@@ -683,7 +683,7 @@ hr{ border-color:#E9E4E2 !important; }
   </div>
  </section>
 
- <section id="tasks" class="page"><div class="card"><div class="card-head"><div><h2>☑️ Aufgaben</h2><div class="muted">Wöchentlich, monatlich oder einmalig</div></div><button class="btn" onclick="openTask()">＋ Neue Aufgabe</button></div><div class="tabs"><button class="tab active" onclick="setTaskFilter('open',this)">Anstehend</button><button class="tab" onclick="setTaskFilter('done',this)">Abgehakt</button><button class="tab" onclick="setTaskFilter('all',this)">Alle</button></div><div id="taskList"></div></div></section>
+ <section id="tasks" class="page"><div class="card"><div class="card-head"><div><button class="btn" onclick="openTask()">＋ Neue Aufgabe</button></div><div class="tabs"><button class="tab active" onclick="setTaskFilter('open',this)">Anstehend</button><button class="tab" onclick="setTaskFilter('done',this)">Abgehakt</button><button class="tab" onclick="setTaskFilter('all',this)">Alle</button></div><div id="taskList"></div></div></section>
 
  <section id="calendar" class="page">
   <div class="deadlines-page-layout">
@@ -758,11 +758,7 @@ hr{ border-color:#E9E4E2 !important; }
   </div>
 </section>
 <section id="uni-links" class="page" data-page-section="uni-links">
-  <div class="section-head">
-    <div>
-      <h1>🔗 Uni-Webseiten</h1>
-      <p>Wichtige Webseiten rund ums Studium übersichtlich an einem Ort.</p>
-    </div>
+  <div class="section-head"><div></div>
     <button class="btn-primary" id="addUniLinkBtn">➕ Link hinzufügen</button>
   </div>
 
