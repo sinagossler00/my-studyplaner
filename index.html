@@ -1472,6 +1472,12 @@ function openCloud(){
 <button class="btn secondary" onclick="connectGoogleDrive()">📁 Google Drive verbinden</button>
 <div class="note" style="margin-top:8px">Dateien werden in deinem persönlichen Google Drive gespeichert und sind dadurch auf deinen Geräten verfügbar.</div>
 </div>
+<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line)">
+<h3>🤖 Gemini KI</h3>
+<div class="muted" id="geminiOAuthStatus" style="margin:5px 0 10px">Nicht verbunden – mit deinem Google-Konto verbinden.</div>
+<button class="btn secondary" onclick="connectGeminiGoogle()">🔵 Mit Google für Gemini verbinden</button>
+<div class="note" style="margin-top:8px">Du brauchst keinen Gemini-API-Schlüssel. My Studyplaner nutzt die Google-Anmeldung und dein Google-Konto für die Gemini API.</div>
+</div>
 <h3>🗓️ Google Kalender</h3>
  <div class="muted" style="margin:4px 0 10px">Nur Termine mit der von dir ausgewählten Google-Kalenderfarbe werden in My Studyplaner übernommen.</div>
  <button class="btn" onclick="openGoogleCalendarSettings()">🗓️ Google Kalender einrichten</button>
@@ -2153,6 +2159,60 @@ document.addEventListener('DOMContentLoaded', ()=>{
 </script>
 
 
+
+<script id="msp-v135-gemini-oauth">
+const GEMINI_OAUTH_SCOPE='https://www.googleapis.com/auth/cloud-platform';
+let geminiTokenClient=null;
+let geminiAccessToken='';
+
+function geminiClientId(){
+ const cfg=getGoogleCalendarConfig()||{};
+ return cfg.clientId||GOOGLE_CALENDAR_DEFAULT_CLIENT_ID||'';
+}
+function initGeminiOAuth(){
+ const id=geminiClientId();
+ if(!id||!window.google||!google.accounts||!google.accounts.oauth2)return null;
+ if(geminiTokenClient)return geminiTokenClient;
+ geminiTokenClient=google.accounts.oauth2.initTokenClient({
+   client_id:id,
+   scope:GEMINI_OAUTH_SCOPE,
+   callback:()=>{},
+   error_callback:e=>console.warn('Gemini Google OAuth:',e)
+ });
+ return geminiTokenClient;
+}
+function updateGeminiOAuthStatus(){
+ const e=$('geminiOAuthStatus');
+ if(e)e.textContent=geminiAccessToken?'Verbunden – Gemini kann dein Google-Konto verwenden.':'Nicht verbunden – mit deinem Google-Konto verbinden.';
+}
+function geminiAuth(){
+ if(geminiAccessToken)return Promise.resolve(true);
+ const c=initGeminiOAuth();
+ if(!c){
+   alert('Google-Anmeldung für Gemini ist noch nicht bereit. Bitte die Seite neu laden und kurz warten.');
+   return Promise.resolve(false);
+ }
+ return new Promise(resolve=>{
+   c.callback=r=>{
+     if(r&&r.access_token){
+       geminiAccessToken=r.access_token;
+       updateGeminiOAuthStatus();
+       resolve(true);
+     }else resolve(false);
+   };
+   try{
+     c.requestAccessToken({prompt:'consent'});
+   }catch(e){console.error(e);resolve(false);}
+ });
+}
+async function connectGeminiGoogle(){
+ const ok=await geminiAuth();
+ if(ok)alert('Gemini ist jetzt mit deinem Google-Konto verbunden. Du kannst den Podcast erstellen.');
+ else alert('Die Google-Verbindung für Gemini konnte nicht hergestellt werden.');
+ updateGeminiOAuthStatus();
+}
+</script>
+
 <script id="msp-v124-podcast">
 const GEMINI_KEY='mystudyplaner_gemini_api_key_v1';
 const GEMINI_TEXT_MODEL='gemini-2.5-flash';
@@ -2179,10 +2239,15 @@ function openPodcast(){
  <div id="podcastResult"></div>`);
 }
 async function geminiText(prompt){
- const key=getGeminiApiKey();
- if(!key)throw new Error('Kein Gemini-API-Schlüssel. Öffne ☁️ Konto und hinterlege ihn unter 🤖 Gemini KI.');
+ if(!await geminiAuth())throw new Error('Bitte zuerst im ☁️ Konto mit Google für Gemini verbinden.');
+ const projectId='my-studyplaner';
  const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+GEMINI_TEXT_MODEL+':generateContent',{
-  method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':key},
+  method:'POST',
+  headers:{
+   'Content-Type':'application/json',
+   'Authorization':'Bearer '+geminiAccessToken,
+   'x-goog-user-project':projectId
+  },
   body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:.65,maxOutputTokens:4500}})
  });
  const j=await r.json().catch(()=>({}));
@@ -2198,9 +2263,14 @@ function pcmWav(pcm){
  return new Blob([b,pcm],{type:'audio/wav'});
 }
 async function geminiTTS(script){
- const key=getGeminiApiKey();
+ if(!await geminiAuth())throw new Error('Bitte zuerst im ☁️ Konto mit Google für Gemini verbinden.');
  const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+GEMINI_TTS_MODEL+':generateContent',{
-  method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':key},
+  method:'POST',
+  headers:{
+   'Content-Type':'application/json',
+   'Authorization':'Bearer '+geminiAccessToken,
+   'x-goog-user-project':'my-studyplaner'
+  },
   body:JSON.stringify({contents:[{parts:[{text:'Speak this German learning podcast naturally. Conversation between Anna and Ben:\n'+script}]}],
    generationConfig:{responseModalities:['AUDIO'],speechConfig:{multiSpeakerVoiceConfig:{speakerVoiceConfigs:[
     {speaker:'Anna',voiceConfig:{prebuiltVoiceConfig:{voiceName:'Kore'}}},
