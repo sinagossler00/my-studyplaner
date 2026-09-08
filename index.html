@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#b8afa0">
-<title>My Studyplaner V95 – Google Kalender</title>
+<title>My Studyplaner V96 – Google Kalender</title>
 <style>
 :root{
       --bg:#FFF3B8;
@@ -1252,7 +1252,7 @@ function openCloud(){
  <div class="wide"><label>E-Mail</label><input id="cEmail" type="email" placeholder="deine@email.de"></div>
  <div><label>Passwort</label><input id="cPassword" type="password" placeholder="mind. 6 Zeichen"></div>
  <div><label>Aktion</label><select id="cAction"><option value="login">Anmelden</option><option value="signup">Neues Konto erstellen</option></select></div>
- </div><div style="display:flex;gap:7px;margin-top:11px"><button class="btn" onclick="cloudAuth()">Anmelden / Konto erstellen</button>${currentUser?'<button class="btn secondary" onclick="cloudLogout()">Abmelden</button>':''}</div>
+ </div>
  <hr style="border:0;border-top:1px solid #3E3A2Fd5a;margin:17px 0">
  <h3>☁️ Firebase verbinden</h3><div class="muted" style="margin:4px 0 10px">Einmalig die Web-App-Konfiguration aus deinem Firebase-Projekt einfügen.</div>
  <textarea id="firebaseConfig" placeholder='{"apiKey":"...","authDomain":"...","projectId":"...","storageBucket":"...","messagingSenderId":"...","appId":"..."}' style="min-height:135px">${esc(JSON.stringify(cfg,null,2))}</textarea>
