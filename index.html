@@ -1305,8 +1305,37 @@ async function initCloud(){
   fb={auth:firebase.auth(),db:firebase.firestore(),storage:firebase.storage()};
   fb.auth.onAuthStateChanged(async user=>{
    currentUser=user;
-   if(user){cloudEnabled=true;updateCloudStatus(true,user.email||'Angemeldet');try{let snap=await fb.db.collection('users').doc(user.uid).get();if(snap.exists&&snap.data().data){data=snap.data().data;saveLocal();renderAll()}}catch(e){console.warn(e)}}
-   else{cloudEnabled=false;updateCloudStatus(false)}
+   if(user){
+    cloudEnabled=true;
+    updateCloudStatus(true,user.email||'Angemeldet');
+    try{
+     const localLinks=(typeof getLocalUniLinks==='function')?getLocalUniLinks():[];
+     let snap=await fb.db.collection('users').doc(user.uid).get();
+     if(snap.exists&&snap.data().data){
+      const cloudData=snap.data().data||{};
+      const cloudLinks=Array.isArray(cloudData.uniLinks)?cloudData.uniLinks:[];
+      if(!cloudData.uniLinks && localLinks.length){
+       cloudData.uniLinks=localLinks;
+       data=cloudData;
+       saveLocal();
+       await saveData();
+      }else{
+       data=cloudData;
+       data.uniLinks=cloudLinks;
+       saveLocal();
+      }
+      renderAll();
+     }else if(localLinks.length){
+      if(!data||typeof data!=='object')data={};
+      data.uniLinks=localLinks;
+      await saveData();
+      renderAll();
+     }
+    }catch(e){console.warn('Cloud-Sync:',e)}
+   }else{
+    cloudEnabled=false;
+    updateCloudStatus(false);
+   }
   });
  }catch(e){console.warn(e);updateCloudStatus(false)}
 }
@@ -1850,21 +1879,36 @@ document.addEventListener('DOMContentLoaded', ()=>{
 (function(){
   const STORE='studyflow_uni_links_v1';
 
-  function getLinks(){
+  function getLocalUniLinks(){
     try{
       const raw=localStorage.getItem(STORE);
       const arr=raw?JSON.parse(raw):[];
       return Array.isArray(arr)?arr:[];
     }catch(e){return [];}
   }
-  function saveLinks(arr){
-    localStorage.setItem(STORE,JSON.stringify(arr));
+
+  function getLinks(){
+    try{
+      if(typeof data!=='undefined' && data && Array.isArray(data.uniLinks)) return data.uniLinks;
+    }catch(e){}
+    return getLocalUniLinks();
   }
+
+  async function saveLinks(arr){
+    const safe=Array.isArray(arr)?arr:[];
+    try{
+      if(typeof data!=='undefined' && data) data.uniLinks=safe;
+    }catch(e){}
+    localStorage.setItem(STORE,JSON.stringify(safe));
+    if(typeof saveData==='function') await saveData();
+  }
+
   function escHtml(v){
     return String(v??'').replace(/[&<>"']/g,function(c){
       return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];
     });
   }
+
   function normalizeUrl(v){
     let url=String(v||'').trim();
     if(!/^https?:\/\//i.test(url)) url='https://'+url;
@@ -1930,17 +1974,13 @@ document.addEventListener('DOMContentLoaded', ()=>{
     const list=document.getElementById('uniLinksList');
 
     if(add)add.addEventListener('click',function(e){
-      e.preventDefault();
-      e.stopPropagation();
-      openForm();
+      e.preventDefault(); e.stopPropagation(); openForm();
     });
-
     if(cancel)cancel.addEventListener('click',function(e){
-      e.preventDefault();
-      closeForm();
+      e.preventDefault(); closeForm();
     });
 
-    if(save)save.addEventListener('click',function(e){
+    if(save)save.addEventListener('click',async function(e){
       e.preventDefault();
       const title=document.getElementById('uniLinkTitle').value.trim();
       const rawUrl=document.getElementById('uniLinkUrl').value.trim();
@@ -1950,29 +1990,24 @@ document.addEventListener('DOMContentLoaded', ()=>{
       const url=normalizeUrl(rawUrl);
       try{new URL(url);}catch(err){alert('Bitte einen gültigen Link eingeben.');return;}
 
-      const links=getLinks();
+      const links=getLinks().map(x=>({...x}));
       const form=document.getElementById('uniLinkForm');
       const editId=form.dataset.editId;
       if(editId){
         const item=links.find(x=>String(x.id)===String(editId));
-        if(item){
-          item.title=title;
-          item.url=url;
-          item.description=description;
-        }
+        if(item){item.title=title;item.url=url;item.description=description;}
       }else{
         links.push({id:Date.now(),title:title,url:url,description:description});
       }
-      saveLinks(links);
+      await saveLinks(links);
       closeForm();
       renderUniLinks();
     });
 
-    if(list)list.addEventListener('click',function(e){
+    if(list)list.addEventListener('click',async function(e){
       const openBtn=e.target.closest('[data-open-uni]');
       const editBtn=e.target.closest('[data-edit-uni]');
       const deleteBtn=e.target.closest('[data-delete-uni]');
-
       if(openBtn){
         const link=getLinks().find(x=>String(x.id)===String(openBtn.dataset.openUni));
         if(link)window.open(link.url,'_blank','noopener,noreferrer');
@@ -1985,8 +2020,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
       }
       if(deleteBtn){
         const id=deleteBtn.dataset.deleteUni;
-        const links=getLinks().filter(x=>String(x.id)!==String(id));
-        saveLinks(links);
+        await saveLinks(getLinks().filter(x=>String(x.id)!==String(id)));
         renderUniLinks();
       }
     });
@@ -1994,6 +2028,8 @@ document.addEventListener('DOMContentLoaded', ()=>{
     renderUniLinks();
   }
 
+  window.getLocalUniLinks=getLocalUniLinks;
+  window.renderUniLinks=renderUniLinks;
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);
   else init();
 })();
