@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#b8afa0">
-<title>My Studyplaner V92 – Google Kalender</title>
+<title>My Studyplaner V94 – Google Kalender</title>
 <style>
 :root{
       --bg:#FFF3B8;
@@ -538,6 +538,31 @@ hr{ border-color:#E9E4E2 !important; }
 }
 </style>
 
+
+<style id="mystudyplaner-v94-calendar-compact">
+.google-calendar-bar{
+  padding:9px 12px !important;
+  min-height:0 !important;
+}
+.google-calendar-main{gap:2px !important}
+.google-calendar-title{
+  font-size:13px !important;
+  line-height:1.15 !important;
+}
+.google-calendar-status{
+  font-size:9px !important;
+  line-height:1.25 !important;
+  max-width:430px !important;
+}
+.google-calendar-actions{gap:7px !important}
+.google-calendar-actions .btn{
+  min-height:27px !important;
+  height:27px !important;
+  padding:4px 8px !important;
+  font-size:10px !important;
+}
+</style>
+
 </head>
 <body>
 <div class="app">
@@ -639,14 +664,14 @@ hr{ border-color:#E9E4E2 !important; }
   <div class="google-calendar-bar" id="googleCalendarBar">
     <div class="google-calendar-main">
       <div class="google-calendar-title">🗓️ Google Kalender</div>
-      <div class="google-calendar-status" id="googleCalendarStatus">Nicht verbunden – es werden nur Termine mit deiner gewählten Google-Kalenderfarbe übernommen.</div>
+      <div class="google-calendar-status" id="googleCalendarStatus">Nicht verbunden – du kannst einen Google-Kalender und eine Farbe auswählen. Nur Termine mit dieser Farbe werden übernommen.</div>
     </div>
     <div class="google-calendar-actions">
       <button class="btn secondary small" onclick="openGoogleCalendarSettings()">⚙️ Einstellungen</button>
       <button class="btn small" onclick="connectGoogleCalendar()">☁️ Verbinden / synchronisieren</button>
     </div>
   </div>
-  <div class="section-head" style="justify-content:flex-end;">
+<div class="section-head" style="justify-content:flex-end;">
     <button class="btn" onclick="openCalendarEvent()">＋ Termin hinzufügen</button>
   </div>
   <div class="calendar-wrap planner-calendar-wrap">
@@ -1251,6 +1276,7 @@ async function cloudLogout(){if(fb){await fb.auth.signOut();closeModal()}}
 
 /* ---------- Google Kalender ---------- */
 const GOOGLE_CALENDAR_SCOPE='https://www.googleapis.com/auth/calendar.readonly';
+const GOOGLE_CALENDAR_DEFAULT_CLIENT_ID='119642140783-mbnm7m2v2lkqpirvaj5ronou3l0bga5d.apps.googleusercontent.com';
 const GOOGLE_CONFIG_KEY='mystudyplaner_google_calendar_v1';
 let googleCalendarTokenClient=null;
 let googleCalendarAccessToken='';
@@ -1258,7 +1284,11 @@ let googleCalendarCalendars=[];
 let googleCalendarColors={};
 
 function getGoogleCalendarConfig(){
- try{return JSON.parse(localStorage.getItem(GOOGLE_CONFIG_KEY)||'null')}catch{return null}
+ try{
+  const saved=JSON.parse(localStorage.getItem(GOOGLE_CONFIG_KEY)||'null');
+  if(saved&&saved.clientId)return saved;
+  return {clientId:GOOGLE_CALENDAR_DEFAULT_CLIENT_ID};
+ }catch{return {clientId:GOOGLE_CALENDAR_DEFAULT_CLIENT_ID}}
 }
 function saveGoogleCalendarConfig(cfg){
  localStorage.setItem(GOOGLE_CONFIG_KEY,JSON.stringify(cfg));
@@ -1377,7 +1407,7 @@ function openGoogleCalendarSettings(autoOpen=false){
  const hasClient=!!cfg.clientId;
  if(!hasClient){
   openModal('🗓️ Google Kalender verbinden',`
-   <div class="note"><b>Einmalig nötig:</b> Du brauchst eine Google OAuth-Client-ID für eine Webanwendung. Ein Client-Secret gehört nicht in diese HTML-Datei.</div>
+   <div class="note"><b>Google Kalender ist vorbereitet.</b> Wähle hier deinen Kalender und die Farbe aus, die My Studyplaner übernehmen soll.</div>
    <ol class="google-setup-list">
     <li>Google Cloud-Projekt erstellen oder auswählen.</li>
     <li><b>Google Calendar API</b> aktivieren.</li>
@@ -1515,7 +1545,7 @@ function updateGoogleCalendarStatus(count){
  if(!el)return;
  const cfg=getGoogleCalendarConfig();
  if(!cfg?.clientId){
-  el.textContent='Nicht eingerichtet – es werden nur Termine mit deiner gewählten Google-Kalenderfarbe übernommen.';
+  el.textContent='Nicht eingerichtet – du kannst einen Google-Kalender und eine Farbe auswählen. Nur Termine mit dieser Farbe werden übernommen.';
   return;
  }
  const cal=googleCalendarCalendars.find(c=>String(c.id)===String(cfg.calendarId));
@@ -1524,7 +1554,7 @@ function updateGoogleCalendarStatus(count){
  if(count!==undefined){
   el.innerHTML=`Verbunden: <b>${esc(calName)}</b> · nur <span class="google-color-swatch" style="background:${esc(googleSafeColor(color))};vertical-align:-2px"></span> die gewählte Farbe · ${count} Termin${count===1?'':'e'} übernommen`;
  }else{
-  el.textContent=`Eingerichtet: ${calName} · nur die gewählte Farbe wird übernommen.`;
+  el.textContent=`Eingerichtet: ${calName} · nur Termine mit der gewählten Farbe werden übernommen.`;
  }
 }
 async function tryInitGoogleFromSavedConfig(){
