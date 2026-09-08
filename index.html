@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#b8afa0">
-<title>My Studyplaner V86 – Google Kalender</title>
+<title>My Studyplaner V88 – Google Drive</title>
 <style>
 :root{
       --bg:#FFF3B8;
@@ -89,7 +89,6 @@ h1{margin:0;font-size:29px;font-weight:850}h2{margin:0;font-size:19px;font-weigh
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
 
 <style id="mystudyplaner-v10-uni-links-style">
 #uni-links .section-head {
@@ -402,6 +401,35 @@ hr{ border-color:#E9E4E2 !important; }
 }
 </style>
 
+<style id="mystudyplaner-v88-google-drive-style">
+.google-drive-bar{
+  display:flex;justify-content:space-between;align-items:center;gap:12px;
+  padding:12px 14px;margin-bottom:14px;background:#fff;
+  border:1px solid #E9E4E2;border-radius:12px;
+}
+.google-drive-main{min-width:0}
+.google-drive-title{font-weight:850;font-size:14px}
+.google-drive-status{font-size:11px;color:#555;margin-top:3px}
+.google-drive-actions{display:flex;gap:7px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.drive-search-row{margin-bottom:12px}
+.drive-search-row input{width:100%;box-sizing:border-box}
+.drive-file-card{
+  display:flex;align-items:center;gap:10px;padding:11px 12px;
+  border:1px solid #E9E4E2;border-radius:12px;background:#fff;min-width:0;
+}
+.drive-file-icon{font-size:22px;flex:none}
+.drive-file-main{min-width:0;flex:1}
+.drive-file-name{font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.drive-file-meta{font-size:10px;color:#666;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.drive-file-actions{display:flex;gap:6px;flex:none}
+.drive-file-actions .btn{padding:6px 9px;font-size:11px}
+@media(max-width:700px){
+  .google-drive-bar{align-items:flex-start;flex-direction:column}
+  .google-drive-actions{width:100%;justify-content:flex-start}
+  .drive-file-card{align-items:flex-start;flex-wrap:wrap}
+  .drive-file-actions{width:100%}
+}
+</style>
 <style id="uni-webseiten-page-style">
 .uni-webseiten-page .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:14px 0 18px}
 .uni-webseiten-page .form-grid label{display:flex;flex-direction:column;gap:7px;font-weight:600}
@@ -628,7 +656,37 @@ hr{ border-color:#E9E4E2 !important; }
     </div>
   </div>
  </section>
- <section id="files" class="page"><div class="card"><div class="card-head"><div><h2>📁 Dateien & wichtige Studieninfos</h2><div class="muted">Studienordnung, Modulplan, PDFs, Bilder und weitere Unterlagen</div></div><button class="btn" onclick="triggerUpload()">＋ Dateien hochladen</button></div><input id="fileInput2" type="file" accept=".pdf,image/*,.doc,.docx,.txt" multiple hidden onchange="handleFiles(this.files)"><div id="fileList" class="file-grid"></div><div class="note" style="margin-top:13px">☁️ Mit einem verbundenen Konto werden deine Daten zwischen Geräten synchronisiert. Dateien werden in der Cloud gespeichert, wenn du dein Firebase-Konto eingerichtet hast.</div></div></section>
+ <section id="files" class="page">
+  <div class="google-drive-bar" id="googleDriveBar">
+    <div class="google-drive-main">
+      <div class="google-drive-title">📁 Google Drive</div>
+      <div class="google-drive-status" id="googleDriveStatus">Nicht verbunden – deine Drive-Dateien werden hier nach der Google-Freigabe angezeigt.</div>
+    </div>
+    <div class="google-drive-actions">
+      <button class="btn secondary small" onclick="openGoogleDriveSettings()">⚙️ Einstellungen</button>
+      <button class="btn small" onclick="connectGoogleDrive()">☁️ Verbinden / synchronisieren</button>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-head">
+      <div><h2>📁 Dateien & wichtige Studieninfos</h2><div class="muted">Studienordnung, Modulplan, PDFs, Bilder und weitere Unterlagen</div></div>
+      <button class="btn" onclick="triggerUpload()">＋ Dateien hochladen</button>
+    </div>
+    <input id="fileInput2" type="file" accept=".pdf,image/*,.doc,.docx,.txt" multiple hidden onchange="handleFiles(this.files)">
+    <div id="fileList" class="file-grid"></div>
+    <div class="note" style="margin-top:13px">☁️ Wenn Google Drive verbunden ist, werden neue Uploads direkt in dein Google Drive hochgeladen. Firebase bleibt für Konto und Studiendaten zuständig.</div>
+  </div>
+  <div class="card" style="margin-top:18px">
+    <div class="card-head">
+      <div><h2>☁️ Dateien aus Google Drive</h2><div class="muted">Dateien aus deinem Drive durchsuchen und direkt öffnen.</div></div>
+      <button class="btn secondary small" onclick="loadGoogleDriveFiles()">🔄 Aktualisieren</button>
+    </div>
+    <div class="drive-search-row">
+      <input id="googleDriveSearch" placeholder="🔎 Drive durchsuchen..." oninput="filterGoogleDriveFiles()">
+    </div>
+    <div id="googleDriveFileList" class="file-grid"></div>
+  </div>
+</section>
 
 
 
@@ -788,7 +846,7 @@ function renderTasks(){
 }
 function fileIcon(f){return f.kind==='image'?'▧':f.kind==='pdf'?'▤':'▤'}
 function renderFiles(){
- let html=data.files.map(f=>`<div class="file"><div class="file-icon">${fileIcon(f)}</div><div class="file-name">${esc(f.name)}</div><div class="file-meta">${esc(f.type||'Datei')} · ${Math.max(1,Math.round((f.size||0)/1024))} KB</div><div class="file-actions"><button class="trash" onclick="deleteFile('${f.id}')">×</button></div></div>`).join('');
+ let html=data.files.map(f=>`<div class="file"><div class="file-icon">${fileIcon(f)}</div><div class="file-name">${esc(f.name)}</div><div class="file-meta">${esc(f.type||'Datei')} · ${Math.max(1,Math.round((f.size||0)/1024))} KB</div><div class="file-actions">${f.url?`<a class="btn secondary small" href="${esc(f.url)}" target="_blank" rel="noopener">Öffnen</a>`:''}<button class="trash" onclick="deleteFile('${f.id}')">×</button></div></div>`).join('');
  $('fileList').innerHTML=html||'<div class="empty">Noch keine Dateien hochgeladen.</div>';
  $('homeFiles').innerHTML=data.files.slice(0,5).map(f=>`<div class="file"><div class="file-icon">${fileIcon(f)}</div><div class="file-name">${esc(f.name)}</div><div class="file-meta">${esc(f.type||'Datei')}</div></div>`).join('')||'<div class="empty">Noch keine Dateien.</div>'
 }
@@ -1168,9 +1226,17 @@ async function handleFiles(files){for(const f of [...files])await addFile(f,null
 async function uploadModule(id){let f=$('moduleInput_'+id);f.value='';f.click()}
 async function handleModuleFiles(id,files){for(const f of [...files])await addFile(f,id);await saveData();renderAll()}
 async function addFile(f,moduleId){
- let item={id:String(Date.now())+Math.random().toString(16).slice(2),name:f.name,size:f.size,type:f.type,kind:f.type.startsWith('image/')?'image':f.type==='application/pdf'?'pdf':'file',moduleId:moduleId||null,url:''};
- if(cloudEnabled&&currentUser&&fb){
-  try{let ref=fb.storage.ref().child(`users/${currentUser.uid}/${item.id}_${f.name}`);let snap=await ref.put(f);item.url=await snap.ref.getDownloadURL()}catch(e){alert('Cloud-Upload fehlgeschlagen: '+e.message);return}
+ let item={id:String(Date.now())+Math.random().toString(16).slice(2),name:f.name,size:f.size,type:f.type,kind:f.type.startsWith('image/')?'image':f.type==='application/pdf'?'pdf':'file',moduleId:moduleId||null,url:'',driveId:'',driveWebViewLink:''};
+ if(googleDriveAccessToken){
+  try{
+   const driveFile=await uploadGoogleDriveFile(f);
+   item.driveId=driveFile.id||'';
+   item.driveWebViewLink=driveFile.webViewLink||'';
+   item.url=item.driveWebViewLink||'';
+  }catch(e){
+   alert('Google-Drive-Upload fehlgeschlagen: '+e.message);
+   return;
+  }
  } else {
   item.url=URL.createObjectURL(f);
  }
@@ -1185,13 +1251,27 @@ async function addNote(e){e.preventDefault();data.notes.push({id:Date.now(),titl
 $('modal').addEventListener('click',e=>{if(e.target.id==='modal')closeModal()});
 $('fileInput').addEventListener('change',e=>{});$('fileInput2').addEventListener('change',e=>handleFiles(e.target.files));
 /* ---------- Cloud / Benutzerkonto ---------- */
-function getFirebaseConfig(){try{return JSON.parse(localStorage.getItem('mystudyplaner_firebase_config')||'null')}catch{return null}}
+const BUILT_IN_FIREBASE_CONFIG = {
+ apiKey: "AIzaSyD3KsC_q8zzvNICS62WAWVuIe7y0CxzBPk",
+ authDomain: "my-studyplaner.firebaseapp.com",
+ projectId: "my-studyplaner",
+ storageBucket: "my-studyplaner.firebasestorage.app",
+ messagingSenderId: "257868828257",
+ appId: "1:257868828257:web:849deb72baac58fbbc2420",
+ measurementId: "G-MK90M1VYMS"
+};
+function getFirebaseConfig(){
+ try{
+  const saved=JSON.parse(localStorage.getItem('mystudyplaner_firebase_config')||'null');
+  return saved&&saved.apiKey&&saved.projectId?saved:BUILT_IN_FIREBASE_CONFIG;
+ }catch{return BUILT_IN_FIREBASE_CONFIG}
+}
 async function initCloud(){
  const cfg=getFirebaseConfig();
  if(!cfg||!cfg.apiKey){updateCloudStatus(false);return}
  try{
   if(!firebase.apps.length)firebase.initializeApp(cfg);
-  fb={auth:firebase.auth(),db:firebase.firestore(),storage:firebase.storage()};
+  fb={auth:firebase.auth(),db:firebase.firestore()};
   fb.auth.onAuthStateChanged(async user=>{
    currentUser=user;
    if(user){cloudEnabled=true;updateCloudStatus(true,user.email||'Angemeldet');try{let snap=await fb.db.collection('users').doc(user.uid).get();if(snap.exists&&snap.data().data){data=snap.data().data;saveLocal();renderAll()}}catch(e){console.warn(e)}}
@@ -1218,7 +1298,10 @@ function openCloud(){
  <hr style="border:0;border-top:1px solid #3E3A2Fd5a;margin:17px 0">
  <h3>🗓️ Google Kalender</h3>
  <div class="muted" style="margin:4px 0 10px">Nur Termine mit der von dir ausgewählten Google-Kalenderfarbe werden in My Studyplaner übernommen.</div>
- <button class="btn" onclick="openGoogleCalendarSettings()">🗓️ Google Kalender einrichten</button>
+ <button class="btn" onclick="openGoogleCalendarSettings()">🗓️ Google Kalender einrichten</button><div style="height:9px"></div>
+ <h3>📁 Google Drive</h3>
+ <div class="muted" style="margin:4px 0 10px">Studienunterlagen direkt aus deinem Google Drive nutzen und neue Dateien dorthin hochladen.</div>
+ <button class="btn" onclick="openGoogleDriveSettings()">📁 Google Drive einrichten</button>
  </div>`)
 }
 async function saveFirebaseConfig(){
@@ -1234,6 +1317,182 @@ async function cloudAuth(){
  }catch(e){alert('Anmeldung fehlgeschlagen: '+e.message)}
 }
 async function cloudLogout(){if(fb){await fb.auth.signOut();closeModal()}}
+
+
+/* ---------- Google Drive ---------- */
+const GOOGLE_DRIVE_SCOPE='https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.file';
+const GOOGLE_DRIVE_CONFIG_KEY='mystudyplaner_google_drive_v1';
+const GOOGLE_DRIVE_DEFAULT_CLIENT_ID='119642140783-mbnm7m2v2lkqpirvaj5ronou3l0bga5d.apps.googleusercontent.com';
+let googleDriveTokenClient=null;
+let googleDriveAccessToken='';
+let googleDriveFiles=[];
+
+function getGoogleDriveConfig(){
+ try{
+  const saved=JSON.parse(localStorage.getItem(GOOGLE_DRIVE_CONFIG_KEY)||'null');
+  if(saved&&saved.clientId)return saved;
+  const cal=typeof getGoogleCalendarConfig==='function'?getGoogleCalendarConfig():null;
+  if(cal?.clientId)return {clientId:cal.clientId};
+  return {clientId:GOOGLE_DRIVE_DEFAULT_CLIENT_ID};
+ }catch{return {clientId:GOOGLE_DRIVE_DEFAULT_CLIENT_ID}}
+}
+function saveGoogleDriveConfig(cfg){localStorage.setItem(GOOGLE_DRIVE_CONFIG_KEY,JSON.stringify(cfg))}
+function driveSafeDate(v){
+ const d=new Date(v||'');
+ return Number.isNaN(d.getTime())?'':d.toLocaleDateString('de-DE');
+}
+function driveFileIcon(mime,name){
+ const s=String(name||'').toLowerCase(),m=String(mime||'');
+ if(m==='application/pdf'||s.endsWith('.pdf'))return '📕';
+ if(m.startsWith('image/'))return '🖼️';
+ if(m.includes('word')||s.endsWith('.doc')||s.endsWith('.docx'))return '📘';
+ if(m.includes('spreadsheet')||s.endsWith('.xls')||s.endsWith('.xlsx'))return '📗';
+ if(m.includes('presentation')||s.endsWith('.ppt')||s.endsWith('.pptx'))return '📙';
+ if(m==='application/vnd.google-apps.folder')return '📂';
+ return '📄';
+}
+async function googleDriveApi(path,options={}){
+ if(!googleDriveAccessToken)throw new Error('Google Drive ist noch nicht autorisiert.');
+ const headers=new Headers(options.headers||{});
+ headers.set('Authorization','Bearer '+googleDriveAccessToken);
+ const res=await fetch('https://www.googleapis.com/drive/v3/'+path,{...options,headers});
+ const json=await res.json().catch(()=>({}));
+ if(!res.ok)throw new Error(json.error?.message||'Google Drive API Fehler');
+ return json;
+}
+function initGoogleDriveTokenClient(){
+ const cfg=getGoogleDriveConfig();
+ if(!cfg?.clientId||!window.google?.accounts?.oauth2)return null;
+ googleDriveTokenClient=google.accounts.oauth2.initTokenClient({
+  client_id:cfg.clientId,
+  scope:GOOGLE_DRIVE_SCOPE,
+  callback:async response=>{
+   if(response?.error){alert('Google-Drive-Freigabe fehlgeschlagen: '+(response.error_description||response.error));return}
+   googleDriveAccessToken=response.access_token||'';
+   try{await loadGoogleDriveFiles();updateGoogleDriveStatus()}
+   catch(e){console.error(e);alert('Google Drive konnte nicht geladen werden: '+e.message)}
+  },
+  error_callback:err=>{
+   if(err?.type!=='popup_closed')alert('Google-Fenster konnte nicht geöffnet werden. Bitte Popups für My Studyplaner erlauben.')
+  }
+ });
+ return googleDriveTokenClient;
+}
+async function connectGoogleDrive(){
+ const cfg=getGoogleDriveConfig();
+ if(!cfg?.clientId){openGoogleDriveSettings();return}
+ if(!window.google?.accounts?.oauth2){alert('Die Google-Bibliothek ist noch nicht geladen. Bitte kurz warten und erneut versuchen.');return}
+ googleDriveTokenClient=initGoogleDriveTokenClient();
+ if(!googleDriveTokenClient){alert('Google Drive konnte nicht vorbereitet werden.');return}
+ googleDriveTokenClient.requestAccessToken({prompt:'consent'});
+}
+function renderGoogleDriveFiles(list){
+ const el=$('googleDriveFileList');
+ if(!el)return;
+ if(!googleDriveAccessToken){el.innerHTML='<div class="empty">Noch nicht mit Google Drive verbunden.</div>';return}
+ const arr=list||[];
+ if(!arr.length){el.innerHTML='<div class="empty">Keine passenden Dateien gefunden.</div>';return}
+ el.innerHTML=arr.map(f=>{
+  const name=esc(f.name||'(Ohne Titel)');
+  const meta=[f.mimeType||'Datei',driveSafeDate(f.modifiedTime)].filter(Boolean).join(' · ');
+  const link=f.webViewLink||`https://drive.google.com/open?id=${encodeURIComponent(f.id||'')}`;
+  return `<div class="drive-file-card">
+   <div class="drive-file-icon">${driveFileIcon(f.mimeType,f.name)}</div>
+   <div class="drive-file-main"><div class="drive-file-name" title="${name}">${name}</div><div class="drive-file-meta">${esc(meta)}</div></div>
+   <div class="drive-file-actions">
+    <a class="btn secondary" href="${esc(link)}" target="_blank" rel="noopener">Öffnen</a>
+    <button class="btn" onclick="addDriveFileToPlanner('${esc(f.id||'')}')">＋ Übernehmen</button>
+   </div>
+  </div>`;
+ }).join('');
+}
+function filterGoogleDriveFiles(){
+ const q=String($('googleDriveSearch')?.value||'').trim().toLowerCase();
+ renderGoogleDriveFiles(googleDriveFiles.filter(f=>!q||String(f.name||'').toLowerCase().includes(q)||String(f.mimeType||'').toLowerCase().includes(q)));
+}
+async function loadGoogleDriveFiles(){
+ if(!googleDriveAccessToken){renderGoogleDriveFiles([]);return}
+ try{
+  let all=[],pageToken='';
+  do{
+   const params=new URLSearchParams({
+    q:"trashed = false",
+    pageSize:'1000',
+    orderBy:'modifiedTime desc',
+    fields:'nextPageToken,files(id,name,mimeType,size,modifiedTime,webViewLink,iconLink,parents)'
+   });
+   if(pageToken)params.set('pageToken',pageToken);
+   const res=await googleDriveApi('files?'+params.toString());
+   all=all.concat(res.files||[]);
+   pageToken=res.nextPageToken||'';
+  }while(pageToken);
+  googleDriveFiles=all;
+  filterGoogleDriveFiles();
+  updateGoogleDriveStatus();
+ }catch(e){console.error(e);alert('Google-Drive-Dateien konnten nicht geladen werden: '+e.message)}
+}
+async function addDriveFileToPlanner(id){
+ const f=googleDriveFiles.find(x=>String(x.id)===String(id));
+ if(!f)return;
+ if((data.files||[]).some(x=>String(x.driveId||'')===String(f.id))){alert('Diese Datei ist bereits in My Studyplaner übernommen.');return}
+ data.files.push({
+  id:'drive_'+String(f.id),name:f.name||'(Ohne Titel)',size:Number(f.size||0),type:f.mimeType||'application/octet-stream',
+  kind:String(f.mimeType||'').startsWith('image/')?'image':String(f.mimeType||'')==='application/pdf'?'pdf':'file',
+  moduleId:null,url:f.webViewLink||`https://drive.google.com/open?id=${encodeURIComponent(f.id)}`,driveId:f.id,driveWebViewLink:f.webViewLink||''
+ });
+ await saveData();renderAll();alert('Datei wurde zu My Studyplaner hinzugefügt.');
+}
+function openGoogleDriveSettings(){
+ const cfg=getGoogleDriveConfig()||{};
+ openModal('📁 Google Drive – Einstellungen',`
+  <div class="note">🔒 My Studyplaner liest deine Google-Drive-Dateien und kann neue Uploads in deinem Drive anlegen. Dateien werden nicht automatisch gelöscht, wenn du sie aus My Studyplaner entfernst.</div>
+  <div style="margin-top:12px"><label>Google OAuth Client-ID</label><input id="googleDriveClientId" value="${esc(cfg.clientId||GOOGLE_DRIVE_DEFAULT_CLIENT_ID)}"></div>
+  <div class="note" style="margin-top:12px">Für deinen persönlichen Planner wird <b>Drive-Lesen</b> plus <b>drive.file</b> verwendet. Die Google-Freigabe erscheint einmalig beim Verbinden.</div>
+  <div style="display:flex;gap:7px;margin-top:11px;flex-wrap:wrap">
+   <button class="btn" onclick="saveGoogleDriveClientId()">💾 Client-ID speichern</button>
+   <button class="btn secondary" onclick="connectGoogleDrive()">☁️ Mit Google verbinden</button>
+   <button class="btn secondary" onclick="loadGoogleDriveFiles();closeModal()">🔄 Dateien aktualisieren</button>
+   <button class="btn danger" onclick="disconnectGoogleDrive()">× Verbindung entfernen</button>
+  </div>
+  <div style="margin-top:10px;font-size:11px;color:#555">Client-ID: ${esc(cfg.clientId||GOOGLE_DRIVE_DEFAULT_CLIENT_ID)}</div>
+ `);
+}
+function saveGoogleDriveClientId(){
+ const id=String($('googleDriveClientId')?.value||'').trim();
+ if(!id||!id.endsWith('.apps.googleusercontent.com')){alert('Bitte eine gültige Google OAuth Client-ID eintragen.');return}
+ saveGoogleDriveConfig({clientId:id});closeModal();updateGoogleDriveStatus();
+ alert('Client-ID gespeichert. Klicke jetzt auf „☁️ Verbinden / synchronisieren“.');
+}
+function disconnectGoogleDrive(){
+ if(googleDriveAccessToken&&window.google?.accounts?.oauth2){try{google.accounts.oauth2.revoke(googleDriveAccessToken,()=>{})}catch(e){}}
+ googleDriveAccessToken='';googleDriveTokenClient=null;googleDriveFiles=[];
+ localStorage.removeItem(GOOGLE_DRIVE_CONFIG_KEY);renderGoogleDriveFiles([]);updateGoogleDriveStatus();
+}
+function updateGoogleDriveStatus(){
+ const el=$('googleDriveStatus');if(!el)return;
+ const cfg=getGoogleDriveConfig();
+ if(!cfg?.clientId){el.textContent='Nicht eingerichtet – deine Drive-Dateien werden hier nach der Google-Freigabe angezeigt.';return}
+ if(!googleDriveAccessToken){el.textContent='Client-ID gespeichert – noch nicht mit Google Drive verbunden.';return}
+ el.textContent=`Verbunden · ${googleDriveFiles.length} Drive-Dateien verfügbar`;
+}
+async function uploadGoogleDriveFile(file){
+ if(!googleDriveAccessToken)throw new Error('Google Drive ist nicht verbunden.');
+ const metadata={name:file.name,mimeType:file.type||'application/octet-stream'};
+ const boundary='-------MyStudyplanerDrive'+Date.now();
+ const body=new Blob([
+  `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n`,
+  JSON.stringify(metadata),`\r\n`,
+  `--${boundary}\r\nContent-Type: ${file.type||'application/octet-stream'}\r\n\r\n`,
+  file,`\r\n`,`--${boundary}--`
+ ]);
+ const res=await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,mimeType,size,modifiedTime,webViewLink',{
+  method:'POST',headers:{'Authorization':'Bearer '+googleDriveAccessToken,'Content-Type':'multipart/related; boundary='+boundary},body
+ });
+ const json=await res.json().catch(()=>({}));
+ if(!res.ok)throw new Error(json.error?.message||'Google Drive Upload fehlgeschlagen');
+ await loadGoogleDriveFiles();
+ return json;
+}
 
 /* ---------- Google Kalender ---------- */
 const GOOGLE_CALENDAR_SCOPE='https://www.googleapis.com/auth/calendar.readonly';
