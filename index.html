@@ -598,7 +598,43 @@ hr{ border-color:#E9E4E2 !important; }
 
 <style id="msp-v124-podcast-style">
 .podcast-intro{font-size:12px;line-height:1.5;color:var(--muted);margin-bottom:12px}
-</style></head>
+</style>
+<style id="msp-v125-folder-icons">
+.folder-file-icon{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:34px;
+  height:28px;
+  font-size:25px;
+  line-height:1;
+}
+.file-icon{
+  display:flex !important;
+  align-items:center !important;
+  justify-content:flex-start !important;
+  min-height:30px !important;
+}
+</style>
+
+
+<style id="msp-v127-deadline-butteryellow">
+/* V127: butter-yellow background for "Nächste Deadlines" */
+.home-deadline-heading,
+.next-deadline-heading,
+.deadline-heading,
+#homeDeadlines .section-title{
+  background:#FFF2B8 !important;
+}
+</style>
+
+<style id="msp-v128-deadline-chip">
+/* V128: actual "Nächste Deadlines" chip */
+.title-chip.rose{
+  background:#FFF2B8 !important;
+}
+</style>
+</head>
 <body>
 <div class="app">
 <aside class="sidebar">
@@ -616,7 +652,7 @@ hr{ border-color:#E9E4E2 !important; }
 
 <main>
  <div class="topbar">
-  <div><h1 id="pageTitle">Hallo! ⌁</h1><div class="subtitle" id="pageSubtitle">Schön, dass du hier bist. Bleib dran!</div></div>
+  <div><h1 id="pageTitle">Hallo Sina! ⌁</h1><div class="subtitle" id="pageSubtitle">Schön, dass du hier bist. Bleib dran!</div></div>
   <div class="top-actions"><button class="btn secondary" onclick="openCloud()">☁️️ Konto</button><div class="cloud-status" id="cloudStatus" style="display:none;"><span class="dot"></span><span>Nur auf diesem Gerät</span></div><input class="search" id="search" placeholder="⌕ Suche..." oninput="renderAll()" style="display:none;" aria-hidden="true"></div>
  </div>
 
@@ -652,13 +688,7 @@ hr{ border-color:#E9E4E2 !important; }
  <section id="calendar" class="page">
   <div class="deadlines-page-layout">
     <div class="card deadlines-list-card">
-      <div class="card-head">
-        <div>
-          <h2>❗ Deadlines & Anmeldungen</h2>
-          <div class="muted">Abgaben, Hausarbeiten, Prüfungsanmeldungen und weitere Fristen</div>
-        </div>
-        <button class="btn" onclick="openDeadline()">＋ Neuer Eintrag</button>
-      </div>
+      <div class="card-head"><div></div><button class="btn" onclick="openDeadline()">＋ Neuer Eintrag</button></div>
 
       <div id="deadlineSortControl" class="deadline-sort-control">
         <label for="deadlineSort">Sortieren nach</label>
@@ -689,7 +719,7 @@ hr{ border-color:#E9E4E2 !important; }
     </div>
   </div>
  </section>
- <section id="files" class="page"><div class="card"><div class="card-head"><div><h2>📁 Dateien & wichtige Studieninfos</h2><div class="muted">Studienordnung, Modulplan, PDFs, Bilder und weitere Unterlagen</div></div><button class="btn" onclick="triggerUpload()">＋ Dateien hochladen</button></div><input id="fileInput2" type="file" accept=".pdf,image/*,.doc,.docx,.txt" multiple hidden onchange="handleFiles(this.files)"><div id="fileList" class="file-grid"></div><div class="note" style="margin-top:13px">☁️ Mit einem verbundenen Konto werden deine Daten zwischen Geräten synchronisiert. Dateien werden in der Cloud gespeichert, wenn du dein Firebase-Konto eingerichtet hast.</div></div></section>
+ <section id="files" class="page"><div class="card"><div class="card-head"><div></div><button class="btn" onclick="triggerUpload()">＋ Dateien hochladen</button></div><input id="fileInput2" type="file" accept=".pdf,image/*,.doc,.docx,.txt" multiple hidden onchange="handleFiles(this.files)"><div id="fileList" class="file-grid"></div><div class="note" style="margin-top:13px">☁️ Mit einem verbundenen Konto werden deine Daten zwischen Geräten synchronisiert. Dateien werden in der Cloud gespeichert, wenn du dein Firebase-Konto eingerichtet hast.</div></div></section>
 
 
 
@@ -812,7 +842,7 @@ function go(page){
  setActiveNav(page);
  document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));$(page).classList.add('active');
  document.querySelectorAll('.nav button').forEach(x=>x.classList.toggle('active',x.dataset.page===page));
- const t={home:['🏠 Hallo!','Schön, dass du hier bist. Bleib dran!'],tasks:['☑️ Aufgaben','Was steht heute, diese Woche oder diesen Monat an?'],'planner-calendar':['Kalender 📅','Deadlines und Termine übersichtlich im Monatskalender.'],calendar:['❗ Deadlines & Termine','Behalte alle wichtigen Fristen im Blick.'],podcast:['🎙️ KI-Podcast','Deine Zusammenfassungen als Lern-Podcast.'],files:['📁 Dateien & Infos','Alles Wichtige schnell griffbereit.'],modules:['📚 Meine Module','Deine Module und ihre Dateien.'],stats:['📊 Statistiken','Dein aktueller Studienfortschritt.'],'uni-links':['Uni-Webseiten 🔗','Wichtige Webseiten rund ums Studium an einem Ort.']}[page];
+ const t={home:['🏠 Hallo Sina!','Schön, dass du hier bist. Bleib dran!'],tasks:['☑️ Aufgaben','Was steht heute, diese Woche oder diesen Monat an?'],'planner-calendar':['Kalender 📅','Deadlines und Termine übersichtlich im Monatskalender.'],calendar:['❗ Deadlines & Termine','Behalte alle wichtigen Fristen im Blick.'],podcast:['🎙️ KI-Podcast','Deine Zusammenfassungen als Lern-Podcast.'],files:['📁 Dateien & Infos','Alles Wichtige schnell griffbereit.'],modules:['📚 Meine Module','Deine Module und ihre Dateien.'],stats:['📊 Statistiken','Dein aktueller Studienfortschritt.'],'uni-links':['Uni-Webseiten 🔗','Wichtige Webseiten rund ums Studium an einem Ort.']}[page];
  $('pageTitle').textContent=t[0];$('pageSubtitle').textContent=t[1];renderAll()
 }
 document.querySelectorAll('.nav button').forEach(b=>b.onclick=()=>go(b.dataset.page));
@@ -854,7 +884,9 @@ function renderTasks(){
  $('taskList').innerHTML=arr.length?arr.map(taskHTML).join(''):'<div class="empty">Hier ist nichts zu sehen.</div>';
  let open=data.tasks.filter(t=>!t.done&&matches(t)).slice(0,7);$('homeTasks').innerHTML=open.length?open.map(taskHTML).join(''):'<div class="empty">Alles erledigt ✓</div>';
 }
-function fileIcon(f){return f.kind==='image'?'▧':f.kind==='pdf'?'▤':'▤'}
+function fileIcon(f){
+ return '<span class="folder-file-icon" aria-hidden="true">📁</span>';
+}
 async function openFile(id){
  const f=data.files.find(x=>String(x.id)===String(id));
  if(!f)return;
