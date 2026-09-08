@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#b8afa0">
-<title>My Studyplaner V96 – Google Kalender</title>
+<title>My Studyplaner V97 – Google Kalender</title>
 <style>
 :root{
       --bg:#FFF3B8;
@@ -668,7 +668,7 @@ hr{ border-color:#E9E4E2 !important; }
   <div class="google-calendar-bar" id="googleCalendarBar">
     <div class="google-calendar-main">
       <div class="google-calendar-title">🗓️ Google Kalender</div>
-      <div class="google-calendar-status" id="googleCalendarStatus">Nicht verbunden – du kannst einen Google-Kalender und eine Farbe auswählen. Nur Termine mit dieser Farbe werden übernommen.</div>
+      <div class="google-calendar-status" id="googleCalendarStatus">Nicht verbunden – einmal verbinden, danach versucht My Studyplaner beim Laden automatisch zu synchronisieren.</div>
     </div>
     <div class="google-calendar-actions">
       <button class="btn secondary small" onclick="openGoogleCalendarSettings()">⚙️ Einstellungen</button>
@@ -1341,7 +1341,7 @@ function trySilentGoogleCalendarSync(){
   if(googleCalendarAccessToken)return;
   initGoogleTokenClient();
   if(!googleCalendarTokenClient)return;
-  googleCalendarTokenClient.requestAccessToken({prompt:''});
+  googleCalendarTokenClient.requestAccessToken({prompt:'none'});
  }catch(e){console.warn('Silent Google-Kalender-Sync:',e)}
 }
 
@@ -1361,7 +1361,9 @@ function initGoogleTokenClient(){
    }catch(e){console.error(e);alert('Google Kalender konnte nicht geladen werden: '+e.message)}
   },
   error_callback:err=>{
-   if(err?.type!=='popup_closed')alert('Google-Fenster konnte nicht geöffnet werden. Bitte Popups für My Studyplaner erlauben.')
+   // Background/silent sync must never interrupt the user with a popup-blocker alert.
+   // If the browser blocks the silent request, the manual sync button can authorize again.
+   console.warn('Google Kalender Hintergrund-Sync nicht möglich:',err);
   }
  });
  return googleCalendarTokenClient;
