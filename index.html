@@ -836,8 +836,10 @@ function renderDeadlines(target){
  el.innerHTML=arr.length?arr.map(deadlineHTML).join(''):'<div class="empty">Keine passenden Einträge ✓</div>';
 }
 function taskHTML(t){
- const mod=t.moduleId?data.modules.find(m=>String(m.id)===String(t.moduleId)):null;
- return `<div class="task-row"><button class="check ${t.done?'done':''}" onclick="toggleTask(${t.id})"></button><div class="task-text ${t.done?'done-text':''}"><b>${esc(t.title)}</b><div class="type">${esc(t.period||'einmalig')}${mod?' · 📚 '+esc(mod.name):''}</div></div><button class="edit-btn" onclick="event.stopPropagation(); window.editTask(${t.id}); return false;" title="Bearbeiten">✏️</button><button class="edit-btn" type="button" onclick="deleteTask(${t.id})" title="Löschen">×</button></div>`
+ const modText=t.module||'';
+ const legacyMod=t.moduleId?data.modules.find(m=>String(m.id)===String(t.moduleId)):null;
+ const displayMod=modText||((legacyMod&&legacyMod.name)||'');
+ return `<div class="task-row"><button class="check ${t.done?'done':''}" onclick="toggleTask(${t.id})"></button><div class="task-text ${t.done?'done-text':''}"><b>${esc(t.title)}</b><div class="type">${esc(t.period||'einmalig')}${displayMod?' · 📚 '+esc(displayMod):''}</div></div><button class="edit-btn" onclick="event.stopPropagation(); window.editTask(${t.id}); return false;" title="Bearbeiten">✏️</button><button class="edit-btn" type="button" onclick="deleteTask(${t.id})" title="Löschen">×</button></div>`
 }
 function renderTasks(){
  let arr=data.tasks.filter(matches).filter(t=>taskFilter==='all'||(taskFilter==='done'?t.done:!t.done));
@@ -1220,6 +1222,8 @@ function moduleOptions(selected){
 function editTask(id){
  const t=data.tasks.find(x=>x.id===id);
  if(!t)return;
+ const legacyMod=t.moduleId?data.modules.find(m=>String(m.id)===String(t.moduleId)):null;
+ const moduleText=t.module||((legacyMod&&legacyMod.name)||'');
  openModal('Aufgabe bearbeiten',`<form onsubmit="updateTask(event,${t.id})">
   <div class="form-grid">
    <div class="wide"><label>Aufgabe</label><input id="tTitle" value="${esc(t.title||'')}" required></div>
@@ -1228,7 +1232,7 @@ function editTask(id){
     <option ${t.period==='monatlich'?'selected':''}>monatlich</option>
     <option ${t.period==='einmalig'?'selected':''}>einmalig</option>
    </select></div>
-   <div><label>Modul</label><select id="tModule">${moduleOptions(t.moduleId)}</select></div>
+   <div><label>Modul</label><input id="tModule" value="${esc(moduleText)}" placeholder="z. B. Entwicklungspsychologie"></div>
   </div><br><button class="btn" type="submit">💾 Änderungen speichern</button></form>`)
 }
 async function updateTask(e,id){
@@ -1237,12 +1241,13 @@ async function updateTask(e,id){
  if(!t)return;
  t.title=tTitle.value;
  t.period=tPeriod.value;
- t.moduleId=tModule.value||'';
+ t.module=tModule.value.trim();
+ t.moduleId='';
  await saveData();closeModal();renderAll()
 }
 
-function openTask(){openModal('Neue Aufgabe',`<form onsubmit="addTask(event)"><div class="form-grid"><div class="wide"><label>Aufgabe</label><input id="tTitle" placeholder="z. B. Kapitel 4 lesen" required></div><div><label>Rhythmus</label><select id="tPeriod"><option>wöchentlich</option><option>monatlich</option><option>einmalig</option></select></div><div><label>Modul</label><select id="tModule">${moduleOptions('')}</select></div></div><br><button class="btn" type="submit">Aufgabe speichern</button></form>`)}
-async function addTask(e){e.preventDefault();data.tasks.push({id:Date.now(),title:tTitle.value,period:tPeriod.value,moduleId:tModule.value||'',done:false});await saveData();closeModal();renderAll()}
+function openTask(){openModal('Neue Aufgabe',`<form onsubmit="addTask(event)"><div class="form-grid"><div class="wide"><label>Aufgabe</label><input id="tTitle" placeholder="z. B. Kapitel 4 lesen" required></div><div><label>Rhythmus</label><select id="tPeriod"><option>wöchentlich</option><option>monatlich</option><option>einmalig</option></select></div><div><label>Modul</label><input id="tModule" placeholder="z. B. Entwicklungspsychologie"></div></div><br><button class="btn" type="submit">Aufgabe speichern</button></form>`)}
+async function addTask(e){e.preventDefault();data.tasks.push({id:Date.now(),title:tTitle.value,period:tPeriod.value,module:tModule.value.trim(),moduleId:'',done:false});await saveData();closeModal();renderAll()}
 async function toggleTask(id){let t=data.tasks.find(x=>x.id===id);if(t)t.done=!t.done;await saveData();renderAll()}
 async function deleteTask(id){
  data.tasks=data.tasks.filter(x=>Number(x.id)!==Number(id));
