@@ -1255,242 +1255,110 @@ async function handleFiles(files){for(const f of [...files])await addFile(f,null
 async function uploadModule(id){let f=$('moduleInput_'+id);f.value='';f.click()}
 async function handleModuleFiles(id,files){for(const f of [...files])await addFile(f,id);await saveData();renderAll()}
 
-/* ---------- Google Drive Datei-Speicher V104 ---------- */
 const GOOGLE_DRIVE_SCOPE='https://www.googleapis.com/auth/drive.file';
 let googleDriveTokenClient=null;
 let googleDriveAccessToken='';
-let googleDriveTokenPromise=null;
 
-function getGoogleClientId(){
+function googleDriveClientId(){
  const cfg=getGoogleCalendarConfig()||{};
  return cfg.clientId||GOOGLE_CALENDAR_DEFAULT_CLIENT_ID||'';
 }
-
-function initGoogleDriveTokenClient(){
- const clientId=getGoogleClientId();
- if(!clientId||!window.google||!google.accounts||!google.accounts.oauth2)return null;
+function initGoogleDrive(){
+ const id=googleDriveClientId();
+ if(!id||!window.google||!google.accounts||!google.accounts.oauth2)return null;
  if(googleDriveTokenClient)return googleDriveTokenClient;
  googleDriveTokenClient=google.accounts.oauth2.initTokenClient({
-  client_id:clientId,
-  scope:GOOGLE_DRIVE_SCOPE,
-  callback:()=>{},
-  error_callback:err=>{
-   console.warn('Google Drive OAuth:',err);
-   if(googleDriveTokenPromise){
-    const resolve=googleDriveTokenPromise;
-    googleDriveTokenPromise=null;
-    resolve(false);
-   }
-  }
+  client_id:id,scope:GOOGLE_DRIVE_SCOPE,callback:()=>{},
+  error_callback:e=>console.warn('Google Drive OAuth',e)
  });
  return googleDriveTokenClient;
 }
-
-function requestGoogleDriveAccess(){
- const client=initGoogleDriveTokenClient();
- if(!client){
-  return Promise.reject(new Error('Google-Anmeldung ist noch nicht geladen. Bitte die Seite neu laden und kurz warten.'));
- }
+function googleDriveAuth(){
  if(googleDriveAccessToken)return Promise.resolve(true);
- if(googleDriveTokenPromise)return googleDriveTokenPromise;
- googleDriveTokenPromise=new Promise(resolve=>{
-  client.callback=response=>{
-   const finish=ok=>{
-    googleDriveTokenPromise=null;
-    resolve(ok);
-   };
-   if(response&&response.access_token){
-    googleDriveAccessToken=response.access_token;
-    finish(true);
-   }else{
-    console.warn('Google Drive OAuth Antwort:',response);
-    finish(false);
-   }
+ const c=initGoogleDrive();
+ if(!c){alert('Google Drive ist noch nicht bereit. Bitte die Seite neu laden und kurz warten.');return Promise.resolve(false);}
+ return new Promise(resolve=>{
+  c.callback=r=>{
+   if(r&&r.access_token){googleDriveAccessToken=r.access_token;updateDriveStatus();resolve(true);}
+   else resolve(false);
   };
-  try{
-   client.requestAccessToken({prompt:'consent'});
-  }catch(e){
-   googleDriveTokenPromise=null;
-   resolve(false);
-  }
+  try{c.requestAccessToken({prompt:'consent'});}catch(e){console.error(e);resolve(false);}
  });
- return googleDriveTokenPromise;
 }
-
 async function connectGoogleDrive(){
- const ok=await requestGoogleDriveAccess();
- if(ok){
-  updateDriveStatus();
-  alert('Google Drive ist jetzt verbunden. Du kannst deine Dateien hochladen.');
- }else{
-  alert('Google Drive konnte nicht verbunden werden. Bitte prüfe, ob die Google Drive API für dein Projekt aktiviert ist und ob dein Google-Konto als Testnutzer eingetragen ist.');
- }
+ const ok=await googleDriveAuth();
+ alert(ok?'Google Drive ist verbunden. Jetzt kannst du Dateien hochladen.':'Google Drive konnte nicht verbunden werden.');
 }
-
-async function googleDriveRequest(url,options={}){
- const headers=Object.assign({},options.headers||{},{
-  Authorization:'Bearer '+googleDriveAccessToken
- });
- let res=await fetch(url,Object.assign({},options,{headers}));
- if(res.status===401){
-  googleDriveAccessToken='';
-  const ok=await requestGoogleDriveAccess();
-  if(!ok)throw new Error('Google Drive-Zugriff ist abgelaufen oder wurde abgelehnt.');
-  headers.Authorization='Bearer '+googleDriveAccessToken;
-  res=await fetch(url,Object.assign({},options,{headers}));
- }
- return res;
-}
-
-async function googleDriveUpload(file){
- const metadata={
-  name:file.name,
-  mimeType:file.type||'application/octet-stream'
- };
- // Resumable upload funktioniert auch für kleine Dateien und ist robuster bei PDFs.
- const initRes=await googleDriveRequest(
-  'https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id,name,mimeType,size,webViewLink,webContentLink',
-  {
-   method:'POST',
-   headers:{
-    'Content-Type':'application/json; charset=UTF-8',
-    'X-Upload-Content-Type':file.type||'application/octet-stream',
-    'X-Upload-Content-Length':String(file.size)
-   },
-   body:JSON.stringify(metadata)
-  }
- );
- if(!initRes.ok){
-  const txt=await initRes.text();
-  throw new Error('Google Drive Upload konnte nicht gestartet werden: '+txt);
- }
- const sessionUrl=initRes.headers.get('Location');
- if(!sessionUrl)throw new Error('Google Drive hat keine Upload-Adresse zurückgegeben.');
-
- const uploadRes=await fetch(sessionUrl,{
-  method:'PUT',
-  headers:{
-   'Content-Type':file.type||'application/octet-stream',
-   'Content-Length':String(file.size)
-  },
-  body:file
- });
- if(!uploadRes.ok){
-  const txt=await uploadRes.text();
-  throw new Error('Google Drive Upload fehlgeschlagen ('+uploadRes.status+'): '+txt);
- }
- return await uploadRes.json();
-}
-
-async function googleDriveDelete(fileId){
- const res=await googleDriveRequest(
-  'https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(fileId),
-  {method:'DELETE'}
- );
- if(!res.ok&&res.status!==404){
-  const txt=await res.text();
-  throw new Error('Google Drive Löschen fehlgeschlagen: '+txt);
- }
-}
-
 function updateDriveStatus(){
- const el=$('googleDriveStatus');
- if(!el)return;
- el.textContent=googleDriveAccessToken
-  ? 'Verbunden – neue Dateien werden in deinem Google Drive gespeichert.'
-  : 'Noch nicht verbunden – beim ersten Upload wird einmalig nach der Google-Drive-Freigabe gefragt.';
+ const e=$('googleDriveStatus');
+ if(e)e.textContent=googleDriveAccessToken?'Verbunden – Dateien werden in deinem Google Drive gespeichert.':'Nicht verbunden – beim ersten Upload wird einmalig nach Zugriff gefragt.';
 }
-
-async function ensureGoogleDrive(){
- if(googleDriveAccessToken)return true;
- const ok=await requestGoogleDriveAccess();
- if(!ok){
-  alert('Bitte den Zugriff auf Google Drive erlauben. Danach erneut auf „＋ Upload“ klicken.');
-  return false;
- }
- updateDriveStatus();
- return true;
+async function driveFetch(url,opt={}){
+ const make=()=>fetch(url,{...opt,headers:{...(opt.headers||{}),Authorization:'Bearer '+googleDriveAccessToken}});
+ let r=await make();
+ if(r.status===401){googleDriveAccessToken='';if(!await googleDriveAuth())throw new Error('Google-Drive-Zugriff nicht mehr gültig.');r=await make();}
+ return r;
 }
-
+async function googleDriveUpload(file){
+ const b='msp_'+Date.now();
+ const body=new Blob([
+  '--'+b+'\r\n','Content-Type: application/json; charset=UTF-8\r\n\r\n',
+  JSON.stringify({name:file.name,mimeType:file.type||'application/octet-stream'}),
+  '\r\n--'+b+'\r\n','Content-Type: '+(file.type||'application/octet-stream')+'\r\n\r\n',
+  file,'\r\n--'+b+'--'
+ ]);
+ const r=await driveFetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,mimeType,size,webViewLink',{
+  method:'POST',headers:{'Content-Type':'multipart/related; boundary='+b},body
+ });
+ if(!r.ok)throw new Error('Google Drive ('+r.status+'): '+await r.text());
+ return r.json();
+}
+async function googleDriveDelete(id){
+ const r=await driveFetch('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(id),{method:'DELETE'});
+ if(!r.ok&&r.status!==404)throw new Error('Google Drive ('+r.status+'): '+await r.text());
+}
 async function addFile(f,moduleId){
- const ok=await ensureGoogleDrive();
- if(!ok)return;
-
- const item={
-  id:String(Date.now())+Math.random().toString(16).slice(2),
-  name:f.name,
-  size:f.size,
-  type:f.type,
-  kind:f.type.startsWith('image/')?'image':f.type==='application/pdf'?'pdf':'file',
-  moduleId:moduleId||null,
-  url:'',
-  storagePath:'',
-  driveFileId:''
- };
-
+ if(!await googleDriveAuth()){alert('Bitte zuerst den Zugriff auf Google Drive erlauben.');return;}
+ const item={id:String(Date.now())+Math.random().toString(16).slice(2),name:f.name,size:f.size,type:f.type,kind:f.type.startsWith('image/')?'image':f.type==='application/pdf'?'pdf':'file',moduleId:moduleId||null,url:'',storagePath:'',driveFileId:''};
  try{
-  const uploaded=await googleDriveUpload(f);
-  item.driveFileId=uploaded.id;
-  item.url=uploaded.webViewLink||('https://drive.google.com/file/d/'+uploaded.id+'/view');
-  item.driveMimeType=uploaded.mimeType||f.type;
-  data.files=data.files||[];
-  data.files.push(item);
-  await saveData();
-  renderAll();
- }catch(e){
-  console.error(e);
-  alert('Datei konnte nicht hochgeladen werden:\n'+(e.message||e));
- }
+  const u=await googleDriveUpload(f);
+  item.driveFileId=u.id;item.url=u.webViewLink||('https://drive.google.com/file/d/'+u.id+'/view');
+  data.files=data.files||[];data.files.push(item);await saveData();renderAll();
+ }catch(e){console.error(e);alert('Datei konnte nicht hochgeladen werden:\n'+(e.message||e));}
 }
-
 async function openFile(id){
- const f=(data.files||[]).find(x=>String(x.id)===String(id));
- if(!f)return;
-
- if(f.driveFileId){
-  const url=f.url||('https://drive.google.com/file/d/'+f.driveFileId+'/view');
-  const win=window.open(url,'_blank','noopener');
-  if(!win)alert('Der Browser hat das Öffnen blockiert. Bitte Popups für My Studyplaner erlauben.');
-  return;
- }
-
- // Alte Firebase-Dateien aus früheren Versionen bleiben weiterhin nutzbar.
- if(f.storagePath&&cloudEnabled&&fb){
-  try{
-   const url=await fb.storage.ref(f.storagePath).getDownloadURL();
-   f.url=url;
-   await saveData();
-   window.open(url,'_blank','noopener');
-   return;
-  }catch(e){console.warn(e)}
- }
- if(f.url){
-  window.open(f.url,'_blank','noopener');
-  return;
- }
- alert('Diese Datei hat keinen gültigen Speicherort. Bitte die Datei neu hochladen.');
+ const f=(data.files||[]).find(x=>String(x.id)===String(id));if(!f)return;
+ if(f.driveFileId){window.open(f.url||('https://drive.google.com/file/d/'+f.driveFileId+'/view'),'_blank');return;}
+ if(f.storagePath&&cloudEnabled&&fb){try{const u=await fb.storage.ref(f.storagePath).getDownloadURL();f.url=u;await saveData();window.open(u,'_blank');return;}catch(e){console.warn(e)}}
+ if(f.url){window.open(f.url,'_blank');return;}
+ alert('Diese Datei kann nicht geöffnet werden. Bitte lade sie erneut hoch.');
 }
-
 async function deleteFile(id){
- if(!confirm('Datei aus My Studyplaner und deinem Google Drive löschen?'))return;
- const f=(data.files||[]).find(x=>String(x.id)===String(id));
- if(!f)return;
-
+ const f=(data.files||[]).find(x=>String(x.id)===String(id));if(!f)return;
+ if(!confirm('Datei aus My Studyplaner und Google Drive löschen?'))return;
  try{
-  if(f.driveFileId){
-   const ok=await ensureGoogleDrive();
-   if(!ok)return;
-   await googleDriveDelete(f.driveFileId);
-  }
-  data.files=data.files.filter(x=>String(x.id)!==String(id));
-  await saveData();
-  renderAll();
- }catch(e){
-  console.error(e);
-  alert('Löschen fehlgeschlagen:\n'+(e.message||e));
- }
+  if(f.driveFileId){if(!await googleDriveAuth())return;await googleDriveDelete(f.driveFileId);}
+  data.files=data.files.filter(x=>String(x.id)!==String(id));await saveData();renderAll();
+ }catch(e){console.error(e);alert('Löschen fehlgeschlagen:\n'+(e.message||e));}
 }
-;
+
+function openModule(){openModal('Neues Modul',`<form onsubmit="addModule(event)"><div class="form-grid"><div class="wide"><label>Modulname</label><input id="mName" required></div><div class="wide"><label>Notiz / Information</label><textarea id="mInfo" placeholder="Prüfung, Inhalte, Besonderheiten..."></textarea></div></div><br><button class="btn" type="submit">Modul speichern</button></form>`)}
+async function addModule(e){e.preventDefault();data.modules.push({id:Date.now(),name:mName.value,info:mInfo.value,note:''});await saveData();closeModal();renderAll()}
+async function deleteModule(id){if(confirm('Modul löschen? Die zugehörigen Dateien bleiben erhalten.')){data.modules=data.modules.filter(x=>x.id!==id);await saveData();renderAll()}}
+function openNote(){openModal('Neue Notiz',`<form onsubmit="addNote(event)"><label>Titel</label><input id="nTitle" required><label style="margin-top:10px">Notiz</label><textarea id="nText"></textarea><br><button class="btn" type="submit">💾 Speichern</button></form>`)}
+async function addNote(e){e.preventDefault();data.notes.push({id:Date.now(),title:nTitle.value,text:nText.value});await saveData();closeModal();alert('Notiz gespeichert.')}
+$('modal').addEventListener('click',e=>{if(e.target.id==='modal')closeModal()});
+$('fileInput').addEventListener('change',e=>{});$('fileInput2').addEventListener('change',e=>handleFiles(e.target.files));
+/* ---------- Cloud / Benutzerkonto ---------- */
+const BUILT_IN_FIREBASE_CONFIG = {
+ apiKey: "AIzaSyD3KsC_q8zzvNICS62WAWVuIe7y0CxzBPk",
+ authDomain: "my-studyplaner.firebaseapp.com",
+ projectId: "my-studyplaner",
+ storageBucket: "my-studyplaner.firebasestorage.app",
+ messagingSenderId: "257868828257",
+ appId: "1:257868828257:web:849deb72baac58fbbc2420",
+ measurementId: "G-MK90M1VYMS"
+};
 function getFirebaseConfig(){
  try{
   const saved=JSON.parse(localStorage.getItem('mystudyplaner_firebase_config')||'null');
@@ -1543,7 +1411,7 @@ function updateCloudStatus(on,label){$('cloudStatus').innerHTML=`<span class="do
 
 function openCloud(){
  let cfg=getFirebaseConfig()||{};
- openModal('☁️ Konto & Synchronisierung',`<div class="note">My Studyplaner kann mit <b>Firebase</b> ein echtes Benutzerkonto, geräteübergreifende Synchronisierung und Cloud-Daten und Google-Drive-Dateien nutzen. Dafür brauchst du ein kostenloses Firebase-Projekt. Die Konfiguration wird nur in deinem Browser gespeichert.</div>
+ openModal('☁️ Konto & Synchronisierung',`<div class="note">My Studyplaner kann mit <b>Firebase</b> ein echtes Benutzerkonto, geräteübergreifende Synchronisierung und Cloud-Dateien nutzen. Dafür brauchst du ein kostenloses Firebase-Projekt. Die Konfiguration wird nur in deinem Browser gespeichert.</div>
  <div style="height:12px"></div>
  <div class="form-grid">
  <div class="wide"><label>E-Mail</label><button class="btn full" onclick="cloudGoogleAuth()">🔵 Mit Google anmelden</button>
@@ -1560,11 +1428,12 @@ function openCloud(){
  <div style="display:flex;gap:7px;margin-top:9px"><button class="btn" onclick="saveFirebaseConfig()">☁️ Cloud aktivieren</button><button class="btn secondary" onclick="clearFirebaseConfig()">Konfiguration löschen</button></div>
  <div class="note" style="margin-top:12px">Firebase-Konsole → Authentication: E-Mail/Passwort aktivieren. Firestore Database und Storage anlegen. Für eine private Nutzung müssen die Firestore-/Storage-Regeln auf den angemeldeten Nutzer begrenzt werden.</div>
  <hr style="border:0;border-top:1px solid #3E3A2Fd5a;margin:17px 0">
- <hr style="border:0;border-top:1px solid var(--line);margin:16px 0">
+ <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line)">
 <h3>📁 Google Drive</h3>
-<div class="muted" id="googleDriveStatus" style="margin:5px 0 10px">Noch nicht verbunden – beim ersten Upload wird einmalig nach der Google-Drive-Freigabe gefragt.</div>
+<div class="muted" id="googleDriveStatus" style="margin:5px 0 10px">Nicht verbunden – beim ersten Upload wird einmalig nach Zugriff gefragt.</div>
 <button class="btn secondary" onclick="connectGoogleDrive()">📁 Google Drive verbinden</button>
-<div class="note" style="margin-top:8px">Deine hochgeladenen PDFs und Dateien liegen in deinem persönlichen Google Drive und bleiben dadurch geräteübergreifend verfügbar.</div>
+<div class="note" style="margin-top:8px">Dateien werden in deinem persönlichen Google Drive gespeichert und sind dadurch auf deinen Geräten verfügbar.</div>
+</div>
 <h3>🗓️ Google Kalender</h3>
  <div class="muted" style="margin:4px 0 10px">Nur Termine mit der von dir ausgewählten Google-Kalenderfarbe werden in My Studyplaner übernommen.</div>
  <button class="btn" onclick="openGoogleCalendarSettings()">🗓️ Google Kalender einrichten</button>
