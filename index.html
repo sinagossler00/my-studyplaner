@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#b8afa0">
-<title>My Studyplaner V88 – Google Drive</title>
+<title>My Studyplaner V89 – Google Drive</title>
 <style>
 :root{
       --bg:#FFF3B8;
@@ -566,6 +566,20 @@ hr{ border-color:#E9E4E2 !important; }
 }
 </style>
 
+
+<style id="mystudyplaner-v89-drive-folder-style">
+.google-drive-folder-note{
+  margin:0 0 12px;
+  padding:9px 11px;
+  border:1px solid #E9E4E2;
+  border-radius:10px;
+  background:#fff;
+  font-size:11px;
+  font-weight:700;
+}
+.google-drive-folder-note span{font-weight:500;color:#666}
+</style>
+
 </head>
 <body>
 <div class="app">
@@ -678,11 +692,12 @@ hr{ border-color:#E9E4E2 !important; }
   </div>
   <div class="card" style="margin-top:18px">
     <div class="card-head">
-      <div><h2>☁️ Dateien aus Google Drive</h2><div class="muted">Dateien aus deinem Drive durchsuchen und direkt öffnen.</div></div>
+      <div><h2>☁️ Dateien aus Google Drive</h2><div class="muted">Hier werden nur die Inhalte deines Ordners „Studium“ angezeigt.</div></div>
       <button class="btn secondary small" onclick="loadGoogleDriveFiles()">🔄 Aktualisieren</button>
     </div>
+    <div class="google-drive-folder-note">📂 Ordner: Studium <span>· Nur dieser Ordner wird mit My Studyplaner verknüpft.</span></div>
     <div class="drive-search-row">
-      <input id="googleDriveSearch" placeholder="🔎 Drive durchsuchen..." oninput="filterGoogleDriveFiles()">
+      <input id="googleDriveSearch" placeholder="🔎 Im Ordner „Studium“ suchen..." oninput="filterGoogleDriveFiles()">
     </div>
     <div id="googleDriveFileList" class="file-grid"></div>
   </div>
@@ -1326,6 +1341,7 @@ const GOOGLE_DRIVE_DEFAULT_CLIENT_ID='119642140783-mbnm7m2v2lkqpirvaj5ronou3l0bg
 let googleDriveTokenClient=null;
 let googleDriveAccessToken='';
 let googleDriveFiles=[];
+let googleDriveFolderId='';
 
 function getGoogleDriveConfig(){
  try{
@@ -1410,15 +1426,30 @@ function filterGoogleDriveFiles(){
  const q=String($('googleDriveSearch')?.value||'').trim().toLowerCase();
  renderGoogleDriveFiles(googleDriveFiles.filter(f=>!q||String(f.name||'').toLowerCase().includes(q)||String(f.mimeType||'').toLowerCase().includes(q)));
 }
+async function findGoogleDriveFolder(){
+ if(!googleDriveAccessToken)throw new Error('Google Drive ist noch nicht autorisiert.');
+ const params=new URLSearchParams({
+  q:"trashed = false and mimeType = 'application/vnd.google-apps.folder' and name = 'Studium'",
+  pageSize:'100',
+  orderBy:'name',
+  fields:'files(id,name,mimeType,parents)'
+ });
+ const res=await googleDriveApi('files?'+params.toString());
+ const folders=(res.files||[]).filter(f=>Array.isArray(f.parents)&&f.parents.includes('root'));
+ googleDriveFolderId=folders[0]?.id||'';
+ if(!googleDriveFolderId)throw new Error('Der Ordner „Studium“ wurde nicht direkt in „Meine Ablage“ gefunden.');
+ return googleDriveFolderId;
+}
 async function loadGoogleDriveFiles(){
  if(!googleDriveAccessToken){renderGoogleDriveFiles([]);return}
  try{
+  const folderId=await findGoogleDriveFolder();
   let all=[],pageToken='';
   do{
    const params=new URLSearchParams({
-    q:"trashed = false",
+    q:`trashed = false and '${folderId}' in parents`,
     pageSize:'1000',
-    orderBy:'modifiedTime desc',
+    orderBy:'folder,name',
     fields:'nextPageToken,files(id,name,mimeType,size,modifiedTime,webViewLink,iconLink,parents)'
    });
    if(pageToken)params.set('pageToken',pageToken);
@@ -1429,7 +1460,14 @@ async function loadGoogleDriveFiles(){
   googleDriveFiles=all;
   filterGoogleDriveFiles();
   updateGoogleDriveStatus();
- }catch(e){console.error(e);alert('Google-Drive-Dateien konnten nicht geladen werden: '+e.message)}
+ }catch(e){
+  console.error(e);
+  googleDriveFiles=[];
+  googleDriveFolderId='';
+  renderGoogleDriveFiles([]);
+  updateGoogleDriveStatus();
+  alert('Der Google-Drive-Ordner „Studium“ konnte nicht geladen werden: '+e.message);
+ }
 }
 async function addDriveFileToPlanner(id){
  const f=googleDriveFiles.find(x=>String(x.id)===String(id));
@@ -1445,9 +1483,9 @@ async function addDriveFileToPlanner(id){
 function openGoogleDriveSettings(){
  const cfg=getGoogleDriveConfig()||{};
  openModal('📁 Google Drive – Einstellungen',`
-  <div class="note">🔒 My Studyplaner liest deine Google-Drive-Dateien und kann neue Uploads in deinem Drive anlegen. Dateien werden nicht automatisch gelöscht, wenn du sie aus My Studyplaner entfernst.</div>
+  <div class="note">🔒 My Studyplaner verwendet ausschließlich deinen Google-Drive-Ordner <b>„Studium“</b>. Angezeigt und für neue Uploads verwendet wird nur dieser Ordner. Dateien werden nicht automatisch gelöscht, wenn du sie aus My Studyplaner entfernst.</div>
   <div style="margin-top:12px"><label>Google OAuth Client-ID</label><input id="googleDriveClientId" value="${esc(cfg.clientId||GOOGLE_DRIVE_DEFAULT_CLIENT_ID)}"></div>
-  <div class="note" style="margin-top:12px">Für deinen persönlichen Planner wird <b>Drive-Lesen</b> plus <b>drive.file</b> verwendet. Die Google-Freigabe erscheint einmalig beim Verbinden.</div>
+  <div class="note" style="margin-top:12px">Gesucht wird der Ordner <b>„Studium“</b> direkt in „Meine Ablage“. Nur dessen Inhalte werden angezeigt; neue Uploads landen automatisch dort.</div>
   <div style="display:flex;gap:7px;margin-top:11px;flex-wrap:wrap">
    <button class="btn" onclick="saveGoogleDriveClientId()">💾 Client-ID speichern</button>
    <button class="btn secondary" onclick="connectGoogleDrive()">☁️ Mit Google verbinden</button>
@@ -1465,7 +1503,7 @@ function saveGoogleDriveClientId(){
 }
 function disconnectGoogleDrive(){
  if(googleDriveAccessToken&&window.google?.accounts?.oauth2){try{google.accounts.oauth2.revoke(googleDriveAccessToken,()=>{})}catch(e){}}
- googleDriveAccessToken='';googleDriveTokenClient=null;googleDriveFiles=[];
+ googleDriveAccessToken='';googleDriveTokenClient=null;googleDriveFiles=[];googleDriveFolderId='';
  localStorage.removeItem(GOOGLE_DRIVE_CONFIG_KEY);renderGoogleDriveFiles([]);updateGoogleDriveStatus();
 }
 function updateGoogleDriveStatus(){
@@ -1473,11 +1511,12 @@ function updateGoogleDriveStatus(){
  const cfg=getGoogleDriveConfig();
  if(!cfg?.clientId){el.textContent='Nicht eingerichtet – deine Drive-Dateien werden hier nach der Google-Freigabe angezeigt.';return}
  if(!googleDriveAccessToken){el.textContent='Client-ID gespeichert – noch nicht mit Google Drive verbunden.';return}
- el.textContent=`Verbunden · ${googleDriveFiles.length} Drive-Dateien verfügbar`;
+ el.textContent=`Verbunden · Ordner „Studium“ · ${googleDriveFiles.length} Dateien verfügbar`;
 }
 async function uploadGoogleDriveFile(file){
  if(!googleDriveAccessToken)throw new Error('Google Drive ist nicht verbunden.');
- const metadata={name:file.name,mimeType:file.type||'application/octet-stream'};
+ const folderId=googleDriveFolderId||await findGoogleDriveFolder();
+ const metadata={name:file.name,mimeType:file.type||'application/octet-stream',parents:[folderId]};
  const boundary='-------MyStudyplanerDrive'+Date.now();
  const body=new Blob([
   `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n`,
