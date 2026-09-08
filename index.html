@@ -61,6 +61,11 @@ h1{margin:0;font-size:29px;font-weight:850}h2{margin:0;font-size:19px;font-weigh
 }
 .deadlines-list-card,.deadlines-calendar-card{min-width:0;}
 .deadlines-calendar-card{padding:16px;}
+.google-calendar-bar-deadlines{margin:-2px 0 10px;padding:8px 9px;}
+.google-calendar-bar-deadlines .google-calendar-title{font-size:11px;}
+.google-calendar-bar-deadlines .google-calendar-status{font-size:9px;}
+.google-calendar-bar-deadlines .google-calendar-actions{gap:5px;}
+
 .deadlines-calendar-card .calendar-wrap{margin:0;border:0;padding:0;}
 @media(max-width:1100px){
   .deadlines-page-layout{grid-template-columns:minmax(0,1.3fr) minmax(340px,.9fr);}
@@ -773,6 +778,16 @@ hr{ border-color:#E9E4E2 !important; }
     </div>
 
     <div class="card deadlines-calendar-card">
+      <div class="google-calendar-bar google-calendar-bar-deadlines" id="googleCalendarBarDeadlines">
+        <div class="google-calendar-main">
+          <div class="google-calendar-title">🗓️ Google Kalender</div>
+          <div class="google-calendar-status" id="googleCalendarStatusDeadlines">Wird mit dem Kalender synchronisiert.</div>
+        </div>
+        <div class="google-calendar-actions">
+          <button class="btn secondary small" onclick="openGoogleCalendarSettings()">⚙️</button>
+          <button class="btn small" onclick="connectGoogleCalendar()">☁️ Synchronisieren</button>
+        </div>
+      </div>
       <div class="calendar-wrap">
         <div class="calendar-nav">
           <button class="btn secondary" onclick="changeCalendarMonth(-1)">‹</button>
@@ -1049,21 +1064,32 @@ function renderCalendar(){
  for(let i=0;i<start;i++)cells.push('<div class="cal-day empty-day"></div>');
  for(let day=1;day<=last.getDate();day++){
    const key=`${y}-${String(m+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-   const items=data.deadlines.filter(d=>d.date===key).slice(0,3);
+   const deadlines=data.deadlines.filter(d=>d.date===key).slice(0,3);
+   const events=(data.events||[]).filter(e=>e.date===key).slice(0,3);
+   const total=(data.deadlines.filter(d=>d.date===key).length)+(data.events||[]).filter(e=>e.date===key).length;
    const today=key===getTodayKey();
-   cells.push(`<div class="cal-day ${today?'today':''}" onclick="openCalendarDay('${key}')"><b>${day}</b>${items.map(d=>`<div class="cal-item ${d.priority||'mittel'}" title="${esc(d.title)}">${esc(d.title)}</div>`).join('')}${data.deadlines.filter(d=>d.date===key).length>3?'<small>+ weitere</small>':''}</div>`);
+   cells.push(`<div class="cal-day ${today?'today':''}" onclick="openCalendarDay('${key}')"><b>${day}</b>
+    ${deadlines.map(d=>`<div class="cal-item ${d.priority||'mittel'} deadline-cal-item" title="${esc(d.title)}${d.time?' · '+d.time+' Uhr':''}" onclick="event.stopPropagation();openCalendarDeadlineDetails(${d.id})">❗ ${esc(d.title)}${d.time?' · '+esc(d.time):''}</div>`).join('')}
+    ${events.map(e=>`<div class="cal-item event-item ${e.googleImported?'google-calendar-event':''}" ${e.googleImported&&e.googleColor?`style="--google-event-color:${esc(e.googleColor)}"`:''} title="${esc(e.title)}${e.time?' · '+e.time+' Uhr':''}" onclick="event.stopPropagation();openCalendarEventDetails(${e.id})">${e.googleImported?'🗓️':'📅'} ${esc(e.title)}${e.time?' · '+esc(e.time):''}</div>`).join('')}
+    ${total>6?'<small>+ weitere</small>':''}</div>`);
  }
  box.innerHTML=cells.join('');
 }
+
 function changeCalendarMonth(delta){
  calendarMonth=new Date(calendarMonth.getFullYear(),calendarMonth.getMonth()+delta,1);
  renderCalendar();
 }
 function openCalendarDay(date){
- const items=data.deadlines.filter(d=>d.date===date);
- if(!items.length){openDeadline(); $('dDate').value=date; return;}
- openModal('Deadlines am '+fmt(date),`<div>${items.map(d=>deadlineHTML(d)).join('')}</div>`);
+ const deadlines=data.deadlines.filter(d=>d.date===date);
+ const events=(data.events||[]).filter(e=>e.date===date);
+ if(!deadlines.length&&!events.length){openDeadline(); $('dDate').value=date; return;}
+ openModal('Termine am '+fmt(date),`<div>
+   ${deadlines.length?`<div style="font-weight:850;margin-bottom:7px">❗ Deadlines</div>${deadlines.map(d=>deadlineHTML(d)).join('')}`:''}
+   ${events.length?`<div style="font-weight:850;margin:14px 0 7px">🗓️ Google-Kalender & Termine</div>${events.map(e=>`<div class="calendar-event-detail" style="padding:9px 0;border-bottom:1px solid var(--line)"><b>${e.googleImported?'🗓️':'📅'} ${esc(e.title)}</b><div class="muted">${e.time?esc(e.time)+' Uhr · ':''}${e.googleImported?'Aus Google Kalender übernommen':'Eigener Termin'}</div><button class="btn secondary small" style="margin-top:6px" onclick="openCalendarEventDetails(${e.id})">Details</button></div>`).join('')}`:''}
+ </div>`);
 }
+
 function renderStats(){
  let total=data.tasks.length,done=data.tasks.filter(x=>x.done).length,pct=total?Math.round(done/total*100):0;
  let upcoming=data.deadlines.filter(x=>x.date>=getTodayKey()).length;
@@ -1875,23 +1901,7 @@ function disconnectGoogleCalendar(){
  closeModal();
  updateGoogleCalendarStatus();
 }
-function updateGoogleCalendarStatus(count){
- const el=$('googleCalendarStatus');
- if(!el)return;
- const cfg=getGoogleCalendarConfig();
- if(!cfg?.clientId){
-  el.textContent='Nicht eingerichtet – du kannst einen Google-Kalender und eine Farbe auswählen. Nur Termine mit dieser Farbe werden übernommen.';
-  return;
- }
- const cal=googleCalendarCalendars.find(c=>String(c.id)===String(cfg.calendarId));
- const color=googleCalendarColors[cfg.colorId]?.background||'';
- const calName=cal?.summary||cfg.calendarId||'Google Kalender';
- if(count!==undefined){
-  el.innerHTML=`Verbunden: <b>${esc(calName)}</b> · nur <span class="google-color-swatch" style="background:${esc(googleSafeColor(color))};vertical-align:-2px"></span> die gewählte Farbe · ${count} Termin${count===1?'':'e'} übernommen`;
- }else{
-  el.textContent=`Eingerichtet: ${calName} · nur Termine mit der gewählten Farbe werden übernommen.`;
- }
-}
+
 async function tryInitGoogleFromSavedConfig(){
  const cfg=getGoogleCalendarConfig();
  if(cfg?.clientId && window.google?.accounts?.oauth2){
@@ -2234,7 +2244,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
 
 <script id="msp-v138-gemini-ai-logic">
-/* V139: Gemini läuft über Firebase AI Logic – kein Gemini-OAuth-Token und kein API-Key im Browser nötig. */
+/* V140: Gemini läuft über Firebase AI Logic – kein Gemini-OAuth-Token und kein API-Key im Browser nötig. */
 function updateGeminiOAuthStatus(){
  const e=$('geminiOAuthStatus');
  if(e)e.textContent='Bereit – Gemini läuft über Firebase AI Logic.';
