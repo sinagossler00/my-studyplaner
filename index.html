@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#b8afa0">
-<title>My Studyplaner V90 – Google Drive</title>
+<title>My Studyplaner V91 – Google Drive</title>
 <style>
 :root{
       --bg:#FFF3B8;
@@ -579,6 +579,46 @@ hr{ border-color:#E9E4E2 !important; }
 }
 .google-drive-folder-note span{font-weight:500;color:#666}
 </style>
+
+
+<style id="mystudyplaner-v91-drive-nav">
+.drive-folder-nav{
+  display:grid;
+  grid-template-columns:repeat(auto-fill,minmax(190px,1fr));
+  gap:9px;
+  margin:0 0 12px;
+}
+.drive-folder-item{
+  display:flex;
+  align-items:center;
+  gap:9px;
+  width:100%;
+  padding:10px 11px;
+  border:1px solid #e7e2df;
+  border-radius:10px;
+  background:#fff;
+  cursor:pointer;
+  text-align:left;
+  font:inherit;
+}
+.drive-folder-item:hover{background:#faf9f7}
+.drive-folder-item .icon{font-size:21px}
+.drive-folder-item .name{font-size:12px;font-weight:850;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.drive-folder-item .sub{font-size:9px;color:#777;margin-top:2px}
+.drive-path{
+  display:flex;align-items:center;gap:5px;flex-wrap:wrap;
+  margin:0 0 10px;font-size:10px;font-weight:800;
+}
+.drive-path button{
+  border:0;background:none;padding:2px 4px;border-radius:5px;
+  cursor:pointer;font:inherit;
+}
+.drive-path button:hover{background:#f2efed}
+.drive-path .sep{color:#aaa}
+.drive-folder-heading{font-size:11px;font-weight:850;margin:3px 0 7px}
+.drive-back{
+  display:inline-flex;align-items:center;gap:4px;margin-bottom:9px;
+}
 
 </head>
 <body>
@@ -1342,6 +1382,9 @@ let googleDriveTokenClient=null;
 let googleDriveAccessToken='';
 let googleDriveFiles=[];
 let googleDriveFolderId='';
+let googleDriveCurrentFolderId='';
+let googleDriveCurrentFolderName='';
+let googleDrivePath=[];
 
 function getGoogleDriveConfig(){
  try{
@@ -1407,24 +1450,91 @@ function renderGoogleDriveFiles(list){
  if(!el)return;
  if(!googleDriveAccessToken){el.innerHTML='<div class="empty">Noch nicht mit Google Drive verbunden.</div>';return}
  const arr=list||[];
- if(!arr.length){el.innerHTML='<div class="empty">Keine passenden Dateien gefunden.</div>';return}
- el.innerHTML=arr.map(f=>{
-  const name=esc(f.name||'(Ohne Titel)');
-  const meta=[f.mimeType||'Datei',driveSafeDate(f.modifiedTime)].filter(Boolean).join(' · ');
-  const link=f.webViewLink||`https://drive.google.com/open?id=${encodeURIComponent(f.id||'')}`;
-  return `<div class="drive-file-card">
-   <div class="drive-file-icon">${driveFileIcon(f.mimeType,f.name)}</div>
-   <div class="drive-file-main"><div class="drive-file-name" title="${name}">${name}</div><div class="drive-file-meta">${esc(meta)}</div></div>
-   <div class="drive-file-actions">
-    <a class="btn secondary" href="${esc(link)}" target="_blank" rel="noopener">Öffnen</a>
-    <button class="btn" onclick="addDriveFileToPlanner('${esc(f.id||'')}')">＋ Übernehmen</button>
-   </div>
-  </div>`;
- }).join('');
+ const folders=arr.filter(f=>f.mimeType==='application/vnd.google-apps.folder');
+ const files=arr.filter(f=>f.mimeType!=='application/vnd.google-apps.folder');
+
+ let pathHtml='';
+ if(googleDrivePath.length){
+   pathHtml='<div class="drive-path">'+googleDrivePath.map((p,i)=>
+     `${i?' <span class="sep">›</span> ':''}<button onclick="openGoogleDrivePath(${i})">📂 ${esc(p.name)}</button>`
+   ).join('')+'</div>';
+ }
+ let folderHtml='';
+ if(folders.length){
+   folderHtml='<div class="drive-folder-heading">📂 Ordner</div><div class="drive-folder-nav">'+folders.map(f=>
+     `<button class="drive-folder-item" onclick="openGoogleDriveFolder('${esc(f.id||'')}','${esc(f.name||'').replace(/'/g,"&#39;")}')">
+       <span class="icon">📂</span>
+       <span><div class="name">${esc(f.name||'Ordner')}</div><div class="sub">Ordner öffnen</div></span>
+     </button>`
+   ).join('')+'</div>';
+ }
+ let fileHtml='';
+ if(files.length){
+   fileHtml='<div class="drive-file-heading" style="font-size:11px;font-weight:850;margin:8px 0 7px">📄 Dateien</div>'+
+   '<div class="drive-file-grid">'+files.map(f=>{
+    const name=esc(f.name||'(Ohne Titel)');
+    const meta=[f.mimeType||'Datei',driveSafeDate(f.modifiedTime)].filter(Boolean).join(' · ');
+    const link=f.webViewLink||`https://drive.google.com/open?id=${encodeURIComponent(f.id||'')}`;
+    return `<div class="drive-file-card">
+      <div class="drive-file-icon">${driveFileIcon(f.mimeType,f.name)}</div>
+      <div class="drive-file-main"><div class="drive-file-name" title="${name}">${name}</div><div class="drive-file-meta">${esc(meta)}</div></div>
+      <div class="drive-file-actions">
+       <a class="btn secondary" href="${esc(link)}" target="_blank" rel="noopener">Öffnen</a>
+       <button class="btn" onclick="addDriveFileToPlanner('${esc(f.id||'')}')">＋ Übernehmen</button>
+      </div>
+    </div>`;
+   }).join('')+'</div>';
+ } else if(!folders.length){
+   fileHtml='<div class="empty">Dieser Ordner ist leer.</div>';
+ }
+ el.innerHTML=pathHtml+folderHtml+fileHtml;
+}
+async function openGoogleDriveFolder(id,name){
+ if(!id)return;
+ googleDriveCurrentFolderId=id;
+ googleDriveCurrentFolderName=name||'Ordner';
+ const existing=googleDrivePath.findIndex(p=>p.id===id);
+ if(existing>=0)googleDrivePath=googleDrivePath.slice(0,existing+1);
+ else googleDrivePath.push({id,name:name||'Ordner'});
+ $('googleDriveSearch').value='';
+ await loadGoogleDriveFolderContents(id);
+}
+async function openGoogleDrivePath(index){
+ const p=googleDrivePath[index];
+ if(!p)return;
+ googleDrivePath=googleDrivePath.slice(0,index+1);
+ googleDriveCurrentFolderId=p.id;
+ googleDriveCurrentFolderName=p.name;
+ $('googleDriveSearch').value='';
+ await loadGoogleDriveFolderContents(p.id);
+}
+async function loadGoogleDriveFolderContents(folderId){
+ try{
+  let all=[],pageToken='';
+  do{
+   const params=new URLSearchParams({
+    q:`trashed = false and '${folderId}' in parents`,
+    pageSize:'1000',
+    orderBy:'folder,name',
+    fields:'nextPageToken,files(id,name,mimeType,size,modifiedTime,webViewLink,iconLink,parents)'
+   });
+   if(pageToken)params.set('pageToken',pageToken);
+   const res=await googleDriveApi('files?'+params.toString());
+   all=all.concat(res.files||[]);
+   pageToken=res.nextPageToken||'';
+  }while(pageToken);
+  googleDriveFiles=all;
+  filterGoogleDriveFiles();
+ }catch(e){
+  console.error(e);
+  alert('Der Drive-Ordner konnte nicht geöffnet werden: '+e.message);
+ }
 }
 function filterGoogleDriveFiles(){
  const q=String($('googleDriveSearch')?.value||'').trim().toLowerCase();
- renderGoogleDriveFiles(googleDriveFiles.filter(f=>!q||String(f.name||'').toLowerCase().includes(q)||String(f.mimeType||'').toLowerCase().includes(q)));
+ const base=googleDriveFiles||[];
+ const filtered=q?base.filter(f=>String(f.name||'').toLowerCase().includes(q)||String(f.mimeType||'').toLowerCase().includes(q)):base;
+ renderGoogleDriveFiles(filtered);
 }
 async function findGoogleDriveFolder(){
  if(!googleDriveAccessToken)throw new Error('Google Drive ist noch nicht autorisiert.');
@@ -1444,29 +1554,18 @@ async function loadGoogleDriveFiles(){
  if(!googleDriveAccessToken){renderGoogleDriveFiles([]);return}
  try{
   const folderId=await findGoogleDriveFolder();
-  let all=[],pageToken='';
-  do{
-   const params=new URLSearchParams({
-    q:`trashed = false and '${folderId}' in parents`,
-    pageSize:'1000',
-    orderBy:'folder,name',
-    fields:'nextPageToken,files(id,name,mimeType,size,modifiedTime,webViewLink,iconLink,parents)'
-   });
-   if(pageToken)params.set('pageToken',pageToken);
-   const res=await googleDriveApi('files?'+params.toString());
-   all=all.concat(res.files||[]);
-   pageToken=res.nextPageToken||'';
-  }while(pageToken);
-  googleDriveFiles=all;
-  filterGoogleDriveFiles();
+  googleDriveCurrentFolderId=folderId;
+  googleDriveCurrentFolderName=googleDriveFolderName||'Studium';
+  googleDrivePath=[{id:folderId,name:googleDriveCurrentFolderName}];
+  $('googleDriveSearch').value='';
+  await loadGoogleDriveFolderContents(folderId);
   updateGoogleDriveStatus();
  }catch(e){
   console.error(e);
   googleDriveFiles=[];
-  googleDriveFolderId='';
   renderGoogleDriveFiles([]);
   updateGoogleDriveStatus();
-  alert('Der Google-Drive-Ordner „Studium“ konnte nicht geladen werden: '+e.message);
+  alert('Der ausgewählte Google-Drive-Ordner konnte nicht geladen werden: '+e.message);
  }
 }
 async function addDriveFileToPlanner(id){
@@ -1485,7 +1584,7 @@ function openGoogleDriveSettings(){
  openModal('📁 Google Drive – Einstellungen',`
   <div class="note">🔒 My Studyplaner verwendet ausschließlich deinen Google-Drive-Ordner <b>„Studium“</b>. Angezeigt und für neue Uploads verwendet wird nur dieser Ordner. Dateien werden nicht automatisch gelöscht, wenn du sie aus My Studyplaner entfernst.</div>
   <div style="margin-top:12px"><label>Google OAuth Client-ID</label><input id="googleDriveClientId" value="${esc(cfg.clientId||GOOGLE_DRIVE_DEFAULT_CLIENT_ID)}"></div>
-  <div class="note" style="margin-top:12px">Gesucht wird der Ordner <b>„Studium“</b> direkt in „Meine Ablage“. Nur dessen Inhalte werden angezeigt; neue Uploads landen automatisch dort.</div>
+  <div class="note" style="margin-top:12px">Der verknüpfte Ordner (z. B. <b>„Studium“</b>) ist dein Startpunkt. Seine Unterordner werden hier angezeigt und können angeklickt werden. Neue Uploads landen weiterhin im verknüpften Startordner.</div>
   <div style="display:flex;gap:7px;margin-top:11px;flex-wrap:wrap">
    <button class="btn" onclick="saveGoogleDriveClientId()">💾 Client-ID speichern</button>
    <button class="btn secondary" onclick="connectGoogleDrive()">☁️ Mit Google verbinden</button>
@@ -1503,7 +1602,7 @@ function saveGoogleDriveClientId(){
 }
 function disconnectGoogleDrive(){
  if(googleDriveAccessToken&&window.google?.accounts?.oauth2){try{google.accounts.oauth2.revoke(googleDriveAccessToken,()=>{})}catch(e){}}
- googleDriveAccessToken='';googleDriveTokenClient=null;googleDriveFiles=[];googleDriveFolderId='';
+ googleDriveAccessToken='';googleDriveTokenClient=null;googleDriveFiles=[];googleDriveFolderId='';googleDriveCurrentFolderId='';googleDriveCurrentFolderName='';googleDrivePath=[];
  localStorage.removeItem(GOOGLE_DRIVE_CONFIG_KEY);renderGoogleDriveFiles([]);updateGoogleDriveStatus();
 }
 function updateGoogleDriveStatus(){
