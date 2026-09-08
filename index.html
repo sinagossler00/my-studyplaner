@@ -802,7 +802,7 @@ function go(page){
  setActiveNav(page);
  document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));$(page).classList.add('active');
  document.querySelectorAll('.nav button').forEach(x=>x.classList.toggle('active',x.dataset.page===page));
- const t={home:['🏠 Hallo!','Schön, dass du hier bist. Bleib dran!'],tasks:['☑️ Aufgaben','Was steht heute, diese Woche oder diesen Monat an?'],'planner-calendar':['Kalender 📅','Deadlines und Termine übersichtlich im Monatskalender.'],calendar:['❗ Deadlines & Termine','Behalte alle wichtigen Fristen im Blick.'],files:['📁 Dateien & Infos','Alles Wichtige schnell griffbereit.'],modules:['📚 Meine Module','Deine Module und ihre Dateien.'],stats:['📊 Statistiken','Dein aktueller Studienfortschritt.'],'uni-links':['Uni-Webseiten 🔗','Wichtige Webseiten rund ums Studium an einem Ort.']}[page];
+ const t={home:['🏠 Hallo!','Schön, dass du hier bist. Bleib dran!'],tasks:['☑️ Aufgaben','Was steht heute, diese Woche oder diesen Monat an?'],'planner-calendar':['Kalender 📅','Deadlines und Termine übersichtlich im Monatskalender.'],calendar:['❗ Deadlines & Termine','Behalte alle wichtigen Fristen im Blick.'],files:['📁 Dateien & Infos','Alles Wichtige schnell griffbereit. Dateien werden sicher in deinem Google Drive gespeichert.'],modules:['📚 Meine Module','Deine Module und ihre Dateien.'],stats:['📊 Statistiken','Dein aktueller Studienfortschritt.'],'uni-links':['Uni-Webseiten 🔗','Wichtige Webseiten rund ums Studium an einem Ort.']}[page];
  $('pageTitle').textContent=t[0];$('pageSubtitle').textContent=t[1];renderAll()
 }
 document.querySelectorAll('.nav button').forEach(b=>b.onclick=()=>go(b.dataset.page));
@@ -999,7 +999,7 @@ function renderPsychologyDay(){
 }
 
 function renderAll(){if(!data.events)data.events=[];
- data.deadlines=(data.deadlines||[]).map(d=>({...d,priority:['hoch','mittel','leicht'].includes(String(d.priority||'').toLowerCase())?String(d.priority||'').toLowerCase():'mittel'}));renderHomeOverview();renderDeadlines('home');renderDeadlines('calendar');renderTasks();renderFiles();renderCalendar();renderPlannerCalendar();renderReminders();renderPsychologyDay();updateGoogleCalendarStatus()}
+ data.deadlines=(data.deadlines||[]).map(d=>({...d,priority:['hoch','mittel','leicht'].includes(String(d.priority||'').toLowerCase())?String(d.priority||'').toLowerCase():'mittel'}));renderHomeOverview();renderDeadlines('home');renderDeadlines('calendar');renderTasks();renderFiles();renderCalendar();renderPlannerCalendar();renderReminders();renderPsychologyDay();updateGoogleCalendarStatus();updateDriveStatus()}
 function setDeadlineFilter(v,btn){deadlineFilter=v;document.querySelectorAll('.tabs .tab').forEach(x=>{if(x.closest('#home')||x.closest('#calendar'))x.classList.remove('active')});if(btn)btn.classList.add('active');renderAll()}
 function setTaskFilter(v,btn){taskFilter=v;document.querySelectorAll('#tasks .tab').forEach(x=>x.classList.remove('active'));btn.classList.add('active');renderTasks()}
 function reminderLabel(v){
@@ -1254,26 +1254,210 @@ function triggerUpload2(){let f=$('fileInput2');f.value='';f.click()}
 async function handleFiles(files){for(const f of [...files])await addFile(f,null);await saveData();renderAll()}
 async function uploadModule(id){let f=$('moduleInput_'+id);f.value='';f.click()}
 async function handleModuleFiles(id,files){for(const f of [...files])await addFile(f,id);await saveData();renderAll()}
-async function addFile(f,moduleId){
- let item={id:String(Date.now())+Math.random().toString(16).slice(2),name:f.name,size:f.size,type:f.type,kind:f.type.startsWith('image/')?'image':f.type==='application/pdf'?'pdf':'file',moduleId:moduleId||null,url:'',storagePath:''};
- if(cloudEnabled&&currentUser&&fb){
-  try{
-   let ref=fb.storage.ref().child(`users/${currentUser.uid}/${item.id}_${f.name}`);
-   let snap=await ref.put(f);
-   item.url=await snap.ref.getDownloadURL();
-   item.storagePath=snap.ref.fullPath;
-  }catch(e){
-   alert('Cloud-Upload fehlgeschlagen: '+e.message);
-   return;
-  }
- } else {
-  alert('Bitte zuerst unter ☁️ Konto einloggen. Dann wird die PDF dauerhaft gespeichert und kann auch nach einem Reload geöffnet werden.');
+/* ---------- Google Drive Datei-Speicher ---------- */
+const GOOGLE_DRIVE_SCOPE='https://www.googleapis.com/auth/drive.file';
+let googleDriveTokenClient=null;
+let googleDriveAccessToken='';
+
+function initGoogleDriveTokenClient(){
+ const cfg=getGoogleCalendarConfig()||{};
+ const clientId=cfg.clientId||GOOGLE_CALENDAR_DEFAULT_CLIENT_ID;
+ if(!clientId||!window.google||!google.accounts||!google.accounts.oauth2)return null;
+ if(googleDriveTokenClient)return googleDriveTokenClient;
+ googleDriveTokenClient=google.accounts.oauth2.initTokenClient({
+  client_id:clientId,
+  scope:GOOGLE_DRIVE_SCOPE,
+  callback:async response=>{
+   if(response?.error){
+    console.warn('Google Drive Autorisierung:',response);
+    alert('Google Drive-Freigabe fehlgeschlagen: '+(response.error_description||response.error));
+    return;
+   }
+   googleDriveAccessToken=response.access_token||'';
+   try{
+    await syncGoogleDriveFiles();
+   }catch(e){
+    console.error(e);
+    alert('Google Drive konnte nicht geladen werden: '+e.message);
+   }
+  },
+  error_callback:err=>console.warn('Google Drive Hintergrund-Sync nicht möglich:',err)
+ });
+ return googleDriveTokenClient;
+}
+
+function connectGoogleDrive(){
+ const client=initGoogleDriveTokenClient();
+ if(!client){
+  alert('Google-Bibliothek ist noch nicht geladen. Bitte kurz warten und erneut versuchen.');
   return;
  }
- data.files.push(item);
- await saveData();
+ client.requestAccessToken({prompt:googleDriveAccessToken?'':'consent'});
 }
-async function deleteFile(id){if(confirm('Datei aus My Studyplaner löschen?')){data.files=data.files.filter(x=>String(x.id)!==String(id));await saveData();renderAll()}}
+
+async function googleDriveUpload(file){
+ if(!googleDriveAccessToken)throw new Error('Google Drive ist noch nicht autorisiert.');
+ const metadata={
+  name:file.name,
+  mimeType:file.type||'application/octet-stream'
+ };
+ const boundary='mystudyplaner_'+Date.now();
+ const body=new Blob([
+  `--${boundary}\r\n`,
+  'Content-Type: application/json; charset=UTF-8\r\n\r\n',
+  JSON.stringify(metadata),
+  `\r\n--${boundary}\r\n`,
+  `Content-Type: ${file.type||'application/octet-stream'}\r\n\r\n`,
+  file,
+  `\r\n--${boundary}--`
+ ]);
+ const res=await fetch(
+  'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,mimeType,size,webViewLink,webContentLink',
+  {
+   method:'POST',
+   headers:{
+    Authorization:'Bearer '+googleDriveAccessToken,
+    'Content-Type':`multipart/related; boundary=${boundary}`
+   },
+   body
+  }
+ );
+ const json=await res.json();
+ if(!res.ok)throw new Error(json?.error?.message||'Google Drive Upload fehlgeschlagen.');
+ return json;
+}
+
+async function googleDriveDelete(fileId){
+ if(!googleDriveAccessToken)throw new Error('Google Drive ist nicht autorisiert.');
+ const res=await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}`,{
+  method:'DELETE',
+  headers:{Authorization:'Bearer '+googleDriveAccessToken}
+ });
+ if(!res.ok && res.status!==404){
+  const json=await res.json().catch(()=>({}));
+  throw new Error(json?.error?.message||'Datei konnte in Google Drive nicht gelöscht werden.');
+ }
+}
+
+async function syncGoogleDriveFiles(){
+ if(!googleDriveAccessToken)return;
+ const q=encodeURIComponent("trashed = false");
+ const res=await fetch(
+  `https://www.googleapis.com/drive/v3/files?pageSize=1000&orderBy=createdTime desc&q=${q}&fields=files(id,name,mimeType,size,webViewLink,webContentLink,createdTime,modifiedTime)`
+  ,{headers:{Authorization:'Bearer '+googleDriveAccessToken}}
+ );
+ const json=await res.json();
+ if(!res.ok)throw new Error(json?.error?.message||'Google Drive konnte nicht geladen werden.');
+ const driveFiles=Array.isArray(json.files)?json.files:[];
+ const localByDrive=new Map((data.files||[]).filter(f=>f.driveFileId).map(f=>[String(f.driveFileId),f]));
+ for(const f of driveFiles){
+  if(localByDrive.has(String(f.id)))continue;
+  // Nur von My Studyplaner erstellte Dateien werden mit dem Planer verknüpft.
+  // Bereits vorhandene Drive-Dateien bleiben unangetastet.
+ }
+ updateDriveStatus();
+ renderAll();
+}
+
+function updateDriveStatus(){
+ const el=$('googleDriveStatus');
+ if(!el)return;
+ el.textContent=googleDriveAccessToken
+  ? 'Verbunden – neue Dateien werden in deinem Google Drive gespeichert.'
+  : 'Nicht verbunden – beim ersten Upload wirst du einmalig um Zugriff gebeten.';
+}
+
+async function ensureGoogleDrive(){
+ if(googleDriveAccessToken)return true;
+ const client=initGoogleDriveTokenClient();
+ if(!client){
+  alert('Google Drive konnte noch nicht geladen werden. Bitte kurz warten und erneut versuchen.');
+  return false;
+ }
+ return await new Promise(resolve=>{
+  const previous=client.callback;
+  client.callback=async response=>{
+   if(response?.error){
+    alert('Google Drive-Freigabe fehlgeschlagen: '+(response.error_description||response.error));
+    resolve(false);
+    return;
+   }
+   googleDriveAccessToken=response.access_token||'';
+   resolve(!!googleDriveAccessToken);
+  };
+  client.requestAccessToken({prompt:'consent'});
+  setTimeout(()=>{ if(!googleDriveAccessToken)resolve(false); },30000);
+ });
+}
+
+async function addFile(f,moduleId){
+ const ok=await ensureGoogleDrive();
+ if(!ok)return;
+ const item={
+  id:String(Date.now())+Math.random().toString(16).slice(2),
+  name:f.name,size:f.size,type:f.type,
+  kind:f.type.startsWith('image/')?'image':f.type==='application/pdf'?'pdf':'file',
+  moduleId:moduleId||null,url:'',storagePath:'',driveFileId:''
+ };
+ try{
+  const uploaded=await googleDriveUpload(f);
+  item.driveFileId=uploaded.id;
+  item.url=uploaded.webViewLink||`https://drive.google.com/file/d/${uploaded.id}/view`;
+  item.driveName=uploaded.name||f.name;
+  item.driveMimeType=uploaded.mimeType||f.type;
+  data.files.push(item);
+  await saveData();
+  updateDriveStatus();
+ }catch(e){
+  console.error(e);
+  alert('Google-Drive-Upload fehlgeschlagen: '+e.message);
+ }
+}
+
+async function openFile(id){
+ const f=data.files.find(x=>String(x.id)===String(id));
+ if(!f)return;
+ if(f.driveFileId){
+  const url=f.url||`https://drive.google.com/file/d/${f.driveFileId}/view`;
+  const win=window.open(url,'_blank','noopener');
+  if(!win)alert('Der Browser hat das Öffnen blockiert. Bitte Popups für My Studyplaner erlauben.');
+  return;
+ }
+ if(f.url){
+  const win=window.open(f.url,'_blank','noopener');
+  if(!win)alert('Der Browser hat das Öffnen blockiert. Bitte Popups für My Studyplaner erlauben.');
+  return;
+ }
+ if(f.storagePath&&cloudEnabled&&fb){
+  try{
+   const url=await fb.storage.ref(f.storagePath).getDownloadURL();
+   f.url=url;
+   await saveData();
+   window.open(url,'_blank','noopener');
+   return;
+  }catch(e){console.warn(e)}
+ }
+ alert('Diese Datei hat keinen gültigen Online-Speicherort. Bitte die Datei neu hochladen.');
+}
+
+async function deleteFile(id){
+ if(!confirm('Datei aus My Studyplaner und deinem Google Drive löschen?'))return;
+ const f=data.files.find(x=>String(x.id)===String(id));
+ if(!f)return;
+ try{
+  if(f.driveFileId){
+   const ok=await ensureGoogleDrive();
+   if(!ok)return;
+   await googleDriveDelete(f.driveFileId);
+  }
+  data.files=data.files.filter(x=>String(x.id)!==String(id));
+  await saveData();
+  renderAll();
+ }catch(e){
+  console.error(e);
+  alert('Löschen fehlgeschlagen: '+e.message);
+ }
+}
 function openModule(){openModal('Neues Modul',`<form onsubmit="addModule(event)"><div class="form-grid"><div class="wide"><label>Modulname</label><input id="mName" required></div><div class="wide"><label>Notiz / Information</label><textarea id="mInfo" placeholder="Prüfung, Inhalte, Besonderheiten..."></textarea></div></div><br><button class="btn" type="submit">Modul speichern</button></form>`)}
 async function addModule(e){e.preventDefault();data.modules.push({id:Date.now(),name:mName.value,info:mInfo.value,note:''});await saveData();closeModal();renderAll()}
 async function deleteModule(id){if(confirm('Modul löschen? Die zugehörigen Dateien bleiben erhalten.')){data.modules=data.modules.filter(x=>x.id!==id);await saveData();renderAll()}}
@@ -1343,7 +1527,7 @@ function updateCloudStatus(on,label){$('cloudStatus').innerHTML=`<span class="do
 
 function openCloud(){
  let cfg=getFirebaseConfig()||{};
- openModal('☁️ Konto & Synchronisierung',`<div class="note">My Studyplaner kann mit <b>Firebase</b> ein echtes Benutzerkonto, geräteübergreifende Synchronisierung und Cloud-Dateien nutzen. Dafür brauchst du ein kostenloses Firebase-Projekt. Die Konfiguration wird nur in deinem Browser gespeichert.</div>
+ openModal('☁️ Konto & Synchronisierung',`<div class="note">My Studyplaner kann mit <b>Firebase</b> dein Benutzerkonto und die geräteübergreifende Synchronisierung nutzen. Dateien werden separat in deinem <b>Google Drive</b> gespeichert. Dafür brauchst du ein kostenloses Firebase-Projekt. Die Konfiguration wird nur in deinem Browser gespeichert.</div>
  <div style="height:12px"></div>
  <div class="form-grid">
  <div class="wide"><label>E-Mail</label><button class="btn full" onclick="cloudGoogleAuth()">🔵 Mit Google anmelden</button>
@@ -1358,8 +1542,13 @@ function openCloud(){
  <h3>☁️ Firebase verbinden</h3><div class="muted" style="margin:4px 0 10px">Einmalig die Web-App-Konfiguration aus deinem Firebase-Projekt einfügen.</div>
  <textarea id="firebaseConfig" placeholder='{"apiKey":"...","authDomain":"...","projectId":"...","storageBucket":"...","messagingSenderId":"...","appId":"..."}' style="min-height:135px">${esc(JSON.stringify(cfg,null,2))}</textarea>
  <div style="display:flex;gap:7px;margin-top:9px"><button class="btn" onclick="saveFirebaseConfig()">☁️ Cloud aktivieren</button><button class="btn secondary" onclick="clearFirebaseConfig()">Konfiguration löschen</button></div>
- <div class="note" style="margin-top:12px">Firebase-Konsole → Authentication: E-Mail/Passwort aktivieren. Firestore Database und Storage anlegen. Für eine private Nutzung müssen die Firestore-/Storage-Regeln auf den angemeldeten Nutzer begrenzt werden.</div>
+ <div class="note" style="margin-top:12px">Firebase-Konsole → Authentication: E-Mail/Passwort oder Google aktivieren. Firestore Database anlegen. Für die Dateien wird kein Firebase Storage benötigt – sie liegen in deinem Google Drive.</div>
  <hr style="border:0;border-top:1px solid #3E3A2Fd5a;margin:17px 0">
+ <hr style="border:0;border-top:1px solid #3E3A2Fd5a;margin:17px 0">
+ <h3>📁 Google Drive</h3>
+ <div class="muted" style="margin:4px 0 10px" id="googleDriveStatus">Nicht verbunden – beim ersten Upload wirst du einmalig um Zugriff gebeten.</div>
+ <button class="btn" onclick="connectGoogleDrive()">📁 Google Drive verbinden</button>
+ <div class="note" style="margin-top:10px">Hochgeladene PDFs und Dateien werden in deinem persönlichen Google Drive gespeichert. My Studyplaner speichert nur die Dateiinformationen und den Drive-Link in deinem Konto.</div>
  <h3>🗓️ Google Kalender</h3>
  <div class="muted" style="margin:4px 0 10px">Nur Termine mit der von dir ausgewählten Google-Kalenderfarbe werden in My Studyplaner übernommen.</div>
  <button class="btn" onclick="openGoogleCalendarSettings()">🗓️ Google Kalender einrichten</button>
