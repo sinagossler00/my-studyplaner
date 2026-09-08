@@ -1403,6 +1403,7 @@ function getFirebaseConfig(){
   return saved&&saved.apiKey&&saved.projectId?saved:BUILT_IN_FIREBASE_CONFIG;
  }catch{return BUILT_IN_FIREBASE_CONFIG}
 }
+window.MSP_FIREBASE_CONFIG=getFirebaseConfig();
 async function initCloud(){
  const cfg=getFirebaseConfig();
  if(!cfg||!cfg.apiKey){updateCloudStatus(false);return}
@@ -1474,9 +1475,9 @@ function openCloud(){
 </div>
 <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line)">
 <h3>🤖 Gemini KI</h3>
-<div class="muted" id="geminiOAuthStatus" style="margin:5px 0 10px">Nicht verbunden – mit deinem Google-Konto verbinden.</div>
-<button class="btn secondary" onclick="connectGeminiGoogle()">🔵 Mit Google für Gemini verbinden</button>
-<div class="note" style="margin-top:8px">Du brauchst keinen Gemini-API-Schlüssel. My Studyplaner nutzt die Google-Anmeldung und dein Google-Konto für die Gemini API.</div>
+<div class="muted" id="geminiOAuthStatus" style="margin:5px 0 10px">Bereit – Gemini läuft über Firebase AI Logic.</div>
+<button class="btn secondary" onclick="connectGeminiGoogle()">🤖 Gemini testen</button>
+<div class="note" style="margin-top:8px">Kein Gemini-API-Schlüssel und kein separater Gemini-Login nötig. Die KI läuft über Firebase AI Logic.</div>
 </div>
 <h3>🗓️ Google Kalender</h3>
  <div class="muted" style="margin:4px 0 10px">Nur Termine mit der von dir ausgewählten Google-Kalenderfarbe werden in My Studyplaner übernommen.</div>
@@ -2160,147 +2161,102 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
 
 
-<script id="msp-v135-gemini-oauth">
-const GEMINI_OAUTH_SCOPE='https://www.googleapis.com/auth/cloud-platform https://www.googleapis.com/auth/generative-language.retriever';
-let geminiTokenClient=null;
-let geminiAccessToken='';
-
-function geminiClientId(){
- const cfg=getGoogleCalendarConfig()||{};
- return cfg.clientId||GOOGLE_CALENDAR_DEFAULT_CLIENT_ID||'';
-}
-function initGeminiOAuth(){
- const id=geminiClientId();
- if(!id||!window.google||!google.accounts||!google.accounts.oauth2)return null;
- if(geminiTokenClient)return geminiTokenClient;
- geminiTokenClient=google.accounts.oauth2.initTokenClient({
-   client_id:id,
-   scope:GEMINI_OAUTH_SCOPE,
-   include_granted_scopes:true,
-   callback:()=>{},
-   error_callback:e=>console.warn('Gemini Google OAuth:',e)
- });
- return geminiTokenClient;
-}
+<script id="msp-v137-gemini-ai-logic">
+/* V137: Gemini läuft über Firebase AI Logic – kein Gemini-OAuth-Token und kein API-Key im Browser nötig. */
 function updateGeminiOAuthStatus(){
  const e=$('geminiOAuthStatus');
- if(e)e.textContent=geminiAccessToken?'Verbunden – Gemini kann dein Google-Konto verwenden.':'Nicht verbunden – mit deinem Google-Konto verbinden.';
-}
-function geminiAuth(){
- if(geminiAccessToken)return Promise.resolve(true);
- const c=initGeminiOAuth();
- if(!c){
-   alert('Google-Anmeldung für Gemini ist noch nicht bereit. Bitte die Seite neu laden und kurz warten.');
-   return Promise.resolve(false);
- }
- return new Promise(resolve=>{
-   c.callback=r=>{
-     const required='https://www.googleapis.com/auth/generative-language.retriever';
-     const granted=String(r?.scope||'').split(/\s+/).filter(Boolean);
-     if(r&&r.access_token&&granted.includes(required)){
-       geminiAccessToken=r.access_token;
-       updateGeminiOAuthStatus();
-       resolve(true);
-     }else{
-       console.warn('Gemini OAuth: erforderlicher Scope fehlt.',r);
-       alert('Google hat die Gemini-Berechtigung nicht vollständig freigegeben. Bitte die Gemini-Genehmigung erneut bestätigen.');
-       resolve(false);
-     }
-   };
-   try{
-     c.requestAccessToken({prompt:'consent'});
-   }catch(e){console.error(e);resolve(false);}
- });
+ if(e)e.textContent='Bereit – Gemini läuft über Firebase AI Logic.';
 }
 async function connectGeminiGoogle(){
- const ok=await geminiAuth();
- if(ok)alert('Gemini ist jetzt mit deinem Google-Konto verbunden. Du kannst den Podcast erstellen.');
- else alert('Die Google-Verbindung für Gemini konnte nicht hergestellt werden.');
  updateGeminiOAuthStatus();
+ alert('Gemini ist für My Studyplaner über Firebase AI Logic bereit. Du brauchst keinen separaten Gemini-Login oder API-Schlüssel.');
 }
 </script>
 
-<script id="msp-v124-podcast">
-const GEMINI_KEY='mystudyplaner_gemini_api_key_v1';
-const GEMINI_TEXT_MODEL='gemini-2.5-flash';
+<script id="msp-v137-podcast">
+const GEMINI_TEXT_MODEL='gemini-3.7-flash';
 const GEMINI_TTS_MODEL='gemini-3.1-flash-tts-preview';
+let mspAI=null;
 
-function getGeminiApiKey(){return localStorage.getItem(GEMINI_KEY)||'';}
-function saveGeminiApiKey(){
-  const e=$('geminiApiKey'),k=(e?.value||'').trim();
-  if(!k){alert('Bitte einen Gemini-API-Schlüssel einfügen.');return;}
-  localStorage.setItem(GEMINI_KEY,k);alert('Gemini-API-Schlüssel gespeichert.');
+function mspFirebaseConfig(){
+ return window.MSP_FIREBASE_CONFIG||{};
 }
-function clearGeminiApiKey(){localStorage.removeItem(GEMINI_KEY);const e=$('geminiApiKey');if(e)e.value='';}
-
-function openPodcast(){
- openModal('🎙️ KI-Podcast',`<div class="podcast-intro">Erstelle aus deiner Zusammenfassung einen verständlichen Lern-Podcast.</div>
- <label>Zusammenfassung / Lerntext</label>
- <textarea id="podcastSourceText" placeholder="Zusammenfassung hier einfügen..." style="min-height:220px"></textarea>
- <div class="form-grid" style="margin-top:10px">
-  <div><label>Stil</label><select id="podcastStyle"><option value="lern">ruhig & verständlich</option><option value="locker">locker & motivierend</option><option value="pruefung">prüfungsorientiert</option></select></div>
-  <div><label>Länge</label><select id="podcastLength"><option value="kurz">kurz</option><option value="mittel" selected>mittel</option></select></div>
- </div>
- <div id="podcastStatus" class="muted" style="margin-top:9px;min-height:18px"></div>
- <button class="btn" style="margin-top:10px" onclick="createAIPodcast()">🎙️ Podcast erstellen</button>
- <div id="podcastResult"></div>`);
+async function mspGetAI(){
+ if(mspAI)return mspAI;
+ const cfg=mspFirebaseConfig();
+ if(!cfg.apiKey||!cfg.projectId)throw new Error('Firebase-Konfiguration fehlt.');
+ const mod=await import('https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js');
+ const aimod=await import('https://www.gstatic.com/firebasejs/12.18.0/firebase-ai.js');
+ let app;
+ try{app=mod.initializeApp(cfg,'mystudyplaner-ai-logic');}
+ catch(e){
+   if(String(e?.code||'').includes('duplicate-app'))app=mod.getApp('mystudyplaner-ai-logic');
+   else throw e;
+ }
+ mspAI=aimod.getAI(app,{backend:new aimod.GoogleAIBackend()});
+ return mspAI;
+}
+async function mspTextModel(){
+ const ai=await mspGetAI();
+ const {getGenerativeModel}=await import('https://www.gstatic.com/firebasejs/12.18.0/firebase-ai.js');
+ return getGenerativeModel(ai,{model:GEMINI_TEXT_MODEL});
+}
+async function mspTTSModel(){
+ const ai=await mspGetAI();
+ const {getGenerativeModel,ResponseModality}=await import('https://www.gstatic.com/firebasejs/12.18.0/firebase-ai.js');
+ const generationConfig={
+  responseModalities:[ResponseModality.AUDIO],
+  speechConfig:{
+   multiSpeakerVoiceConfig:{
+    speakerVoiceConfigs:[
+     {speaker:'Anna',voiceConfig:{prebuiltVoiceConfig:{voiceName:'Kore'}}},
+     {speaker:'Ben',voiceConfig:{prebuiltVoiceConfig:{voiceName:'Puck'}}}
+    ]
+   },
+   languageCode:'de-DE'
+  }
+ };
+ return getGenerativeModel(ai,{model:GEMINI_TTS_MODEL,generationConfig});
 }
 async function geminiText(prompt){
- if(!await geminiAuth())throw new Error('Bitte zuerst im ☁️ Konto mit Google für Gemini verbinden.');
- const projectId='my-studyplaner';
- const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+GEMINI_TEXT_MODEL+':generateContent',{
-  method:'POST',
-  headers:{
-   'Content-Type':'application/json',
-   'Authorization':'Bearer '+geminiAccessToken,
-   'x-goog-user-project':projectId
-  },
-  body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:.65,maxOutputTokens:4500}})
- });
- const j=await r.json().catch(()=>({}));
- if(!r.ok){
-  const msg=j.error?.message||`Gemini (${r.status})`;
-  if(/insufficient authentication scopes/i.test(msg)){
-    throw new Error('Google-Berechtigung für Gemini fehlt. Bitte unter ☁️ Konto → Gemini KI erneut mit Google verbinden und die Berechtigung bestätigen.');
-  }
-  throw new Error(msg);
- }
- const t=j.candidates?.[0]?.content?.parts?.map(p=>p.text||'').join('').trim();
- if(!t)throw new Error('Gemini hat keinen Podcast-Text erstellt.');
- return t;
+ const model=await mspTextModel();
+ const result=await model.generateContent(prompt);
+ const text=result?.response?.text?.();
+ if(!text)throw new Error('Gemini hat keinen Podcast-Text erstellt.');
+ return text.trim();
 }
-function b64bytes(b64){const s=atob(b64),a=new Uint8Array(s.length);for(let i=0;i<s.length;i++)a[i]=s.charCodeAt(i);return a;}
 function pcmWav(pcm){
  const rate=24000,ch=1,bits=16,b=new ArrayBuffer(44),v=new DataView(b),w=(o,s)=>{for(let i=0;i<s.length;i++)v.setUint8(o+i,s.charCodeAt(i));};
  w(0,'RIFF');v.setUint32(4,36+pcm.length,true);w(8,'WAVE');w(12,'fmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,ch,true);v.setUint32(24,rate,true);v.setUint32(28,rate*2,true);v.setUint16(32,2,true);v.setUint16(34,bits,true);w(36,'data');v.setUint32(40,pcm.length,true);
  return new Blob([b,pcm],{type:'audio/wav'});
 }
+function concatUint8(parts){
+ const total=parts.reduce((n,a)=>n+a.length,0),out=new Uint8Array(total);
+ let o=0;for(const a of parts){out.set(a,o);o+=a.length;}
+ return out;
+}
 async function geminiTTS(script){
- if(!await geminiAuth())throw new Error('Bitte zuerst im ☁️ Konto mit Google für Gemini verbinden.');
- const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+GEMINI_TTS_MODEL+':generateContent',{
-  method:'POST',
-  headers:{
-   'Content-Type':'application/json',
-   'Authorization':'Bearer '+geminiAccessToken,
-   'x-goog-user-project':'my-studyplaner'
-  },
-  body:JSON.stringify({contents:[{parts:[{text:'Speak this German learning podcast naturally. Conversation between Anna and Ben:\n'+script}]}],
-   generationConfig:{responseModalities:['AUDIO'],speechConfig:{multiSpeakerVoiceConfig:{speakerVoiceConfigs:[
-    {speaker:'Anna',voiceConfig:{prebuiltVoiceConfig:{voiceName:'Kore'}}},
-    {speaker:'Ben',voiceConfig:{prebuiltVoiceConfig:{voiceName:'Puck'}}}
-   ]}}}})
- });
- const j=await r.json().catch(()=>({}));
- if(!r.ok){
-  const msg=j.error?.message||`Gemini TTS (${r.status})`;
-  if(/insufficient authentication scopes/i.test(msg)){
-    throw new Error('Google-Berechtigung für Gemini fehlt. Bitte unter ☁️ Konto → Gemini KI erneut mit Google verbinden und die Berechtigung bestätigen.');
-  }
-  throw new Error(msg);
+ const model=await mspTTSModel();
+ const result=await model.generateContent(`Audio Profile:
+Natural German educational podcast with two clearly distinct speakers.
+Director's Notes:
+Read the dialogue exactly as written. Speak naturally, clearly and conversationally.
+Do not read the speaker names aloud.
+
+Dialogue:
+${script}`);
+ const parts=result?.response?.inlineDataParts?.()||[];
+ const pcmParts=[];
+ for(const p of parts){
+   const b64=p?.inlineData?.data;
+   if(b64){
+     const bin=atob(b64),a=new Uint8Array(bin.length);
+     for(let i=0;i<bin.length;i++)a[i]=bin.charCodeAt(i);
+     pcmParts.push(a);
+   }
  }
- const p=j.candidates?.[0]?.content?.parts?.find(x=>x.inlineData);
- if(!p?.inlineData?.data)throw new Error('Keine Audiodatei erhalten. Bitte eine kürzere Zusammenfassung versuchen.');
- return pcmWav(b64bytes(p.inlineData.data));
+ if(!pcmParts.length)throw new Error('Keine Audiodatei erhalten. Bitte eine kürzere Zusammenfassung versuchen.');
+ return pcmWav(concatUint8(pcmParts));
 }
 async function createAIPodcast(){
  const source=($('podcastSourceText')?.value||'').trim();
@@ -2312,20 +2268,40 @@ async function createAIPodcast(){
   const len=$('podcastLength').value==='kurz'?'450–650':'750–1000';
   const script=await geminiText(`Erstelle aus dieser Psychologie-Zusammenfassung ein deutsches Lern-Podcast-Skript.
 Stil: ${style}. Länge: etwa ${len} Wörter. Bleibe ausschließlich bei den Inhalten der Zusammenfassung.
-Nutze zwei Sprecher Anna und Ben, erkläre schwierige Begriffe kurz und baue am Ende 3 Wiederholungsfragen ein.
-Nur Gespräch ausgeben im Format Anna: ... / Ben: ...
+Nutze genau zwei Sprecher: Anna und Ben. Erkläre schwierige Begriffe kurz und baue am Ende 3 Wiederholungsfragen ein.
+Nur Gespräch ausgeben im Format:
+Anna: ...
+Ben: ...
 
 ZUSAMMENFASSUNG:
 ${source.slice(0,60000)}`);
   status.textContent='🎙️ Audio wird erzeugt…';
-  const audio=await geminiTTS(script);
+  let audio;
+  for(let attempt=1;attempt<=2;attempt++){
+   try{audio=await geminiTTS(script);break;}
+   catch(e){
+    if(attempt===2)throw e;
+    await new Promise(r=>setTimeout(r,900));
+   }
+  }
   const url=URL.createObjectURL(audio);
   result.innerHTML=`<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line)"><b>🎧 Dein Lern-Podcast</b><audio controls style="width:100%;margin-top:10px" src="${url}"></audio><details style="margin-top:9px"><summary>📝 Skript</summary><div style="white-space:pre-wrap;font-size:12px;line-height:1.5;margin-top:7px">${esc(script)}</div></details></div>`;
   status.textContent='✓ Podcast fertig.';
- }catch(e){console.error(e);status.textContent='';alert('Podcast konnte nicht erstellt werden:\n\n'+(e.message||e));}
+ }catch(e){
+  console.error(e);
+  status.textContent='';
+  let msg=e?.message||String(e);
+  if(/permission|unauthorized|forbidden|app check|api key|billing|quota/i.test(msg)){
+    msg+='\\n\\nFalls Firebase AI Logic noch nicht für das Projekt eingerichtet ist, muss es einmal in Firebase Console → AI Logic aktiviert werden.';
+  }
+  alert('Podcast konnte nicht erstellt werden:\n\n'+msg);
+ }
 }
 </script>
 
+<script id="msp-v137-ai-bootstrap">
+window.addEventListener('load',()=>{try{updateGeminiOAuthStatus()}catch(e){console.warn(e)}});
+</script>
 </body>
 </html>
 
