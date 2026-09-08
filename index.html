@@ -567,6 +567,30 @@ hr{ border-color:#E9E4E2 !important; }
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23ffffff'/%3E%3Ctext x='32' y='43' text-anchor='middle' font-size='40'%3E🎓%3C/text%3E%3C/svg%3E">
 <meta name="theme-color" content="#ffffff">
 
+
+<style id="mystudyplaner-v99-file-open">
+.file-clickable{
+  position:relative;
+  cursor:pointer;
+  transition:transform .12s ease, box-shadow .12s ease;
+}
+.file-clickable:hover{
+  transform:translateY(-1px);
+  box-shadow:0 5px 14px rgba(0,0,0,.08);
+}
+.file-open-hint{
+  margin-top:6px;
+  font-size:10px;
+  font-weight:800;
+  text-decoration:underline;
+}
+.file-clickable .file-actions{
+  position:absolute;
+  top:7px;
+  right:7px;
+}
+</style>
+
 </head>
 <body>
 <div class="app">
@@ -816,10 +840,29 @@ function renderTasks(){
  let open=data.tasks.filter(t=>!t.done&&matches(t)).slice(0,7);$('homeTasks').innerHTML=open.length?open.map(taskHTML).join(''):'<div class="empty">Alles erledigt ✓</div>';
 }
 function fileIcon(f){return f.kind==='image'?'▧':f.kind==='pdf'?'▤':'▤'}
+function openFile(id){
+ const f=data.files.find(x=>String(x.id)===String(id));
+ if(!f)return;
+ if(f.url){
+   window.open(f.url,'_blank','noopener');
+ }else{
+   alert('Diese Datei hat noch keinen gespeicherten Link. Wenn du sie dauerhaft öffnen möchtest, lade sie mit einem verbundenen Konto erneut hoch.');
+ }
+}
+function renderFileCard(f,home=false){
+ return `<div class="file file-clickable" onclick="openFile('${f.id}')" title="Klicken zum Öffnen">
+   <div class="file-icon">${fileIcon(f)}</div>
+   <div class="file-name">${esc(f.name)}</div>
+   <div class="file-meta">${esc(f.type||'Datei')} · ${Math.max(1,Math.round((f.size||0)/1024))} KB</div>
+   <div class="file-actions">
+     ${!home?`<button class="trash" onclick="event.stopPropagation();deleteFile('${f.id}')">×</button>`:''}
+   </div>
+   <div class="file-open-hint">↗ Öffnen</div>
+ </div>`;
+}
 function renderFiles(){
- let html=data.files.map(f=>`<div class="file"><div class="file-icon">${fileIcon(f)}</div><div class="file-name">${esc(f.name)}</div><div class="file-meta">${esc(f.type||'Datei')} · ${Math.max(1,Math.round((f.size||0)/1024))} KB</div><div class="file-actions"><button class="trash" onclick="deleteFile('${f.id}')">×</button></div></div>`).join('');
- $('fileList').innerHTML=html||'<div class="empty">Noch keine Dateien hochgeladen.</div>';
- $('homeFiles').innerHTML=data.files.slice(0,5).map(f=>`<div class="file"><div class="file-icon">${fileIcon(f)}</div><div class="file-name">${esc(f.name)}</div><div class="file-meta">${esc(f.type||'Datei')}</div></div>`).join('')||'<div class="empty">Noch keine Dateien.</div>'
+ $('fileList').innerHTML=data.files.map(f=>renderFileCard(f,false)).join('')||'<div class="empty">Noch keine Dateien hochgeladen.</div>';
+ $('homeFiles').innerHTML=data.files.slice(0,5).map(f=>renderFileCard(f,true)).join('')||'<div class="empty">Noch keine Dateien.</div>';
 }
 function moduleFiles(id){return data.files.filter(f=>String(f.moduleId)===String(id))}
 function renderModules(){
