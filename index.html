@@ -591,6 +591,11 @@ hr{ border-color:#E9E4E2 !important; }
 }
 </style>
 
+
+<style id="mystudyplaner-v100-files-persistent">
+.file-clickable .file-open-hint{opacity:.85}
+</style>
+
 </head>
 <body>
 <div class="app">
@@ -840,14 +845,24 @@ function renderTasks(){
  let open=data.tasks.filter(t=>!t.done&&matches(t)).slice(0,7);$('homeTasks').innerHTML=open.length?open.map(taskHTML).join(''):'<div class="empty">Alles erledigt ✓</div>';
 }
 function fileIcon(f){return f.kind==='image'?'▧':f.kind==='pdf'?'▤':'▤'}
-function openFile(id){
+async function openFile(id){
  const f=data.files.find(x=>String(x.id)===String(id));
  if(!f)return;
  if(f.url){
-   window.open(f.url,'_blank','noopener');
- }else{
-   alert('Diese Datei hat noch keinen gespeicherten Link. Wenn du sie dauerhaft öffnen möchtest, lade sie mit einem verbundenen Konto erneut hoch.');
+   const win=window.open(f.url,'_blank','noopener');
+   if(!win) alert('Der Browser hat das Öffnen blockiert. Bitte Popups für My Studyplaner erlauben.');
+   return;
  }
+ if(f.storagePath&&cloudEnabled&&fb){
+   try{
+    const url=await fb.storage.ref(f.storagePath).getDownloadURL();
+    f.url=url;
+    await saveData();
+    window.open(url,'_blank','noopener');
+    return;
+   }catch(e){console.warn(e)}
+ }
+ alert('Diese Datei wurde früher nur lokal gespeichert und der alte Dateilink ist nach dem Neuladen nicht mehr gültig. Bitte die PDF einmal neu hochladen, während du unter ☁️ Konto angemeldet bist. Danach lässt sie sich dauerhaft öffnen.');
 }
 function renderFileCard(f,home=false){
  return `<div class="file file-clickable" onclick="openFile('${f.id}')" title="Klicken zum Öffnen">
@@ -1240,13 +1255,23 @@ async function handleFiles(files){for(const f of [...files])await addFile(f,null
 async function uploadModule(id){let f=$('moduleInput_'+id);f.value='';f.click()}
 async function handleModuleFiles(id,files){for(const f of [...files])await addFile(f,id);await saveData();renderAll()}
 async function addFile(f,moduleId){
- let item={id:String(Date.now())+Math.random().toString(16).slice(2),name:f.name,size:f.size,type:f.type,kind:f.type.startsWith('image/')?'image':f.type==='application/pdf'?'pdf':'file',moduleId:moduleId||null,url:''};
+ let item={id:String(Date.now())+Math.random().toString(16).slice(2),name:f.name,size:f.size,type:f.type,kind:f.type.startsWith('image/')?'image':f.type==='application/pdf'?'pdf':'file',moduleId:moduleId||null,url:'',storagePath:''};
  if(cloudEnabled&&currentUser&&fb){
-  try{let ref=fb.storage.ref().child(`users/${currentUser.uid}/${item.id}_${f.name}`);let snap=await ref.put(f);item.url=await snap.ref.getDownloadURL()}catch(e){alert('Cloud-Upload fehlgeschlagen: '+e.message);return}
+  try{
+   let ref=fb.storage.ref().child(`users/${currentUser.uid}/${item.id}_${f.name}`);
+   let snap=await ref.put(f);
+   item.url=await snap.ref.getDownloadURL();
+   item.storagePath=snap.ref.fullPath;
+  }catch(e){
+   alert('Cloud-Upload fehlgeschlagen: '+e.message);
+   return;
+  }
  } else {
-  item.url=URL.createObjectURL(f);
+  alert('Bitte zuerst unter ☁️ Konto einloggen. Dann wird die PDF dauerhaft gespeichert und kann auch nach einem Reload geöffnet werden.');
+  return;
  }
- data.files.push(item)
+ data.files.push(item);
+ await saveData();
 }
 async function deleteFile(id){if(confirm('Datei aus My Studyplaner löschen?')){data.files=data.files.filter(x=>String(x.id)!==String(id));await saveData();renderAll()}}
 function openModule(){openModal('Neues Modul',`<form onsubmit="addModule(event)"><div class="form-grid"><div class="wide"><label>Modulname</label><input id="mName" required></div><div class="wide"><label>Notiz / Information</label><textarea id="mInfo" placeholder="Prüfung, Inhalte, Besonderheiten..."></textarea></div></div><br><button class="btn" type="submit">Modul speichern</button></form>`)}
