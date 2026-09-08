@@ -2161,7 +2161,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
 
 <script id="msp-v135-gemini-oauth">
-const GEMINI_OAUTH_SCOPE='https://www.googleapis.com/auth/cloud-platform';
+const GEMINI_OAUTH_SCOPE='https://www.googleapis.com/auth/cloud-platform https://www.googleapis.com/auth/generative-language.retriever';
 let geminiTokenClient=null;
 let geminiAccessToken='';
 
@@ -2176,6 +2176,7 @@ function initGeminiOAuth(){
  geminiTokenClient=google.accounts.oauth2.initTokenClient({
    client_id:id,
    scope:GEMINI_OAUTH_SCOPE,
+   include_granted_scopes:true,
    callback:()=>{},
    error_callback:e=>console.warn('Gemini Google OAuth:',e)
  });
@@ -2194,11 +2195,17 @@ function geminiAuth(){
  }
  return new Promise(resolve=>{
    c.callback=r=>{
-     if(r&&r.access_token){
+     const required='https://www.googleapis.com/auth/generative-language.retriever';
+     const granted=String(r?.scope||'').split(/\s+/).filter(Boolean);
+     if(r&&r.access_token&&granted.includes(required)){
        geminiAccessToken=r.access_token;
        updateGeminiOAuthStatus();
        resolve(true);
-     }else resolve(false);
+     }else{
+       console.warn('Gemini OAuth: erforderlicher Scope fehlt.',r);
+       alert('Google hat die Gemini-Berechtigung nicht vollständig freigegeben. Bitte die Gemini-Genehmigung erneut bestätigen.');
+       resolve(false);
+     }
    };
    try{
      c.requestAccessToken({prompt:'consent'});
@@ -2251,7 +2258,13 @@ async function geminiText(prompt){
   body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:.65,maxOutputTokens:4500}})
  });
  const j=await r.json().catch(()=>({}));
- if(!r.ok)throw new Error(j.error?.message||`Gemini (${r.status})`);
+ if(!r.ok){
+  const msg=j.error?.message||`Gemini (${r.status})`;
+  if(/insufficient authentication scopes/i.test(msg)){
+    throw new Error('Google-Berechtigung für Gemini fehlt. Bitte unter ☁️ Konto → Gemini KI erneut mit Google verbinden und die Berechtigung bestätigen.');
+  }
+  throw new Error(msg);
+ }
  const t=j.candidates?.[0]?.content?.parts?.map(p=>p.text||'').join('').trim();
  if(!t)throw new Error('Gemini hat keinen Podcast-Text erstellt.');
  return t;
@@ -2278,7 +2291,13 @@ async function geminiTTS(script){
    ]}}}})
  });
  const j=await r.json().catch(()=>({}));
- if(!r.ok)throw new Error(j.error?.message||`Gemini TTS (${r.status})`);
+ if(!r.ok){
+  const msg=j.error?.message||`Gemini TTS (${r.status})`;
+  if(/insufficient authentication scopes/i.test(msg)){
+    throw new Error('Google-Berechtigung für Gemini fehlt. Bitte unter ☁️ Konto → Gemini KI erneut mit Google verbinden und die Berechtigung bestätigen.');
+  }
+  throw new Error(msg);
+ }
  const p=j.candidates?.[0]?.content?.parts?.find(x=>x.inlineData);
  if(!p?.inlineData?.data)throw new Error('Keine Audiodatei erhalten. Bitte eine kürzere Zusammenfassung versuchen.');
  return pcmWav(b64bytes(p.inlineData.data));
