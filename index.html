@@ -1317,7 +1317,11 @@ function openCloud(){
  openModal('☁️ Konto & Synchronisierung',`<div class="note">My Studyplaner kann mit <b>Firebase</b> ein echtes Benutzerkonto, geräteübergreifende Synchronisierung und Cloud-Dateien nutzen. Dafür brauchst du ein kostenloses Firebase-Projekt. Die Konfiguration wird nur in deinem Browser gespeichert.</div>
  <div style="height:12px"></div>
  <div class="form-grid">
- <div class="wide"><label>E-Mail</label><input id="cEmail" type="email" placeholder="deine@email.de"></div>
+ <div class="wide"><label>E-Mail</label><button class="btn full" onclick="cloudGoogleAuth()">🔵 Mit Google anmelden</button>
+<div style="display:flex;align-items:center;gap:8px;margin:12px 0;color:var(--muted);font-size:11px">
+<span style="height:1px;background:var(--line);flex:1"></span><span>oder mit E-Mail</span><span style="height:1px;background:var(--line);flex:1"></span>
+</div>
+<input id="cEmail" type="email" placeholder="deine@email.de"></div>
  <div><label>Passwort</label><input id="cPassword" type="password" placeholder="mind. 6 Zeichen"></div>
  <div><label>Aktion</label><select id="cAction"><option value="login">Anmelden</option><option value="signup">Neues Konto erstellen</option></select></div>
  </div>
@@ -1336,6 +1340,24 @@ async function saveFirebaseConfig(){
  try{let cfg=JSON.parse($('firebaseConfig').value);if(!cfg.apiKey||!cfg.projectId)throw Error('apiKey und projectId fehlen.');localStorage.setItem('mystudyplaner_firebase_config',JSON.stringify(cfg));location.reload()}catch(e){alert('Ungültige Konfiguration: '+e.message)}
 }
 function clearFirebaseConfig(){localStorage.removeItem('mystudyplaner_firebase_config');location.reload()}
+
+async function cloudGoogleAuth(){
+ if(!fb){alert('Die Cloud-Verbindung ist noch nicht bereit. Bitte Seite kurz neu laden und erneut versuchen.');return}
+ try{
+  const provider=new firebase.auth.GoogleAuthProvider();
+  provider.setCustomParameters({prompt:'select_account'});
+  await fb.auth.signInWithPopup(provider);
+  closeModal();
+ }catch(e){
+  if(e&&e.code==='auth/popup-closed-by-user')return;
+  if(e&&e.code==='auth/popup-blocked'){
+   alert('Der Google-Anmelde-Popup wurde blockiert. Bitte Popups für My Studyplaner erlauben.');
+   return;
+  }
+  alert('Google-Anmeldung fehlgeschlagen: '+(e.message||e));
+ }
+}
+
 async function cloudAuth(){
  if(!fb){alert('Bitte zuerst die Firebase-Konfiguration einfügen und „Cloud aktivieren“ wählen.');return}
  try{
