@@ -634,6 +634,72 @@ hr{ border-color:#E9E4E2 !important; }
   background:#FFF2B8 !important;
 }
 </style>
+
+<style id="msp-v139-podcast-library-style">
+.podcast-library{
+  margin-top:18px;
+}
+.podcast-library-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  margin-bottom:10px;
+}
+.podcast-library-head h3{
+  margin:0;
+  font-size:16px;
+}
+.podcast-list{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+.saved-podcast{
+  border:1px solid var(--line);
+  border-radius:10px;
+  padding:11px 12px;
+  background:var(--card);
+}
+.saved-podcast-top{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:10px;
+}
+.saved-podcast-title{
+  font-size:13px;
+  font-weight:850;
+  line-height:1.3;
+}
+.saved-podcast-meta{
+  margin-top:3px;
+  font-size:10px;
+  color:var(--muted);
+}
+.saved-podcast-actions{
+  display:flex;
+  gap:6px;
+  flex-wrap:wrap;
+  margin-top:9px;
+}
+.saved-podcast audio{
+  width:100%;
+  margin-top:9px;
+}
+.saved-podcast .script-box{
+  margin-top:8px;
+}
+.saved-podcast .trash{
+  flex:0 0 auto;
+}
+.podcast-empty{
+  padding:14px 0;
+  color:var(--muted);
+  font-size:11px;
+}
+</style>
+
 </head>
 <body>
 <div class="app">
@@ -730,7 +796,12 @@ hr{ border-color:#E9E4E2 !important; }
 <div class="card-head"><div><h2>🎙️ KI-Podcast</h2><div class="muted">Deine Zusammenfassungen als Lern-Podcast.</div></div></div>
 <div style="display:flex;align-items:center;gap:14px">
 <div style="font-size:28px">🤖</div><div><div style="font-weight:800;margin-bottom:4px">Zusammenfassung in Podcast umwandeln</div><div class="muted" style="margin-bottom:10px">Text einfügen und die KI erstellt daraus einen gesprochenen Lern-Podcast.</div><button id="openPodcastBtn" type="button" class="btn">🎙️ Podcast erstellen</button></div>
-</div></div></section>
+</div>
+<div class="podcast-library">
+  <div class="podcast-library-head"><h3>🎧 Meine gespeicherten Podcasts</h3></div>
+  <div id="savedPodcastList" class="podcast-list"></div>
+</div>
+</div></section>
 
 <section id="planner-calendar" class="page">
 
@@ -815,9 +886,10 @@ const defaultData={
   {id:21,name:'Statistik 1',info:'Vorlesungen, Aufgaben und Prüfung'},
   {id:22,name:'Entwicklungspsychologie',info:'Hausarbeit & Literatur'},
   {id:23,name:'Biologische Psychologie',info:'Klausur & Lernmaterial'}
- ],notes:[]
+ ],notes:[],podcasts:[]
 };
 let data=JSON.parse(localStorage.getItem(KEY)||'null')||structuredClone(defaultData);
+if(!Array.isArray(data.podcasts))data.podcasts=[];
 let deadlineFilter='all',taskFilter='open',currentUser=null,fb=null,cloudEnabled=false,calendarMonth=new Date(new Date().getFullYear(),new Date().getMonth(),1);
 const $=id=>document.getElementById(id);
 function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
@@ -1037,7 +1109,7 @@ function renderPsychologyDay(){
 }
 
 function renderAll(){if(!data.events)data.events=[];
- data.deadlines=(data.deadlines||[]).map(d=>({...d,priority:['hoch','mittel','leicht'].includes(String(d.priority||'').toLowerCase())?String(d.priority||'').toLowerCase():'mittel'}));renderHomeOverview();renderDeadlines('home');renderDeadlines('calendar');renderTasks();renderFiles();renderCalendar();renderPlannerCalendar();renderReminders();renderPsychologyDay();updateGoogleCalendarStatus()}
+ data.deadlines=(data.deadlines||[]).map(d=>({...d,priority:['hoch','mittel','leicht'].includes(String(d.priority||'').toLowerCase())?String(d.priority||'').toLowerCase():'mittel'}));renderHomeOverview();renderDeadlines('home');renderDeadlines('calendar');renderTasks();renderFiles();renderCalendar();renderPlannerCalendar();renderReminders();renderPsychologyDay();renderSavedPodcasts();updateGoogleCalendarStatus()}
 function setDeadlineFilter(v,btn){deadlineFilter=v;document.querySelectorAll('.tabs .tab').forEach(x=>{if(x.closest('#home')||x.closest('#calendar'))x.classList.remove('active')});if(btn)btn.classList.add('active');renderAll()}
 function setTaskFilter(v,btn){taskFilter=v;document.querySelectorAll('#tasks .tab').forEach(x=>x.classList.remove('active'));btn.classList.add('active');renderTasks()}
 function reminderLabel(v){
@@ -2162,7 +2234,7 @@ document.addEventListener('DOMContentLoaded', ()=>{
 
 
 <script id="msp-v138-gemini-ai-logic">
-/* V138: Gemini läuft über Firebase AI Logic – kein Gemini-OAuth-Token und kein API-Key im Browser nötig. */
+/* V139: Gemini läuft über Firebase AI Logic – kein Gemini-OAuth-Token und kein API-Key im Browser nötig. */
 function updateGeminiOAuthStatus(){
  const e=$('geminiOAuthStatus');
  if(e)e.textContent='Bereit – Gemini läuft über Firebase AI Logic.';
@@ -2173,10 +2245,12 @@ async function connectGeminiGoogle(){
 }
 </script>
 
-<script id="msp-v138-podcast-ui">
+<script id="msp-v139-podcast-ui">
 window.openPodcast=function(){
   openModal('🎙️ KI-Podcast',`<div class="podcast-intro">Erstelle aus deiner Zusammenfassung einen verständlichen Lern-Podcast.</div>
-  <label>Zusammenfassung / Lerntext</label>
+  <label>Titel</label>
+  <input id="podcastTitle" placeholder="z. B. Entwicklungspsychologie – Gedächtnis">
+  <label style="margin-top:10px">Zusammenfassung / Lerntext</label>
   <textarea id="podcastSourceText" placeholder="Zusammenfassung hier einfügen..." style="min-height:220px"></textarea>
   <div class="form-grid" style="margin-top:10px">
    <div><label>Stil</label><select id="podcastStyle"><option value="lern">ruhig & verständlich</option><option value="locker">locker & motivierend</option><option value="pruefung">prüfungsorientiert</option></select></div>
@@ -2194,7 +2268,7 @@ window.addEventListener('DOMContentLoaded',()=>{
 });
 </script>
 
-<script id="msp-v138-podcast">
+<script id="msp-v139-podcast">
 const GEMINI_TEXT_MODEL='gemini-3.7-flash';
 const GEMINI_TTS_MODEL='gemini-3.1-flash-tts-preview';
 let mspAI=null;
@@ -2279,14 +2353,97 @@ ${script}`);
  if(!pcmParts.length)throw new Error('Keine Audiodatei erhalten. Bitte eine kürzere Zusammenfassung versuchen.');
  return pcmWav(concatUint8(pcmParts));
 }
+
+async function savePodcastToDrive(item,audio){
+ if(!await googleDriveAuth())throw new Error('Google Drive-Zugriff wurde nicht erteilt. Der Podcast kann ohne Drive nicht dauerhaft gespeichert werden.');
+ const file=new File([audio],item.fileName,{type:'audio/wav'});
+ const u=await googleDriveUpload(file);
+ item.driveFileId=u.id;
+ item.url=u.webViewLink||('https://drive.google.com/file/d/'+u.id+'/view');
+}
+
+function renderSavedPodcasts(){
+ const el=$('savedPodcastList');
+ if(!el)return;
+ const list=Array.isArray(data.podcasts)?data.podcasts:[];
+ if(!list.length){
+   el.innerHTML='<div class="podcast-empty">Noch keine Podcasts gespeichert. Deine nächsten fertigen Podcasts erscheinen hier automatisch.</div>';
+   return;
+ }
+ el.innerHTML=list.slice().sort((a,b)=>Number(b.createdAt||0)-Number(a.createdAt||0)).map(p=>{
+   const date=p.createdAt?new Date(p.createdAt).toLocaleString('de-DE',{dateStyle:'medium',timeStyle:'short'}):'';
+   const meta=[date,p.styleLabel,p.lengthLabel].filter(Boolean).join(' · ');
+   return `<article class="saved-podcast">
+     <div class="saved-podcast-top">
+       <div><div class="saved-podcast-title">🎧 ${esc(p.title||'Lern-Podcast')}</div><div class="saved-podcast-meta">${esc(meta)}</div></div>
+       <button class="trash" type="button" onclick="deleteSavedPodcast('${esc(p.id)}')" title="Podcast löschen">×</button>
+     </div>
+     <div class="saved-podcast-actions">
+       <button class="btn small" type="button" onclick="playSavedPodcast('${esc(p.id)}',this)">▶️ Abspielen</button>
+       <button class="btn secondary small" type="button" onclick="showSavedPodcastScript('${esc(p.id)}')">📝 Skript</button>
+     </div>
+     <div id="savedPodcastPlayer_${esc(p.id)}"></div>
+   </article>`;
+ }).join('');
+}
+
+async function playSavedPodcast(id,btn){
+ const p=(data.podcasts||[]).find(x=>String(x.id)===String(id));
+ if(!p)return;
+ const holder=$('savedPodcastPlayer_'+id);
+ if(!holder)return;
+ try{
+   btn.disabled=true;btn.textContent='⏳ Laden…';
+   if(!p.driveFileId)throw new Error('Für diesen Podcast ist keine gespeicherte Audiodatei vorhanden.');
+   if(!await googleDriveAuth())throw new Error('Google Drive-Zugriff wurde nicht erteilt.');
+   const r=await driveFetch('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(p.driveFileId)+'?alt=media');
+   if(!r.ok)throw new Error('Google Drive ('+r.status+'): '+await r.text());
+   const blob=await r.blob();
+   if(p._objectUrl)URL.revokeObjectURL(p._objectUrl);
+   p._objectUrl=URL.createObjectURL(blob);
+   holder.innerHTML=`<audio controls autoplay src="${p._objectUrl}"></audio>`;
+ }catch(e){
+   console.error(e);alert('Podcast konnte nicht geladen werden:\n'+(e.message||e));
+ }finally{
+   btn.disabled=false;btn.textContent='▶️ Abspielen';
+ }
+}
+
+function showSavedPodcastScript(id){
+ const p=(data.podcasts||[]).find(x=>String(x.id)===String(id));
+ if(!p)return;
+ openModal('📝 Podcast-Skript',`<div class="podcast-intro">${esc(p.title||'Lern-Podcast')}</div>
+ <div style="white-space:pre-wrap;font-size:12px;line-height:1.55">${esc(p.script||'Kein Skript gespeichert.')}</div>`);
+}
+
+async function deleteSavedPodcast(id){
+ const p=(data.podcasts||[]).find(x=>String(x.id)===String(id));
+ if(!p)return;
+ if(!confirm('Diesen gespeicherten Podcast auch aus Google Drive löschen?'))return;
+ try{
+   if(p.driveFileId){
+     if(!await googleDriveAuth())return;
+     await googleDriveDelete(p.driveFileId);
+   }
+   if(p._objectUrl)URL.revokeObjectURL(p._objectUrl);
+   data.podcasts=data.podcasts.filter(x=>String(x.id)!==String(id));
+   await saveData();
+   renderSavedPodcasts();
+ }catch(e){
+   console.error(e);alert('Podcast konnte nicht gelöscht werden:\n'+(e.message||e));
+ }
+}
+
 window.createAIPodcast=async function(){
  const source=($('podcastSourceText')?.value||'').trim();
  if(source.length<100){alert('Bitte zuerst deine Zusammenfassung einfügen.');return;}
  const status=$('podcastStatus'),result=$('podcastResult');
  try{
   status.textContent='🤖 Podcast-Skript wird erstellt…';result.innerHTML='';
-  const style={lern:'ruhig, klar und lernfreundlich',locker:'locker und motivierend',pruefung:'prüfungsorientiert'}[$('podcastStyle').value];
+  const styleValue=$('podcastStyle').value;
+  const style={lern:'ruhig, klar und lernfreundlich',locker:'locker und motivierend',pruefung:'prüfungsorientiert'}[styleValue];
   const len=$('podcastLength').value==='kurz'?'450–650':'750–1000';
+  const title=(($('podcastTitle')?.value||'').trim())||('Lern-Podcast · '+new Date().toLocaleDateString('de-DE'));
   const script=await geminiText(`Erstelle aus dieser Psychologie-Zusammenfassung ein deutsches Lern-Podcast-Skript.
 Stil: ${style}. Länge: etwa ${len} Wörter. Bleibe ausschließlich bei den Inhalten der Zusammenfassung.
 Nutze genau zwei Sprecher: Anna und Ben. Erkläre schwierige Begriffe kurz und baue am Ende 3 Wiederholungsfragen ein.
@@ -2305,9 +2462,30 @@ ${source.slice(0,60000)}`);
     await new Promise(r=>setTimeout(r,900));
    }
   }
+
+  status.textContent='☁️ Podcast wird dauerhaft gespeichert…';
+  const item={
+    id:String(Date.now())+Math.random().toString(16).slice(2),
+    title,
+    script,
+    createdAt:Date.now(),
+    style:styleValue,
+    styleLabel:{lern:'ruhig & verständlich',locker:'locker & motivierend',pruefung:'prüfungsorientiert'}[styleValue],
+    length:$('podcastLength').value,
+    lengthLabel:$('podcastLength').value==='kurz'?'kurz':'mittel',
+    fileName:'My Studyplaner – '+title.replace(/[\\/:*?"<>|]/g,'-').slice(0,90)+'.wav',
+    driveFileId:'',
+    url:''
+  };
+  await savePodcastToDrive(item,audio);
+  data.podcasts=data.podcasts||[];
+  data.podcasts.push(item);
+  await saveData();
+
   const url=URL.createObjectURL(audio);
-  result.innerHTML=`<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line)"><b>🎧 Dein Lern-Podcast</b><audio controls style="width:100%;margin-top:10px" src="${url}"></audio><details style="margin-top:9px"><summary>📝 Skript</summary><div style="white-space:pre-wrap;font-size:12px;line-height:1.5;margin-top:7px">${esc(script)}</div></details></div>`;
-  status.textContent='✓ Podcast fertig.';
+  result.innerHTML=`<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line)"><b>🎧 Dein Lern-Podcast wurde gespeichert</b><audio controls style="width:100%;margin-top:10px" src="${url}"></audio><div class="muted" style="margin-top:7px">Du findest ihn jetzt unter „🎧 Meine gespeicherten Podcasts“ und kannst ihn auch auf deinen anderen Geräten abrufen.</div><details style="margin-top:9px"><summary>📝 Skript</summary><div style="white-space:pre-wrap;font-size:12px;line-height:1.5;margin-top:7px">${esc(script)}</div></details></div>`;
+  status.textContent='✓ Podcast erstellt und gespeichert.';
+  renderSavedPodcasts();
  }catch(e){
   console.error(e);
   status.textContent='';
@@ -2315,7 +2493,7 @@ ${source.slice(0,60000)}`);
   if(/permission|unauthorized|forbidden|app check|api key|billing|quota/i.test(msg)){
     msg+='\\n\\nFalls Firebase AI Logic noch nicht für das Projekt eingerichtet ist, muss es einmal in Firebase Console → AI Logic aktiviert werden.';
   }
-  alert('Podcast konnte nicht erstellt werden:\n\n'+msg);
+  alert('Podcast konnte nicht erstellt werden:\\n\\n'+msg);
  }
 }
 </script>
