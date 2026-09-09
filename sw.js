@@ -1,4 +1,4 @@
-const CACHE = 'my-studyplaner-pwa-v252';
+const CACHE = 'my-studyplaner-pwa-v254';
 const APP_SHELL = [
   './',
   './index.html',
