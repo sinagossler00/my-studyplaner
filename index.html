@@ -1348,6 +1348,10 @@ hr{ border-color:#E9E4E2 !important; }
 @media(max-width:650px){#tasks .task-list-controls{align-items:flex-start !important;}.task-control{flex-wrap:wrap !important;}}
 </style>
 
+<style id="msp-grades-v181">
+#grades .edit-btn{border:0;background:transparent;padding:2px 4px;cursor:pointer}
+#grades .edit-btn:hover{background:#f3f3f3;border-radius:5px}
+</style>
 </head>
 <body>
 <div class="app">
@@ -1360,7 +1364,8 @@ hr{ border-color:#E9E4E2 !important; }
   <button data-page="calendar"><span class="icon">❗</span><span>Deadlines</span></button>
   <button data-page="files"><span class="icon">📁</span><span>Dateien & Infos</span></button>
   <button data-page="podcast"><span class="icon">🎙️</span><span>KI-Podcast</span></button>
-  <button data-page="study-timer"><span class="icon">⏱️</span><span>Lern-Timer</span></button>
+  <button data-page="grades"><span class="icon">🎓</span><span>Noten</span></button>
+<button data-page="study-timer"><span class="icon">⏱️</span><span>Lern-Timer</span></button>
     <button data-page="uni-links"><span class="icon">🔗</span><span>Uni-Webseiten</span></button>
     </nav>
 </aside>
@@ -1496,6 +1501,19 @@ hr{ border-color:#E9E4E2 !important; }
 </section>
 
 
+<section id="grades" class="page">
+  <div class="card">
+    <div class="card-head">
+      <div>
+        <h2>🎓 Noten</h2>
+        <div class="muted">Deine Leistungen, Klausuren und Hausarbeiten pro Modul im Überblick.</div>
+      </div>
+      <button class="btn" type="button" onclick="openGradeModule()">＋ Modul hinzufügen</button>
+    </div>
+    <div id="gradesSummary"></div>
+  </div>
+  <div id="gradeModulesList"></div>
+</section>
 <section id="study-timer" class="page">
   <div class="card study-timer-card">
     <div class="card-head">
@@ -1633,6 +1651,8 @@ const defaultData={
  ],notes:[],podcasts:[]
 };
 let data=JSON.parse(localStorage.getItem(KEY)||'null')||structuredClone(defaultData);
+data.gradeModules=Array.isArray(data.gradeModules)?data.gradeModules:[];
+data.grades=Array.isArray(data.grades)?data.grades:[];
 if(!Array.isArray(data.podcasts))data.podcasts=[];
 if(!Array.isArray(data.tasks))data.tasks=[];data.tasks.forEach(t=>{if(typeof t.deadline!=='string')t.deadline='';});
 let deadlineFilter='all',taskFilter='open',taskTimeFilter='all',taskSort='deadline',currentUser=null,fb=null,cloudEnabled=false,calendarMonth=new Date(new Date().getFullYear(),new Date().getMonth(),1);
@@ -1655,7 +1675,7 @@ function go(page){
  setActiveNav(page);
  document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));$(page).classList.add('active');
  document.querySelectorAll('.nav button').forEach(x=>x.classList.toggle('active',x.dataset.page===page));
- const t={home:['🏠 Hallo Sina!','Schön, dass du hier bist. Bleib dran!'],tasks:['☑️ Aufgaben','Was steht heute, diese Woche oder diesen Monat an?'],'planner-calendar':['Kalender 📅','Deadlines und Termine übersichtlich im Monatskalender.'],calendar:['❗ Deadlines & Termine','Behalte alle wichtigen Fristen im Blick.'],podcast:['🎙️ KI-Podcast','Deine Zusammenfassungen als Lern-Podcast.'],'study-timer':['⏱️ Lern-Timer','Konzentriert lernen – mit klaren Lern- und Pausenzeiten.'],files:['📁 Dateien & Infos','Alles Wichtige schnell griffbereit.'],modules:['📚 Meine Module','Deine Module und ihre Dateien.'],stats:['📊 Statistiken','Dein aktueller Studienfortschritt.'],'uni-links':['Uni-Webseiten 🔗','Wichtige Webseiten rund ums Studium an einem Ort.']}[page];
+ const t={'grades':['🎓 Noten','Deine Leistungen und Noten pro Modul im Überblick.'],home:['🏠 Hallo Sina!','Schön, dass du hier bist. Bleib dran!'],tasks:['☑️ Aufgaben','Was steht heute, diese Woche oder diesen Monat an?'],'planner-calendar':['Kalender 📅','Deadlines und Termine übersichtlich im Monatskalender.'],calendar:['❗ Deadlines & Termine','Behalte alle wichtigen Fristen im Blick.'],podcast:['🎙️ KI-Podcast','Deine Zusammenfassungen als Lern-Podcast.'],'study-timer':['⏱️ Lern-Timer','Konzentriert lernen – mit klaren Lern- und Pausenzeiten.'],files:['📁 Dateien & Infos','Alles Wichtige schnell griffbereit.'],modules:['📚 Meine Module','Deine Module und ihre Dateien.'],stats:['📊 Statistiken','Dein aktueller Studienfortschritt.'],'uni-links':['Uni-Webseiten 🔗','Wichtige Webseiten rund ums Studium an einem Ort.']}[page];
  $('pageTitle').textContent=t[0];$('pageSubtitle').textContent=t[1];renderAll()
 }
 document.querySelectorAll('.nav button').forEach(b=>b.onclick=()=>go(b.dataset.page));
@@ -1900,6 +1920,121 @@ function renderPsychologyDay(){
  </div>`;
 }
 
+
+function gradeTypeLabel(type){
+ const labels={klausur:'Klausur',hausarbeit:'Hausarbeit',portfolio:'Portfolio',kurs:'Kurs / Teilmodul',muendlich:'Mündliche Prüfung',sonstige:'Sonstige Leistung'};
+ return labels[type]||'Sonstige Leistung';
+}
+function gradeAverage(list){
+ if(!list.length)return null;
+ let sum=0,weight=0;
+ list.forEach(g=>{const n=Number(g.grade),w=Number(g.weight)||1;if(Number.isFinite(n)){sum+=n*w;weight+=w;}});
+ return weight?sum/weight:null;
+}
+function openGradeModule(){
+ openModal('＋ Modul hinzufügen',`<form onsubmit="createGradeModule(event)">
+   <label>Modulname</label>
+   <input id="gradeModuleName" placeholder="z. B. Statistik 1" required autofocus>
+   <br><br><button class="btn" type="submit">＋ Modul anlegen</button>
+ </form>`);
+}
+async function createGradeModule(e){
+ e.preventDefault();
+ const input=$('gradeModuleName');
+ const name=(input?.value||'').trim();
+ if(!name)return;
+ data.gradeModules=data.gradeModules||[];
+ if(data.gradeModules.some(m=>String(m.name||'').trim().toLowerCase()===name.toLowerCase())){
+   alert('Dieses Modul gibt es bereits.');return;
+ }
+ data.gradeModules.push({id:'gm-'+Date.now(),name});
+ await saveData();
+ closeModal();
+ renderGrades();
+}
+function editGradeModule(id){
+ const m=(data.gradeModules||[]).find(x=>String(x.id)===String(id));
+ if(!m)return;
+ openModal('✏️ Modulname bearbeiten',`<form onsubmit="saveGradeModuleName(event,'${esc(String(id))}')">
+   <label>Modulname</label>
+   <input id="editGradeModuleName" value="${esc(m.name)}" required>
+   <br><br><button class="btn" type="submit">Speichern</button>
+ </form>`);
+}
+async function saveGradeModuleName(e,id){
+ e.preventDefault();
+ const m=(data.gradeModules||[]).find(x=>String(x.id)===String(id));
+ const input=$('editGradeModuleName');
+ if(!m||!input)return;
+ const name=input.value.trim();
+ if(!name)return;
+ if((data.gradeModules||[]).some(x=>String(x.id)!==String(id)&&String(x.name||'').trim().toLowerCase()===name.toLowerCase())){
+   alert('Dieses Modul gibt es bereits.');return;
+ }
+ const old=m.name;
+ m.name=name;
+ (data.grades||[]).forEach(g=>{if(String(g.module)===String(old))g.module=name;});
+ await saveData();
+ closeModal();
+ renderGrades();
+}
+function openGradeEntry(module,type){
+ openModal('＋ Leistung',`<form onsubmit="saveGradeEntry(event)">
+   <input id="gradeEntryModule" type="hidden" value="${esc(module)}">
+   <input id="gradeEntryType" type="hidden" value="${esc(type||'sonstige')}">
+   <label>Kategorie</label>
+   <div style="font-weight:800;margin:4px 0 10px">${esc(gradeTypeLabel(type||'sonstige'))}</div>
+   <label>Bezeichnung</label>
+   <input id="gradeEntryName" placeholder="z. B. Klausur Statistik 1" required>
+   <label>Note</label>
+   <input id="gradeEntryValue" type="number" min="1" max="6" step="0.1" placeholder="z. B. 2,0" required>
+   <label>Gewichtung</label>
+   <input id="gradeEntryWeight" type="number" min="0.1" step="0.1" value="1" required>
+   <br><br><button class="btn" type="submit">💾 Leistung speichern</button>
+ </form>`);
+}
+async function saveGradeEntry(e){
+ e.preventDefault();
+ const module=$('gradeEntryModule')?.value||'';
+ const type=$('gradeEntryType')?.value||'sonstige';
+ const name=($('gradeEntryName')?.value||'').trim();
+ const grade=Number($('gradeEntryValue')?.value);
+ const weight=Number($('gradeEntryWeight')?.value)||1;
+ if(!module||!name||!Number.isFinite(grade)||grade<1||grade>6)return;
+ data.grades=data.grades||[];
+ data.grades.push({id:'gr-'+Date.now(),module,type,name,grade,weight});
+ await saveData();
+ closeModal();
+ renderGrades();
+}
+function renderGrades(){
+ const list=$('gradeModulesList'),summary=$('gradesSummary');
+ if(!list||!summary)return;
+ const mods=data.gradeModules||[], grades=data.grades||[];
+ const overall=gradeAverage(grades);
+ summary.innerHTML=`<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px">
+   <div class="overview-card"><span class="overview-icon">📊</span><div><span>Gesamtdurchschnitt</span><strong>${overall===null?'–':overall.toFixed(2).replace('.',',')}</strong></div></div>
+   <div class="overview-card"><span class="overview-icon">📝</span><div><span>Leistungen</span><strong>${grades.length}</strong></div></div>
+ </div>`;
+ list.innerHTML=mods.length?mods.map(m=>{
+   const entries=grades.filter(g=>String(g.module)===String(m.name));
+   const avg=gradeAverage(entries);
+   const types=['klausur','hausarbeit','portfolio','kurs','muendlich','sonstige'];
+   return `<div class="card" style="margin-top:12px">
+     <div class="card-head">
+       <div><h2 style="margin:0">📚 ${esc(m.name)} <button class="edit-btn" type="button" onclick="editGradeModule('${esc(String(m.id))}')" title="Modulname bearbeiten">✏️</button></h2>
+       <div class="muted">${entries.length} Leistung${entries.length===1?'':'en'} · Durchschnitt: ${avg===null?'–':avg.toFixed(2).replace('.',',')}</div></div>
+       <button class="btn small" type="button" onclick="openGradeEntry('${esc(m.name)}','sonstige')">＋ Leistung</button>
+     </div>
+     <div style="display:flex;flex-wrap:wrap;gap:7px;margin-top:10px">
+       ${types.map(t=>`<button class="btn secondary small" type="button" onclick="openGradeEntry('${esc(m.name)}','${t}')">${gradeTypeLabel(t)}</button>`).join('')}
+     </div>
+     <div style="margin-top:8px">
+       ${entries.length?entries.map(g=>`<div style="display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--line);padding:8px 0"><div><b>${esc(g.name)}</b><div class="muted">${esc(gradeTypeLabel(g.type))} · Gewicht ${esc(g.weight)}</div></div><strong style="font-size:16px">${esc(g.grade)}</strong></div>`).join(''):'<div class="empty" style="margin-top:10px">Noch keine Leistung eingetragen.</div>'}
+     </div>
+   </div>`;
+ }).join(''):'<div class="card"><div class="empty">Noch keine Module angelegt. Klicke oben auf „＋ Modul hinzufügen“.</div></div>';
+}
 function renderAll(){if(!data.events)data.events=[];
  data.deadlines=(data.deadlines||[]).map(d=>({...d,priority:['hoch','mittel','leicht'].includes(String(d.priority||'').toLowerCase())?String(d.priority||'').toLowerCase():'mittel'}));renderHomeOverview();renderDeadlines('home');renderDeadlines('calendar');renderTasks();renderFiles();renderCalendar();renderPlannerCalendar();renderReminders();renderPsychologyDay();renderSavedPodcasts();updateGoogleCalendarStatus()}
 function setDeadlineFilter(v,btn){
