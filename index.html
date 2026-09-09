@@ -1433,22 +1433,44 @@ hr{ border-color:#E9E4E2 !important; }
 .plant-stage{font-size:14px;font-weight:850;margin-bottom:3px}.plant-time{font-size:11px;margin-bottom:7px}.plant-progress{height:7px;background:#ece8df;border-radius:8px;overflow:hidden}.plant-progress span{display:block;height:100%;width:0;background:#82a968;border-radius:8px;transition:width .5s}.plant-info .muted{font-size:9px;margin-top:6px}
 @media(max-width:650px){.plant-window{width:58%}.plant-shelf{left:8%;right:8%}.plant-info{width:84%}}
 </style>
+
+<style id="msp-sidebar-compact">
+.sidebar nav button,
+.sidebar .nav button,
+nav button[data-page]{
+  min-height:38px !important;
+  height:38px !important;
+  padding:7px 11px !important;
+  margin:2px 0 !important;
+  gap:9px !important;
+  border-radius:8px !important;
+  font-size:13px !important;
+  box-sizing:border-box !important;
+}
+.sidebar nav button .icon,
+.sidebar .nav button .icon,
+nav button[data-page] .icon{
+  width:20px !important;
+  min-width:20px !important;
+  font-size:15px !important;
+}
+</style>
 </head>
 <body>
 <div class="app">
 <aside class="sidebar">
  <div class="logo">🎓 My Studyplaner ♡</div><div class="tagline">Kleine Schritte. Große Ziele.</div>
  <nav class="nav">
-  <button class="active" data-page="home"><span class="icon">🏠</span><span>Startseite</span></button>
-    <button data-page="planner-calendar"><span class="icon">📅</span><span>Kalender</span></button>
-  <button data-page="tasks"><span class="icon">☑️</span><span>Aufgaben</span></button>
-  <button data-page="calendar"><span class="icon">❗</span><span>Deadlines</span></button>
-  <button data-page="study-room"><span class="icon">🏠</span><span>Study Room</span></button>
+      <button class="active" data-page="home"><span class="icon">🏠</span><span>Startseite</span></button>
+      <button data-page="planner-calendar"><span class="icon">📅</span><span>Kalender</span></button>
+      <button data-page="calendar"><span class="icon">❗</span><span>Deadlines</span></button>
+      <button data-page="tasks"><span class="icon">☑️</span><span>Aufgaben</span></button>
+      <button data-page="grades"><span class="icon">🎓</span><span>Noten</span></button>
+      <button data-page="uni-links"><span class="icon">🔗</span><span>Uni-Webseiten</span></button>
+      <button data-page="study-timer"><span class="icon">⏱️</span><span>Lern-Timer</span></button>
+      <button data-page="podcast"><span class="icon">🎙️</span><span>KI-Podcast</span></button>
+      <button data-page="study-room"><span class="icon">🏠</span><span>Study Room</span></button>
       <button data-page="files"><span class="icon">📁</span><span>Dateien & Infos</span></button>
-  <button data-page="podcast"><span class="icon">🎙️</span><span>KI-Podcast</span></button>
-  <button data-page="grades"><span class="icon">🎓</span><span>Noten</span></button>
-<button data-page="study-timer"><span class="icon">⏱️</span><span>Lern-Timer</span></button>
-    <button data-page="uni-links"><span class="icon">🔗</span><span>Uni-Webseiten</span></button>
     </nav>
 </aside>
 
