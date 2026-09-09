@@ -3637,6 +3637,33 @@ aside.sidebar{
   }
 }
 </style>
+
+<style id="msp-home-greeting-style">
+#msp-home-greeting{
+  margin:0 0 22px 0;
+  text-align:left;
+}
+#msp-home-greeting .msp-home-greeting-line{
+  font-size:20px;
+  line-height:1.15;
+  font-weight:500;
+  color:var(--text) !important;
+}
+#msp-home-greeting .msp-home-greeting-name{
+  margin-top:2px;
+  font-family:"Cormorant Garamond", Georgia, serif !important;
+  font-size:42px;
+  line-height:1;
+  font-weight:600;
+  color:var(--text) !important;
+}
+@media(max-width:700px){
+  #msp-home-greeting{margin-bottom:16px}
+  #msp-home-greeting .msp-home-greeting-line{font-size:18px}
+  #msp-home-greeting .msp-home-greeting-name{font-size:36px}
+}
+</style>
+
 </head>
 <body>
 <div class="app">
@@ -3668,6 +3695,10 @@ aside.sidebar{
  </div>
 
  <section id="home" class="page active">
+  <div id="msp-home-greeting" class="msp-home-greeting" aria-live="polite">
+  <div class="msp-home-greeting-line"><span id="mspGreetingText">Guten Morgen</span> <span id="mspGreetingEmoji">☀️</span></div>
+  <div class="msp-home-greeting-name">Sina</div>
+</div>
   <div class="overview-grid" id="homeOverview"></div>
   <div class="dashboard">
    <div class="card">
@@ -6713,6 +6744,34 @@ function renderStudyTimer(){
       if(ctx.state==='suspended') ctx.resume().then(run); else run();
     }catch(e){}
   };
+})();
+</script>
+
+
+<script id="msp-home-greeting-js">
+(function(){
+  function updateHomeGreeting(){
+    const text=document.getElementById('mspGreetingText');
+    const emoji=document.getElementById('mspGreetingEmoji');
+    if(!text||!emoji)return;
+    const hour=new Date().getHours();
+    if(hour>=5 && hour<12){
+      text.textContent='Guten Morgen';
+      emoji.textContent='☀️';
+    }else if(hour>=12 && hour<18){
+      text.textContent='Guten Mittag';
+      emoji.textContent='🌤️';
+    }else{
+      text.textContent='Guten Abend';
+      emoji.textContent='🌙';
+    }
+  }
+  function init(){
+    updateHomeGreeting();
+    setInterval(updateHomeGreeting,60000);
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);
+  else init();
 })();
 </script>
 
