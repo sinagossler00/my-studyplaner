@@ -721,6 +721,50 @@ hr{ border-color:#E9E4E2 !important; }
 #podcast .card + .card{margin-top:18px}
 #podcast #savedPodcastList{width:100%}
 </style>
+<style id="msp-v143-podcast-design">
+#podcast .page-heading{
+  margin:0 0 18px 0;
+}
+#podcast .page-heading h1{
+  margin:0;
+  font-size:30px;
+  line-height:1.15;
+}
+#podcast .page-heading p{
+  margin:5px 0 0;
+  font-size:12px;
+  color:var(--muted);
+}
+#podcast .podcast-create-card{
+  padding:22px;
+}
+#podcast .podcast-create-content{
+  display:flex;
+  align-items:center;
+  gap:16px;
+}
+#podcast .podcast-create-icon{
+  font-size:30px;
+  line-height:1;
+}
+#podcast .podcast-create-title{
+  font-size:16px;
+  font-weight:850;
+  margin-bottom:5px;
+}
+#podcast .podcast-create-text{
+  font-size:11px;
+  color:var(--muted);
+  margin-bottom:13px;
+}
+#podcast .podcast-create-btn{
+  font-weight:850;
+  padding:9px 14px;
+}
+#podcast .podcast-saved-card{
+  margin-top:18px;
+}
+</style>
 </head>
 <body>
 <div class="app">
@@ -823,24 +867,28 @@ hr{ border-color:#E9E4E2 !important; }
 
 
 <section id="podcast" class="page">
-<div class="card">
-  <div class="card-head">
-    <div><h2>🎙️ KI-Podcast</h2></div>
+  <div class="page-heading">
+    <h1>🎙️ KI-Podcast</h1>
+    <p>Erstelle aus deinen Zusammenfassungen einen Lern-Podcast.</p>
   </div>
-  <div style="display:flex;align-items:center;gap:14px">
-    <div style="font-size:28px">🤖</div>
-    <div>
-      <div style="font-weight:800;margin-bottom:9px">Zusammenfassung als Podcast</div>
-      <button id="openPodcastBtn" type="button" class="btn">🎙️ Podcast erstellen</button>
+
+  <div class="card podcast-create-card">
+    <div class="podcast-create-content">
+      <div class="podcast-create-icon">🤖</div>
+      <div>
+        <div class="podcast-create-title">Zusammenfassung als Podcast</div>
+        <div class="podcast-create-text">Aus deinem Lerntext wird ein gesprochener Podcast.</div>
+        <button id="openPodcastBtn" type="button" class="btn podcast-create-btn">🎙️ Podcast erstellen</button>
+      </div>
     </div>
   </div>
-</div>
-<div class="card" style="margin-top:18px">
-  <div class="card-head">
-    <div><h2>🎧 Gespeicherte Podcasts</h2></div>
+
+  <div class="card podcast-saved-card">
+    <div class="card-head">
+      <div><h2>🎧 Gespeicherte Podcasts</h2></div>
+    </div>
+    <div id="savedPodcastList" class="podcast-list"></div>
   </div>
-  <div id="savedPodcastList" class="podcast-list"></div>
-</div>
 </section>
 
 <section id="planner-calendar" class="page">
