@@ -2707,6 +2707,7 @@ function renderSavedPodcasts(){
      <div class="saved-podcast-actions">
        <button class="btn small" type="button" onclick="playSavedPodcast('${esc(p.id)}',this)">▶️ Abspielen</button>
        <button class="btn secondary small" type="button" onclick="showSavedPodcastScript('${esc(p.id)}')">📝 Skript</button>
+       <button class="btn secondary small" type="button" onclick="renameSavedPodcast('${esc(p.id)}')">✏️ Titel ändern</button>
        ${retry}
      </div>
      <div id="savedPodcastPlayer_${esc(p.id)}"></div>
@@ -2758,6 +2759,20 @@ function showSavedPodcastScript(id){
  if(!p)return;
  openModal('📝 Podcast-Skript',`<div class="podcast-intro">${esc(p.title||'Lern-Podcast')}</div>
  <div style="white-space:pre-wrap;font-size:12px;line-height:1.55">${esc(p.script||'Kein Skript gespeichert.')}</div>`);
+}
+
+async function renameSavedPodcast(id){
+ const p=(data.podcasts||[]).find(x=>String(x.id)===String(id));
+ if(!p)return;
+ const current=String(p.title||'Lern-Podcast');
+ const next=prompt('Neuer Podcast-Titel:',current);
+ if(next===null)return;
+ const title=next.trim();
+ if(!title){alert('Bitte einen Titel eingeben.');return;}
+ p.title=title;
+ p.fileName='My Studyplaner – '+title.replace(/[\\/:*?"<>|]/g,'-').slice(0,90)+'.wav';
+ await saveData();
+ renderSavedPodcasts();
 }
 
 async function deleteSavedPodcast(id){
