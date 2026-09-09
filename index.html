@@ -5238,6 +5238,26 @@ function getGoogleCalendarConfig(){
 function saveGoogleCalendarConfig(cfg){
  localStorage.setItem(GOOGLE_CONFIG_KEY,JSON.stringify(cfg));
 }
+
+/* Google-Kalender-Status: sichere Fallback-Funktion.
+   Verhindert einen Fehler auf der Kalenderseite, falls der Status vor
+   einer erfolgreichen Google-Initialisierung aktualisiert wird. */
+function updateGoogleCalendarStatus(count){
+ const cfg=getGoogleCalendarConfig()||{};
+ const connected=!!googleCalendarAccessToken;
+ const text=connected
+   ? (typeof count==='number'
+      ? `Verbunden · ${count} Termin${count===1?'':'e'} übernommen.`
+      : 'Verbunden · bereit zur Synchronisierung.')
+   : (cfg.clientId
+      ? 'Bereit – Google Kalender kann synchronisiert werden.'
+      : 'Noch nicht verbunden.');
+ ['googleCalendarStatus','googleCalendarStatusDeadlines'].forEach(id=>{
+   const el=document.getElementById(id);
+   if(el)el.textContent=text;
+ });
+}
+
 function clearGoogleImportedEvents(){
  data.events=(data.events||[]).filter(e=>!e.googleImported);
 }
