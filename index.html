@@ -1487,6 +1487,937 @@ nav button[data-page] .icon{
   font-size:16px !important;
 }
 </style>
+
+<style id="msp-grace-style-200">
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@500;600;700&display=swap');
+
+:root{
+  --bg:#f6f1e9 !important;
+  --card:#fffdf9 !important;
+  --text:#3f3834 !important;
+  --muted:#82766d !important;
+  --line:#ded3c8 !important;
+  --accent:#b9786e !important;
+  --accent2:#8c9a7b !important;
+  --yellow:#e9c979 !important;
+}
+
+html,body{
+  background:#f6f1e9 !important;
+  color:var(--text) !important;
+  font-family:'DM Sans',Arial,sans-serif !important;
+}
+body{
+  letter-spacing:.005em !important;
+}
+h1,h2,h3,h4,.page-title,.brand,.logo,.card-head h2{
+  font-family:'Playfair Display',Georgia,serif !important;
+  color:#403833 !important;
+}
+h1,.page-title{letter-spacing:-.02em !important}
+.muted,.sub,.subtitle{color:#887b72 !important}
+
+/* Sidebar: warm editorial student-planner look */
+.sidebar{
+  background:#fbf7f1 !important;
+  border-right:1px solid #e4d9ce !important;
+  box-shadow:4px 0 20px rgba(80,60,45,.045) !important;
+}
+.sidebar .brand,
+.sidebar .logo{
+  color:#3d3632 !important;
+}
+.sidebar nav button,
+.sidebar .nav button,
+nav button[data-page]{
+  color:#504742 !important;
+  background:transparent !important;
+  border:1px solid transparent !important;
+  box-shadow:none !important;
+  font-family:'DM Sans',Arial,sans-serif !important;
+  font-weight:600 !important;
+  transition:background .18s,border-color .18s,transform .18s !important;
+}
+.sidebar nav button:hover,
+.sidebar .nav button:hover,
+nav button[data-page]:hover{
+  background:#f1e8de !important;
+  border-color:#e5d8cc !important;
+  transform:translateX(2px) !important;
+}
+.sidebar nav button.active,
+.sidebar .nav button.active,
+nav button[data-page].active{
+  background:#eadbd4 !important;
+  border-color:#dcc5bb !important;
+  color:#463b37 !important;
+  font-weight:700 !important;
+}
+.sidebar nav button .icon,
+.sidebar .nav button .icon,
+nav button[data-page] .icon{filter:saturate(.72) !important}
+
+/* Main page heading */
+.page-title,.page-header h1{
+  color:#3d3531 !important;
+}
+.page-title:after{
+  background:#c58a7f !important;
+}
+
+/* Cards */
+.card{
+  background:rgba(255,253,249,.96) !important;
+  border:1px solid #e1d6cc !important;
+  border-radius:14px !important;
+  box-shadow:0 5px 18px rgba(86,63,47,.055) !important;
+}
+.card:hover{
+  box-shadow:0 7px 22px rgba(86,63,47,.075) !important;
+}
+.card-head{
+  border-bottom-color:#eadfd6 !important;
+}
+.card-head h2,h2{
+  color:#463c37 !important;
+}
+
+/* Inputs/buttons */
+input,select,textarea{
+  background:#fffdf9 !important;
+  border-color:#d9cec4 !important;
+  color:#463d38 !important;
+  border-radius:9px !important;
+  font-family:'DM Sans',Arial,sans-serif !important;
+}
+input:focus,select:focus,textarea:focus{
+  border-color:#c58a7f !important;
+  box-shadow:0 0 0 3px rgba(197,138,127,.12) !important;
+  outline:none !important;
+}
+.btn{
+  border-radius:9px !important;
+  font-family:'DM Sans',Arial,sans-serif !important;
+  font-weight:700 !important;
+}
+.btn:not(.secondary){
+  background:#bd7e73 !important;
+  border-color:#bd7e73 !important;
+  color:#fff !important;
+}
+.btn:not(.secondary):hover{
+  background:#a96c63 !important;
+  border-color:#a96c63 !important;
+}
+.btn.secondary{
+  background:#f5ede6 !important;
+  border-color:#dfd1c6 !important;
+  color:#554943 !important;
+}
+.btn.secondary:hover{
+  background:#ece0d6 !important;
+}
+
+/* Overview tiles */
+#homeOverview .overview-card{
+  background:#fffaf5 !important;
+  border:1px solid #e0d4c9 !important;
+  box-shadow:0 4px 13px rgba(86,63,47,.045) !important;
+}
+#homeOverview .overview-card:hover{
+  background:#f9efe8 !important;
+}
+#homeOverview .overview-icon{filter:saturate(.72) !important}
+
+/* Warm accent details */
+.priority-dot.high{background:#b96e63 !important}
+.priority-dot.medium{background:#d3ad57 !important}
+.priority-dot.light{background:#8fa07d !important}
+.deadline{
+  border-bottom-color:#eadfd6 !important;
+}
+.datebox{
+  border-color:#ddcec3 !important;
+  background:#faf2eb !important;
+}
+.tabs .active,.filter.active{
+  background:#eadbd4 !important;
+  color:#4b403b !important;
+}
+
+/* Tables, task rows, lists */
+.task,.deadline,.file-item,.saved-podcast,.module-card,.grade-module-card{
+  background:transparent !important;
+}
+.task:hover,.deadline:hover,.file-item:hover,.saved-podcast:hover{
+  background:#fbf5ef !important;
+}
+
+/* Little editorial quote/psychology cards */
+.psychology-day-card{
+  background:#f8efe9 !important;
+}
+.psychology-day-question{
+  border-top-color:#e5d8ce !important;
+}
+
+/* Calendar */
+.calendar-wrap,.calendar{
+  background:#fffdf9 !important;
+}
+.calendar-grid > *{
+  border-color:#e8ddd4 !important;
+}
+
+/* Modal */
+.modal-card,.modal-content{
+  background:#fffdf9 !important;
+  border:1px solid #dfd3c9 !important;
+  box-shadow:0 18px 55px rgba(70,50,38,.18) !important;
+}
+.modal-backdrop{
+  background:rgba(62,47,39,.28) !important;
+}
+
+/* Scrollbars */
+*{
+  scrollbar-color:#cdb9aa #f3ece5 !important;
+  scrollbar-width:thin;
+}
+
+/* Study room gets the same paper/editorial palette */
+.plant-room{
+  border-color:#dfd3c8 !important;
+  box-shadow:0 10px 28px rgba(86,63,47,.08) !important;
+}
+.plant-info{
+  background:rgba(255,253,249,.95) !important;
+  border-color:#e0d4c9 !important;
+}
+
+/* Gentle paper grain without images */
+.main,.content,.page{
+  background-image:radial-gradient(rgba(115,91,74,.028) .6px,transparent .6px) !important;
+  background-size:8px 8px !important;
+}
+</style>
+
+<style id="msp-grace-style-201">
+/* V201 – closer to Grace Digitals / Notion Mono aesthetic.
+   CSS-only visual layer: all existing HTML/JS functionality remains untouched. */
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&display=swap');
+
+:root{
+  --bg:#faf7ef !important;
+  --card:#fffefa !important;
+  --text:#3f3934 !important;
+  --muted:#81766b !important;
+  --line:#e2ddd4 !important;
+  --accent:#b96f5f !important;
+  --accent2:#a79b78 !important;
+  --yellow:#d0aa49 !important;
+}
+
+/* Overall typography: readable body + typewriter/editorial headings like the reference */
+html,body{
+  background:#faf7ef !important;
+  color:#403a35 !important;
+  font-family:'DM Sans',Arial,sans-serif !important;
+}
+body{letter-spacing:0 !important}
+
+h1,h2,h3,h4,.page-title,.brand,.logo,.card-head h2,
+.sidebar .logo,.page-header h1{
+  font-family:'DM Mono','Courier New',monospace !important;
+  font-weight:500 !important;
+  letter-spacing:-.035em !important;
+  color:#403a35 !important;
+}
+h1,.page-title,.page-header h1{
+  font-size:clamp(1.55rem,2.2vw,2rem) !important;
+}
+.card-head h2,h2{font-size:1.05rem !important}
+h3{font-size:.95rem !important}
+.muted,.sub,.subtitle{color:#84796f !important}
+
+/* Sidebar – cream paper, very light rules, warm brown text */
+.sidebar{
+  background:#f8f3e9 !important;
+  border-right:1px solid #e6dfd4 !important;
+  box-shadow:4px 0 18px rgba(80,61,43,.035) !important;
+}
+.sidebar .brand,.sidebar .logo{
+  color:#3e3732 !important;
+  font-family:'DM Mono','Courier New',monospace !important;
+}
+.sidebar .tagline{
+  color:#9a897a !important;
+  font-family:'DM Mono','Courier New',monospace !important;
+  font-size:.72rem !important;
+}
+.sidebar nav button,
+.sidebar .nav button,
+nav button[data-page]{
+  color:#514941 !important;
+  background:transparent !important;
+  border:1px solid transparent !important;
+  box-shadow:none !important;
+  font-family:'DM Sans',Arial,sans-serif !important;
+  font-weight:500 !important;
+  border-radius:7px !important;
+  transition:background .16s,border-color .16s,transform .16s !important;
+}
+.sidebar nav button:hover,
+.sidebar .nav button:hover,
+nav button[data-page]:hover{
+  background:#f0e7da !important;
+  border-color:#e5dacb !important;
+  transform:translateX(1px) !important;
+}
+.sidebar nav button.active,
+.sidebar .nav button.active,
+nav button[data-page].active{
+  background:#ead6cd !important;
+  border-color:#ddc1b7 !important;
+  color:#493c36 !important;
+  font-weight:700 !important;
+}
+.sidebar nav button .icon,
+.sidebar .nav button .icon,
+nav button[data-page] .icon{filter:saturate(.55) sepia(.12) !important}
+
+/* Main headings: warm dark brown, no modern pink underline */
+.page-title,.page-header h1{color:#403a35 !important}
+.page-title:after{background:#c49a62 !important}
+
+/* Cards – flatter and cleaner, closer to the reference */
+.card{
+  background:rgba(255,254,250,.98) !important;
+  border:1px solid #e4dfd7 !important;
+  border-radius:10px !important;
+  box-shadow:0 2px 10px rgba(77,59,43,.035) !important;
+}
+.card:hover{
+  box-shadow:0 4px 14px rgba(77,59,43,.05) !important;
+}
+.card-head{
+  border-bottom-color:#ebe5dc !important;
+}
+.card-head h2,h2{color:#4a413b !important}
+
+/* Inputs: almost-white paper with warm yellow/ochre focus */
+input,select,textarea{
+  background:#fffefa !important;
+  border-color:#ddd6cc !important;
+  color:#443c36 !important;
+  border-radius:6px !important;
+  font-family:'DM Sans',Arial,sans-serif !important;
+}
+input::placeholder,textarea::placeholder{color:#aaa097 !important}
+input:focus,select:focus,textarea:focus{
+  border-color:#c6a15a !important;
+  box-shadow:0 0 0 3px rgba(198,161,90,.13) !important;
+  outline:none !important;
+}
+
+/* Buttons: muted terracotta, not bright pink */
+.btn{
+  border-radius:7px !important;
+  font-family:'DM Sans',Arial,sans-serif !important;
+  font-weight:600 !important;
+}
+.btn:not(.secondary){
+  background:#b97564 !important;
+  border-color:#b97564 !important;
+  color:#fffdf8 !important;
+}
+.btn:not(.secondary):hover{
+  background:#a76456 !important;
+  border-color:#a76456 !important;
+}
+.btn.secondary{
+  background:#f2eadf !important;
+  border-color:#dfd4c7 !important;
+  color:#564a42 !important;
+}
+.btn.secondary:hover{background:#e9ded1 !important}
+
+/* Overview tiles: subtle cream/yellow variation */
+#homeOverview .overview-card{
+  background:#fffdf7 !important;
+  border:1px solid #e5ded3 !important;
+  box-shadow:none !important;
+  border-radius:9px !important;
+}
+#homeOverview .overview-card:hover{background:#fbf3dc !important}
+#homeOverview .overview-icon{filter:saturate(.58) sepia(.12) !important}
+
+/* Reference-inspired accent colors */
+.priority-dot.high{background:#ad6255 !important}
+.priority-dot.medium{background:#c5a044 !important}
+.priority-dot.light{background:#9a9b79 !important}
+.deadline{border-bottom-color:#ebe5dc !important}
+.datebox{
+  border-color:#ddd4c8 !important;
+  background:#f7f0e5 !important;
+}
+.tabs .active,.filter.active{
+  background:#eee0d3 !important;
+  color:#4b4039 !important;
+  border-color:#ddc7b8 !important;
+}
+
+/* Rows stay light and paper-like */
+.task,.deadline,.file-item,.saved-podcast,.module-card,.grade-module-card{
+  background:transparent !important;
+}
+.task:hover,.deadline:hover,.file-item:hover,.saved-podcast:hover{
+  background:#faf4ea !important;
+}
+
+/* Small labels and metadata use the mono character from the reference */
+.deadline .title,
+.task .title,
+.file-item .name,
+.saved-podcast .title{
+  color:#4a413b !important;
+}
+.deadline .meta,
+.task .meta,
+.file-item .meta,
+.saved-podcast .meta{
+  color:#8c8176 !important;
+}
+
+/* Calendar – white paper with soft beige grid */
+.calendar-wrap,.calendar{background:#fffefa !important}
+.calendar-grid > *{border-color:#e9e3da !important}
+
+/* Modal */
+.modal-card,.modal-content{
+  background:#fffefa !important;
+  border:1px solid #e1d9cf !important;
+  box-shadow:0 18px 55px rgba(70,50,38,.15) !important;
+}
+.modal-backdrop{background:rgba(62,47,39,.22) !important}
+
+/* Scrollbars */
+*{
+  scrollbar-color:#c9b59f #f2ece3 !important;
+  scrollbar-width:thin;
+}
+
+/* Study Room – keep it warm but distinct */
+.plant-room{
+  border-color:#ddd3c7 !important;
+  box-shadow:0 8px 24px rgba(86,63,47,.055) !important;
+}
+.plant-info{
+  background:rgba(255,254,250,.96) !important;
+  border-color:#e2d9ce !important;
+}
+
+/* Very subtle paper texture */
+.main,.content,.page{
+  background-image:radial-gradient(rgba(115,91,74,.018) .55px,transparent .55px) !important;
+  background-size:9px 9px !important;
+}
+
+/* A few high-value labels get the mono look without hurting long-form readability */
+.card-head h2,
+.section-title,
+.page-kicker,
+.stat-label,
+.overview-card .label{
+  font-family:'DM Mono','Courier New',monospace !important;
+}
+</style>
+
+
+<style id="msp-grace-style-202">
+/* V202 – typography corrected per page + richer but still muted color palette */
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
+
+:root{
+  --bg:#faf6ed !important;
+  --card:#fffdf8 !important;
+  --text:#403933 !important;
+  --muted:#82766b !important;
+  --line:#e2d9cf !important;
+  --accent:#b96f61 !important;
+  --accent2:#9ba47f !important;
+  --yellow:#d4ad51 !important;
+}
+
+/* Main typography: elegant editorial headings + clean readable body.
+   Mono is reserved for tiny metadata, dates and labels. */
+html,body{
+  font-family:'DM Sans',Arial,sans-serif !important;
+  background:#faf6ed !important;
+  color:#403933 !important;
+}
+h1,h2,h3,h4,
+.page-title,.page-header h1,.brand,.logo,
+.card-head h2{
+  font-family:'Cormorant Garamond',Georgia,serif !important;
+  font-weight:600 !important;
+  letter-spacing:-.015em !important;
+  color:#403933 !important;
+}
+h1,.page-title,.page-header h1{
+  font-size:clamp(1.85rem,2.7vw,2.55rem) !important;
+  line-height:1.05 !important;
+}
+h2,.card-head h2{font-size:1.28rem !important;line-height:1.1 !important}
+h3{font-size:1.08rem !important}
+.stat-label,.page-kicker,.meta,.date,.small-label,
+.overview-card .label{
+  font-family:'DM Mono','Courier New',monospace !important;
+  letter-spacing:.015em !important;
+}
+p,li,label,input,select,textarea,button{
+  font-family:'DM Sans',Arial,sans-serif !important;
+}
+
+/* Sidebar */
+.sidebar{
+  background:#f7f0e4 !important;
+  border-right:1px solid #e3d8ca !important;
+}
+.sidebar .brand,.sidebar .logo{
+  font-family:'Cormorant Garamond',Georgia,serif !important;
+  font-size:1.65rem !important;
+  font-weight:700 !important;
+}
+.sidebar .tagline{
+  font-family:'DM Mono','Courier New',monospace !important;
+  color:#9a897b !important;
+}
+.sidebar nav button,
+.sidebar .nav button,
+nav button[data-page]{
+  border-radius:8px !important;
+  color:#544941 !important;
+  background:transparent !important;
+  border:1px solid transparent !important;
+  font-weight:500 !important;
+}
+.sidebar nav button:hover,
+.sidebar .nav button:hover,
+nav button[data-page]:hover{
+  background:#efe3d5 !important;
+  border-color:#e2d3c4 !important;
+}
+.sidebar nav button.active,
+.sidebar .nav button.active,
+nav button[data-page].active{
+  background:#e8d0c5 !important;
+  border-color:#d9b8aa !important;
+  color:#493a34 !important;
+  font-weight:700 !important;
+}
+
+/* Global cards */
+.card{
+  background:#fffdf8 !important;
+  border:1px solid #e2d9cf !important;
+  border-radius:11px !important;
+  box-shadow:0 3px 12px rgba(79,60,45,.045) !important;
+}
+.card-head{border-bottom-color:#ece4da !important}
+
+/* More colorful, but low-saturation page accents */
+#home{
+  --page-accent:#b96f61;
+  --page-soft:#f1ddd5;
+  --page-pale:#fbefeb;
+}
+#planner-calendar{
+  --page-accent:#87966f;
+  --page-soft:#dfe6d4;
+  --page-pale:#f2f5ec;
+}
+#calendar{
+  --page-accent:#8b796b;
+  --page-soft:#e7ddd3;
+  --page-pale:#f7f1eb;
+}
+#tasks{
+  --page-accent:#c98a68;
+  --page-soft:#f1dfd2;
+  --page-pale:#fcf2eb;
+}
+#grades{
+  --page-accent:#8b879e;
+  --page-soft:#e4e1ec;
+  --page-pale:#f5f3f8;
+}
+#uni-links{
+  --page-accent:#9a7d92;
+  --page-soft:#eadde7;
+  --page-pale:#f7f1f6;
+}
+#study-timer{
+  --page-accent:#c49b43;
+  --page-soft:#f1e5bf;
+  --page-pale:#fbf7e9;
+}
+#podcast{
+  --page-accent:#9b7c86;
+  --page-soft:#eadde1;
+  --page-pale:#f8f1f3;
+}
+#study-room{
+  --page-accent:#80966e;
+  --page-soft:#dce7d5;
+  --page-pale:#f1f6ee;
+}
+#files{
+  --page-accent:#a47e61;
+  --page-soft:#eadbce;
+  --page-pale:#f7f0e9;
+}
+
+/* Each page gets its own visual identity without becoming a rainbow */
+section[id]:not(#modal) > .page-header h1,
+section[id]:not(#modal) > .page-title{
+  color:var(--page-accent,#b96f61) !important;
+}
+section[id]:not(#modal) .card-head h2{
+  color:#4a403a !important;
+}
+section[id]:not(#modal) .card-head{
+  border-bottom-color:color-mix(in srgb,var(--page-accent,#b96f61) 16%,#ece4da) !important;
+}
+
+/* Accent strip on the main content cards */
+#home .card,
+#planner-calendar .card,
+#calendar .card,
+#tasks .card,
+#grades .card,
+#uni-links .card,
+#study-timer .card,
+#podcast .card,
+#study-room .card,
+#files .card{
+  box-shadow:inset 3px 0 0 color-mix(in srgb,var(--page-accent) 58%,transparent),
+             0 3px 12px rgba(79,60,45,.035) !important;
+}
+
+/* Page-specific soft panels */
+#home .overview-card,
+#grades .module-card,
+#grades .grade-module-card,
+#study-timer .timer-card,
+#podcast .saved-podcast,
+#files .file-item{
+  background:var(--page-pale,#fbefeb) !important;
+  border-color:color-mix(in srgb,var(--page-accent) 18%,#e2d9cf) !important;
+}
+
+/* Buttons follow the current page accent */
+section[id]:not(#modal) .btn:not(.secondary){
+  background:var(--page-accent,#b96f61) !important;
+  border-color:var(--page-accent,#b96f61) !important;
+  color:#fffdf8 !important;
+}
+section[id]:not(#modal) .btn:not(.secondary):hover{
+  filter:brightness(.92) saturate(1.05) !important;
+}
+section[id]:not(#modal) .btn.secondary{
+  background:var(--page-soft,#f1ddd5) !important;
+  border-color:color-mix(in srgb,var(--page-accent,#b96f61) 22%,#dfd4c7) !important;
+  color:#554941 !important;
+}
+
+/* Inputs use the page accent on focus */
+section[id]:not(#modal) input:focus,
+section[id]:not(#modal) select:focus,
+section[id]:not(#modal) textarea:focus{
+  border-color:color-mix(in srgb,var(--page-accent,#b96f61) 60%,#ddd6cc) !important;
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--page-accent,#b96f61) 13%,transparent) !important;
+}
+
+/* Home overview: four gentle color blocks */
+#homeOverview .overview-card:nth-child(1){background:#f4e0d9 !important}
+#homeOverview .overview-card:nth-child(2){background:#e7ecd9 !important}
+#homeOverview .overview-card:nth-child(3){background:#eee5d4 !important}
+#homeOverview .overview-card:nth-child(4){background:#e9e1eb !important}
+
+/* Calendar/date elements */
+.datebox{
+  background:#f4ecdf !important;
+  border-color:#ddd1c2 !important;
+}
+.calendar-grid > *{border-color:#e8e0d6 !important}
+.calendar .today,.calendar-grid .today{
+  background:#eee0bd !important;
+  border-color:#d2b66a !important;
+}
+
+/* Priority colors remain semantic but prettier */
+.priority-dot.high{background:#ad5d52 !important}
+.priority-dot.medium{background:#c29b45 !important}
+.priority-dot.light{background:#89976f !important}
+
+/* Study timer */
+#study-timer #studyTimerDisplay{
+  color:#8d7030 !important;
+}
+#study-timer .timer-card{
+  background:#fbf5df !important;
+  border-color:#e7d8aa !important;
+}
+
+/* Study room */
+#study-room .plant-room{
+  background:linear-gradient(145deg,#f4f0e5,#e8efdf) !important;
+  border-color:#d5ddca !important;
+}
+#study-room .plant-info{
+  background:#fffdf8 !important;
+  border-color:#dbe2d4 !important;
+}
+
+/* Podcast gets a soft mauve/lilac tint */
+#podcast .card{
+  background:#fffafc !important;
+}
+#podcast .saved-podcast:hover{background:#f1e6eb !important}
+
+/* Files get a warm folder/paper feel */
+#files .file-item:hover{background:#f0e2d5 !important}
+
+/* Keep the texture extremely subtle */
+.main,.content,.page{
+  background-image:radial-gradient(rgba(115,91,74,.015) .55px,transparent .55px) !important;
+  background-size:10px 10px !important;
+}
+</style>
+
+
+<style id="msp-grace-style-203">
+/* V203 – unified Dusty Rose palette + typography pass */
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
+
+:root{
+  --bg:#faf6ef !important;
+  --card:#fffdf9 !important;
+  --text:#403936 !important;
+  --muted:#81766f !important;
+  --line:#e4d9d2 !important;
+  --accent:#b97970 !important;
+  --accent-soft:#ead5d0 !important;
+  --accent-pale:#f6e9e5 !important;
+  --accent-deep:#9f625b !important;
+}
+
+/* Typography: elegant serif for titles, clean sans for actual content.
+   Mono only for tiny utility/meta text. */
+html,body{
+  font-family:'DM Sans',Arial,sans-serif !important;
+  color:#403936 !important;
+  background:#faf6ef !important;
+}
+h1,h2,h3,h4,h5,h6,
+.page-title,.page-header h1,.brand,.logo,
+.card-head h2{
+  font-family:'Cormorant Garamond',Georgia,serif !important;
+  font-weight:600 !important;
+  letter-spacing:-.018em !important;
+  color:#403936 !important;
+}
+h1,.page-title,.page-header h1{
+  font-size:clamp(1.9rem,2.8vw,2.6rem) !important;
+  line-height:1.02 !important;
+}
+h2,.card-head h2{font-size:1.32rem !important;line-height:1.08 !important}
+h3{font-size:1.1rem !important}
+p,li,label,input,select,textarea,button{
+  font-family:'DM Sans',Arial,sans-serif !important;
+}
+.stat-label,.page-kicker,.meta,.date,.small-label,
+.overview-card .label{
+  font-family:'DM Mono','Courier New',monospace !important;
+  font-size:.72rem !important;
+}
+
+/* Sidebar */
+.sidebar{
+  background:#f7efe7 !important;
+  border-right:1px solid #e2d6cf !important;
+}
+.sidebar .brand,.sidebar .logo{
+  font-family:'Cormorant Garamond',Georgia,serif !important;
+  font-size:1.7rem !important;
+  font-weight:700 !important;
+  color:#493d39 !important;
+}
+.sidebar .tagline{
+  font-family:'DM Mono','Courier New',monospace !important;
+  color:#988881 !important;
+}
+.sidebar nav button,
+.sidebar .nav button,
+nav button[data-page]{
+  color:#564944 !important;
+  background:transparent !important;
+  border:1px solid transparent !important;
+  border-radius:8px !important;
+  font-family:'DM Sans',Arial,sans-serif !important;
+  font-weight:500 !important;
+}
+.sidebar nav button:hover,
+.sidebar .nav button:hover,
+nav button[data-page]:hover{
+  background:#f0dfda !important;
+  border-color:#e4cbc5 !important;
+}
+.sidebar nav button.active,
+.sidebar .nav button.active,
+nav button[data-page].active{
+  background:#e5c8c2 !important;
+  border-color:#d5afa7 !important;
+  color:#4c3b37 !important;
+  font-weight:700 !important;
+}
+
+/* One consistent Dusty Rose identity on EVERY page */
+section[id]:not(#modal){
+  --page-accent:#b97970 !important;
+  --page-soft:#ead5d0 !important;
+  --page-pale:#f6e9e5 !important;
+}
+section[id]:not(#modal) > .page-header h1,
+section[id]:not(#modal) > .page-title{
+  color:#a96860 !important;
+}
+section[id]:not(#modal) .card-head h2{
+  color:#4b403c !important;
+}
+
+/* Cards */
+.card{
+  background:#fffdf9 !important;
+  border:1px solid #e3d9d2 !important;
+  border-radius:11px !important;
+  box-shadow:0 3px 13px rgba(87,61,53,.045) !important;
+}
+.card-head{
+  border-bottom-color:#eee5e0 !important;
+}
+
+/* Soft Dusty Rose surfaces */
+#homeOverview .overview-card,
+section[id]:not(#modal) .module-card,
+section[id]:not(#modal) .grade-module-card,
+section[id]:not(#modal) .saved-podcast,
+section[id]:not(#modal) .file-item{
+  background:#f7ebe7 !important;
+  border-color:#ead7d2 !important;
+}
+#homeOverview .overview-card:nth-child(2),
+#homeOverview .overview-card:nth-child(3),
+#homeOverview .overview-card:nth-child(4){
+  background:#f7ebe7 !important;
+}
+#homeOverview .overview-card:hover,
+section[id]:not(#modal) .file-item:hover,
+section[id]:not(#modal) .saved-podcast:hover{
+  background:#f0ded9 !important;
+}
+
+/* Rose accent on cards – subtle, not a thick colored bar */
+section[id]:not(#modal) .card{
+  box-shadow:inset 2px 0 0 rgba(185,121,112,.42),
+             0 3px 13px rgba(87,61,53,.035) !important;
+}
+
+/* Buttons */
+section[id]:not(#modal) .btn:not(.secondary){
+  background:#b97970 !important;
+  border-color:#b97970 !important;
+  color:#fffdfa !important;
+}
+section[id]:not(#modal) .btn:not(.secondary):hover{
+  background:#a96860 !important;
+  border-color:#a96860 !important;
+}
+section[id]:not(#modal) .btn.secondary{
+  background:#ead5d0 !important;
+  border-color:#dcc2bc !important;
+  color:#56433e !important;
+}
+section[id]:not(#modal) .btn.secondary:hover{
+  background:#e3cac4 !important;
+}
+
+/* Inputs */
+input,select,textarea{
+  background:#fffefa !important;
+  border-color:#ddd4ce !important;
+  color:#463d39 !important;
+  border-radius:7px !important;
+}
+input:focus,select:focus,textarea:focus{
+  border-color:#b97970 !important;
+  box-shadow:0 0 0 3px rgba(185,121,112,.14) !important;
+}
+
+/* Tabs / filters */
+.tabs .active,.filter.active{
+  background:#ead5d0 !important;
+  border-color:#d9bdb6 !important;
+  color:#503d38 !important;
+}
+
+/* Calendar */
+.datebox{
+  background:#f5e8e3 !important;
+  border-color:#dfcdc7 !important;
+}
+.calendar-grid > *{border-color:#ebe1dc !important}
+.calendar .today,.calendar-grid .today{
+  background:#ead5d0 !important;
+  border-color:#c99188 !important;
+}
+
+/* Timer keeps its cozy look but now uses Dusty Rose */
+#study-timer #studyTimerDisplay{color:#a96860 !important}
+#study-timer .timer-card{
+  background:#f8ebe7 !important;
+  border-color:#e6d1cc !important;
+}
+
+/* Study Room */
+#study-room .plant-room{
+  background:linear-gradient(145deg,#f8eee9,#efe2dc) !important;
+  border-color:#ddc9c3 !important;
+}
+#study-room .plant-info{
+  background:#fffdf9 !important;
+  border-color:#e2d6d0 !important;
+}
+
+/* Semantic priority dots: keep meaning, soften the palette */
+.priority-dot.high{background:#a95f58 !important}
+.priority-dot.medium{background:#c59b70 !important}
+.priority-dot.light{background:#9c9b7e !important}
+
+/* Modal */
+.modal-card,.modal-content{
+  background:#fffdf9 !important;
+  border-color:#e1d6d0 !important;
+}
+
+/* Very subtle paper texture */
+.main,.content,.page{
+  background-image:radial-gradient(rgba(116,85,75,.014) .55px,transparent .55px) !important;
+  background-size:10px 10px !important;
+}
+</style>
+
 </head>
 <body>
 <div class="app">
