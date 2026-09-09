@@ -2462,7 +2462,7 @@ async function initCloud(){
  if(!cfg||!cfg.apiKey){updateCloudStatus(false);return}
  try{
   if(!firebase.apps.length)firebase.initializeApp(cfg);
-  fb={auth:firebase.auth(),db:firebase.firestore(),storage:firebase.storage()};
+  fb={auth:firebase.auth(),db:firebase.firestore()};
   fb.auth.onAuthStateChanged(async user=>{
    currentUser=user;
    if(user){
@@ -2497,7 +2497,10 @@ async function initCloud(){
     updateCloudStatus(false);
    }
   });
- }catch(e){console.warn(e);updateCloudStatus(false)}
+ }catch(e){
+  console.error('Cloud-Initialisierung:',e);
+  updateCloudStatus(false,'Cloud nicht bereit');
+ }
 }
 function updateCloudStatus(on,label){$('cloudStatus').innerHTML=`<span class="dot ${on?'on':''}"></span><span>${esc(label||'Nur auf diesem Gerät')}</span>`}
 
