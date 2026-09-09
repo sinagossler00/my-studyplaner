@@ -3786,6 +3786,55 @@ body.msp-dark .msp-theme-control{
 }
 </style>
 
+
+<style id="msp-darkmode-v255-fix">
+/* V255: Darkmode control – always visible in the sidebar */
+.msp-theme-control{
+  display:block !important;
+  position:sticky !important;
+  bottom:0 !important;
+  z-index:9999 !important;
+  width:100% !important;
+  margin:14px 0 0 !important;
+  padding:10px 0 !important;
+  background:inherit !important;
+}
+.msp-theme-toggle{
+  display:flex !important;
+  align-items:center !important;
+  justify-content:flex-start !important;
+  gap:10px !important;
+  width:100% !important;
+  min-height:44px !important;
+  padding:11px 14px !important;
+  border:1px solid rgba(127,127,127,.22) !important;
+  border-radius:12px !important;
+  background:rgba(255,255,255,.55) !important;
+  color:inherit !important;
+  font:inherit !important;
+  font-weight:600 !important;
+  cursor:pointer !important;
+  box-sizing:border-box !important;
+}
+body.msp-dark .msp-theme-toggle{
+  background:rgba(255,255,255,.08) !important;
+  border-color:rgba(255,255,255,.18) !important;
+  color:#f7f1ec !important;
+}
+.msp-theme-toggle:hover{transform:translateY(-1px);}
+@media (max-width:700px){
+  .msp-theme-control{
+    position:relative !important;
+    display:block !important;
+    margin-top:8px !important;
+    padding:8px 12px 12px !important;
+  }
+  .msp-theme-toggle{
+    min-height:46px !important;
+  }
+}
+</style>
+
 </head>
 <body>
 <div class="app">
@@ -3808,7 +3857,7 @@ body.msp-dark .msp-theme-control{
       <button data-page="study-room"><span class="icon">🏠</span><span>Study Room</span></button>
       <button data-page="files"><span class="icon">📁</span><span>Dateien & Infos</span></button>
     </nav>
-<div class="msp-theme-control">
+<div class="msp-theme-control" id="mspThemeControl">
   <button type="button" id="mspThemeToggle" class="msp-theme-toggle" aria-pressed="false">
     <span id="mspThemeIcon">🌙</span><span id="mspThemeLabel">Darkmode</span>
   </button>
