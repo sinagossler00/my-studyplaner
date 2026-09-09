@@ -787,63 +787,8 @@ hr{ border-color:#E9E4E2 !important; }
 }
 </style>
 <style id="msp-v145-exam-countdown">
-.home-exam-countdown{
-  display:inline-flex;
-  align-items:center;
-  gap:9px;
-  margin:0 0 12px 0;
-  padding:8px 11px;
-  border:1px solid var(--line);
-  border-radius:9px;
-  background:var(--card);
-  cursor:pointer;
-  user-select:none;
-  transition:background .15s ease,border-color .15s ease;
-}
-.home-exam-countdown:hover{
-  background:#f7f7f7;
-  border-color:#b8b8b8;
-}
-.home-exam-countdown-dot{
-  width:7px;
-  height:7px;
-  border-radius:50%;
-  background:#d8b84c;
-  flex:0 0 auto;
-}
-.home-exam-countdown-main{
-  display:flex;
-  align-items:baseline;
-  gap:7px;
-}
-.home-exam-countdown-label{
-  font-size:10px;
-  font-weight:800;
-  white-space:nowrap;
-}
-.home-exam-countdown-days{
-  font-size:14px;
-  font-weight:900;
-  white-space:nowrap;
-}
-@media(max-width:700px){
-  .home-exam-countdown-main{display:block}
-  .home-exam-countdown-days{font-size:13px}
-}
-</style>
-<style id="msp-v146-exam-overview">
-#homeOverview .exam-overview-card{
-  cursor:pointer;
-  user-select:none;
-  transition:background .15s ease,border-color .15s ease;
-}
-#homeOverview .exam-overview-card:hover{
-  background:#f7f7f7;
-  border-color:#b8b8b8;
-}
-#homeOverview .exam-overview-card strong{
-  font-size:16px;
-}
+#homeOverview .exam-overview-card{cursor:pointer;user-select:none}
+#homeOverview .exam-overview-card:hover{border-color:#b8b8b8;background:#f7f7f7}
 </style>
 </head>
 <body>
@@ -888,6 +833,57 @@ hr{ border-color:#E9E4E2 !important; }
    </div>
   </div>
   <div class="card reminder-card"><div class="card-head"><h2>🔔 Erinnerungen</h2><button class="btn small" onclick="requestReminderPermission()">Aktivieren</button></div><div id="homeReminders"></div></div>
+  <div class="two-col">
+   <div class="card"><div class="card-head"><h2>📁 Wichtige Dateien & Infos</h2><button class="btn" onclick="triggerUpload()">＋ Upload</button></div><input id="fileInput" type="file" accept=".pdf,image/*,.doc,.docx,.txt" multiple hidden onchange="handleFiles(this.files)"><div id="homeFiles" class="file-grid"></div><button class="btn secondary full" onclick="go('files')">Alle Dateien anzeigen →</button></div>
+   <div class="card psychology-day-card"><div class="card-head"><h2>🧠 Psychologie des Tages</h2></div><div id="psychologyDay"></div></div>
+  </div>
+ </section>
+
+ <section id="tasks" class="page"><div class="card"><div class="card-head"><div><button class="btn" onclick="openTask()">＋ Neue Aufgabe</button></div><div class="tabs"><button class="tab active" onclick="setTaskFilter('open',this)">Anstehend</button><button class="tab" onclick="setTaskFilter('done',this)">Abgehakt</button><button class="tab" onclick="setTaskFilter('all',this)">Alle</button></div></div><div id="taskList"></div></div></section>
+
+ <section id="calendar" class="page">
+  <div class="deadlines-page-layout">
+    <div class="card deadlines-list-card">
+      <div class="card-head"><div></div><button class="btn" onclick="openDeadline()">＋ Neuer Eintrag</button></div>
+
+      <div id="deadlineSortControl" class="deadline-sort-control">
+        <label for="deadlineSort">Sortieren nach</label>
+        <select id="deadlineSort">
+          <option value="date">Deadline</option>
+          <option value="priority">Priorität</option>
+        </select>
+      </div>
+
+      <div class="tabs">
+        <button class="tab active" onclick="setDeadlineFilter('all',this)">Alle</button>
+        <button class="tab" onclick="setDeadlineFilter('task',this)">☑️ Aufgaben</button>
+        <button class="tab" onclick="setDeadlineFilter('reg',this)">Anmeldungen</button>
+      </div>
+      <div id="deadlineList"></div>
+    </div>
+
+    <div class="card deadlines-calendar-card">
+      <div class="google-calendar-bar google-calendar-bar-deadlines" id="googleCalendarBarDeadlines">
+        <div class="google-calendar-main">
+          <div class="google-calendar-title">🗓️ Google Kalender</div>
+          <div class="google-calendar-status" id="googleCalendarStatusDeadlines">Wird mit dem Kalender synchronisiert.</div>
+        </div>
+        <div class="google-calendar-actions">
+          <button class="btn secondary small" onclick="openGoogleCalendarSettings()">⚙️</button>
+          <button class="btn small" onclick="connectGoogleCalendar()">☁️ Synchronisieren</button>
+        </div>
+      </div>
+      <div class="calendar-wrap">
+        <div class="calendar-nav">
+          <button class="btn secondary" onclick="changeCalendarMonth(-1)">‹</button>
+          <strong id="calendarMonthTitle"></strong>
+          <button class="btn secondary" onclick="changeCalendarMonth(1)">›</button>
+        </div>
+        <div class="calendar-weekdays"><span>Mo</span><span>Di</span><span>Mi</span><span>Do</span><span>Fr</span><span>Sa</span><span>So</span></div>
+        <div id="monthCalendar" class="month-calendar"></div>
+      </div>
+    </div>
+  </div>
  </section>
  <section id="files" class="page"><div class="card"><div class="card-head"><div></div><button class="btn" onclick="triggerUpload()">＋ Dateien hochladen</button></div><input id="fileInput2" type="file" accept=".pdf,image/*,.doc,.docx,.txt" multiple hidden onchange="handleFiles(this.files)"><div id="fileList" class="file-grid"></div><div class="note" style="margin-top:13px">☁️ Mit einem verbundenen Konto werden deine Daten zwischen Geräten synchronisiert. Dateien werden in der Cloud gespeichert, wenn du dein Firebase-Konto eingerichtet hast.</div></div></section>
 
@@ -1002,7 +998,7 @@ const defaultData={
 };
 let data=JSON.parse(localStorage.getItem(KEY)||'null')||structuredClone(defaultData);
 if(!Array.isArray(data.podcasts))data.podcasts=[];
-if(!('examCountdown' in data))data.examCountdown=null;
+if(!Object.prototype.hasOwnProperty.call(data,'examCountdown'))data.examCountdown=null;
 let deadlineFilter='all',taskFilter='open',currentUser=null,fb=null,cloudEnabled=false,calendarMonth=new Date(new Date().getFullYear(),new Date().getMonth(),1);
 const $=id=>document.getElementById(id);
 function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
@@ -1129,12 +1125,31 @@ function daysFromToday(date){
 function examCountdownValue(){
  const target=data.examCountdown;
  if(!target)return '–';
- const d=new Date(target+'T23:59:59');
- const today=new Date();
- const t=new Date(today.getFullYear(),today.getMonth(),today.getDate());
- const diff=Math.ceil((d-t)/86400000);
- if(diff<0)return '0';
- return String(diff);
+ const diff=daysFromToday(target);
+ return diff<0?'0':String(diff);
+}
+function openExamCountdownSettings(){
+ openModal('🎓 Prüfung',`<div class="muted" style="margin-bottom:10px">Datum der nächsten Prüfung oder Klausur.</div>
+ <label>Datum</label>
+ <input id="examCountdownDate" type="date" value="${esc(data.examCountdown||'')}">
+ <div style="display:flex;gap:8px;margin-top:12px">
+  <button class="btn" type="button" onclick="saveExamCountdown()">Speichern</button>
+  <button class="btn secondary" type="button" onclick="clearExamCountdown()">Zurücksetzen</button>
+ </div>`);
+}
+async function saveExamCountdown(){
+ const value=($('examCountdownDate')?.value||'').trim();
+ if(!value){alert('Bitte ein Datum auswählen.');return;}
+ data.examCountdown=value;
+ await saveData();
+ renderHomeOverview();
+ closeModal();
+}
+async function clearExamCountdown(){
+ data.examCountdown=null;
+ await saveData();
+ renderHomeOverview();
+ closeModal();
 }
 function renderHomeOverview(){
  const today=getTodayKey();
@@ -1160,7 +1175,7 @@ function renderHomeOverview(){
   ['❗','Deadlines diese Woche',weekDeadlines],
   ['📅','Deadlines nächste Woche',nextWeekDeadlines],
   ['🎓','Tage bis Prüfung',examCountdownValue()]
- ].map((x,i)=>`<div class="overview-card ${i===3?'exam-overview-card':''}" ${i===3?'onclick="openExamCountdownSettings()" role="button" tabindex="0" onkeydown="if(event.key===\'Enter\'||event.key===\' \')openExamCountdownSettings()"':''}><span class="overview-icon">${x[0]}</span><div><span>${x[1]}</span><strong>${x[2]}</strong></div></div>`).join('');
+ ].map((x,i)=>`<div class="overview-card ${i===3?'exam-overview-card':''}" ${i===3?'onclick="openExamCountdownSettings()"':''}><span class="overview-icon">${x[0]}</span><div><span>${x[1]}</span><strong>${x[2]}</strong></div></div>`).join('');
 }
 function renderCalendar(){
  const box=$('monthCalendar'),title=$('calendarMonthTitle');
@@ -1244,7 +1259,7 @@ function renderPsychologyDay(){
 }
 
 function renderAll(){if(!data.events)data.events=[];
- data.deadlines=(data.deadlines||[]).map(d=>({...d,priority:['hoch','mittel','leicht'].includes(String(d.priority||'').toLowerCase())?String(d.priority||'').toLowerCase():'mittel'}));renderHomeOverview();renderDeadlines('home');renderDeadlines('calendar');renderTasks();renderFiles();renderCalendar();renderPlannerCalendar();renderReminders();renderPsychologyDay();renderSavedPodcasts();renderExamCountdown();updateGoogleCalendarStatus()}
+ data.deadlines=(data.deadlines||[]).map(d=>({...d,priority:['hoch','mittel','leicht'].includes(String(d.priority||'').toLowerCase())?String(d.priority||'').toLowerCase():'mittel'}));renderHomeOverview();renderDeadlines('home');renderDeadlines('calendar');renderTasks();renderFiles();renderCalendar();renderPlannerCalendar();renderReminders();renderPsychologyDay();renderSavedPodcasts();updateGoogleCalendarStatus()}
 function setDeadlineFilter(v,btn){deadlineFilter=v;document.querySelectorAll('.tabs .tab').forEach(x=>{if(x.closest('#home')||x.closest('#calendar'))x.classList.remove('active')});if(btn)btn.classList.add('active');renderAll()}
 function setTaskFilter(v,btn){taskFilter=v;document.querySelectorAll('#tasks .tab').forEach(x=>x.classList.remove('active'));btn.classList.add('active');renderTasks()}
 function reminderLabel(v){
@@ -2479,36 +2494,6 @@ async function savePodcastToDrive(item,audio){
  const u=await googleDriveUpload(file);
  item.driveFileId=u.id;
  item.url=u.webViewLink||('https://drive.google.com/file/d/'+u.id+'/view');
-}
-
-
-function renderExamCountdown(){
- renderHomeOverview();
-}
-
-function openExamCountdownSettings(){
- const current=data.examCountdown||'';
- openModal('🎓 Prüfung',`<div class="muted" style="margin-bottom:10px">Datum der nächsten Prüfung oder Klausur.</div>
- <label>Prüfungsdatum</label>
- <input id="examCountdownDate" type="date" value="${esc(current)}">
- <div style="display:flex;gap:8px;margin-top:12px">
-   <button class="btn" type="button" onclick="saveExamCountdown()">Speichern</button>
-   <button class="btn secondary" type="button" onclick="clearExamCountdown()">Zurücksetzen</button>
- </div>`);
-}
-async function saveExamCountdown(){
- const value=($('examCountdownDate')?.value||'').trim();
- if(!value){alert('Bitte ein Datum auswählen.');return;}
- data.examCountdown=value;
- await saveData();
- renderExamCountdown();
- closeModal();
-}
-async function clearExamCountdown(){
- data.examCountdown=null;
- await saveData();
- renderExamCountdown();
- closeModal();
 }
 
 function renderSavedPodcasts(){
