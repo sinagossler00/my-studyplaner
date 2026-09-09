@@ -3911,6 +3911,17 @@ async function initCloud(){
       cloudData.gradeModules=mergeById(cloudData.gradeModules,localBeforeCloud.gradeModules);
       cloudData.grades=mergeById(cloudData.grades,localBeforeCloud.grades);
 
+      // Plant growth is cumulative, so keep the furthest/most advanced state
+      // from either this device or the cloud.
+      const cloudPlant=Number(cloudData.plantMinutes);
+      const localPlant=Number(localBeforeCloud.plantMinutes);
+      const legacyPlant=Number(localStorage.getItem('msp_total_learning_minutes')||0);
+      cloudData.plantMinutes=Math.max(
+        Number.isFinite(cloudPlant)?cloudPlant:0,
+        Number.isFinite(localPlant)?localPlant:0,
+        Number.isFinite(legacyPlant)?legacyPlant:0
+      );
+
       const cloudLinks=Array.isArray(cloudData.uniLinks)?cloudData.uniLinks:[];
       if(!cloudLinks.length&&localLinks.length)cloudData.uniLinks=localLinks;
 
@@ -3924,6 +3935,11 @@ async function initCloud(){
      }else{
       data.gradeModules=Array.isArray(data.gradeModules)?data.gradeModules:[];
       data.grades=Array.isArray(data.grades)?data.grades:[];
+      const legacyPlant=Number(localStorage.getItem('msp_total_learning_minutes')||0);
+      data.plantMinutes=Math.max(
+        Number.isFinite(Number(data.plantMinutes))?Number(data.plantMinutes):0,
+        Number.isFinite(legacyPlant)?legacyPlant:0
+      );
       if(localLinks.length&&!data.uniLinks)data.uniLinks=localLinks;
       await saveData();
       renderAll();
@@ -3936,6 +3952,7 @@ async function initCloud(){
       const remoteData=remoteSnap.data().data||{};
       const remoteGrades=Array.isArray(remoteData.grades)?remoteData.grades:[];
       const remoteModules=Array.isArray(remoteData.gradeModules)?remoteData.gradeModules:[];
+      const remotePlant=Number(remoteData.plantMinutes);
 
       const localGradeSignature=JSON.stringify({
        gradeModules:Array.isArray(data.gradeModules)?data.gradeModules:[],
@@ -3946,12 +3963,23 @@ async function initCloud(){
        grades:remoteGrades
       });
 
-      // Only replace when the remote grade state is actually different.
+      // Grades are authoritative per cloud snapshot.
       if(localGradeSignature!==remoteGradeSignature){
        data.gradeModules=remoteModules;
        data.grades=remoteGrades;
        saveLocal();
        renderGrades();
+      }
+
+      // Plant growth is cumulative: a remote increase should immediately show
+      // on this device, while a local larger value is never reduced.
+      if(Number.isFinite(remotePlant) && remotePlant>=0 &&
+         remotePlant!==Number(data.plantMinutes)){
+       if(remotePlant>Number(data.plantMinutes||0)){
+        data.plantMinutes=Math.round(remotePlant);
+        saveLocal();
+        renderPlant();
+       }
       }
      },err=>console.warn('Cloud-Echtzeit-Sync:',err));
 
@@ -5178,7 +5206,9 @@ window.addEventListener('load',()=>{try{updateGeminiOAuthStatus()}catch(e){conso
  function finishPhase(){
   running=false;clearInterval(timer);timer=null;
   if(!isBreak){
-   const st=timerStats();st.minutes=(st.minutes||0)+presetMinutes;st.sessions=(st.sessions||0)+1;saveData();
+   const st=timerStats();st.minutes=(st.minutes||0)+presetMinutes;st.sessions=(st.sessions||0)+1;
+   saveData();
+   if(typeof window.addLearningPlantMinutes==='function') window.addLearningPlantMinutes(presetMinutes);
    isBreak=true;duration=5*60;remaining=duration;renderStudyTimer();
    const s=document.getElementById('studyTimerStatus');if(s)s.textContent='🎉 Lernzeit geschafft! 5 Minuten Pause.';
   }else{
@@ -5312,14 +5342,28 @@ window.addEventListener('load',()=>{try{updateGeminiOAuthStatus()}catch(e){conso
 <script id="msp-learning-plant-js">
 (function(){
   const plantKey='msp_learning_plant_v1';
+
+  // The plant's cumulative minutes now live in data.plantMinutes and therefore
+  // travel with the normal Firestore-synced planner document.
   function totalLearningMinutes(){
-    let total=Number(localStorage.getItem('msp_total_learning_minutes')||0);
-    // Also recognize common existing timer fields if present.
-    total+=Number(data.studyMinutes||0);
-    total+=Number(data.totalStudyMinutes||0);
-    total+=Number(data.learningMinutes||0);
-    return Math.max(0,Math.round(total));
+    const cloudValue=Number(data&&data.plantMinutes);
+    if(Number.isFinite(cloudValue) && cloudValue>=0) return Math.round(cloudValue);
+
+    // One-time migration from the old device-local plant counter.
+    const oldLocal=Number(localStorage.getItem('msp_total_learning_minutes')||0);
+    return Math.max(0,Math.round(Number.isFinite(oldLocal)?oldLocal:0));
   }
+
+  async function savePlantMinutes(minutes){
+    const n=Math.max(0,Math.round(Number(minutes)||0));
+    data.plantMinutes=n;
+    saveLocal();
+    if(typeof saveData==='function'){
+      try{await saveData();}catch(e){console.warn('Pflanzen-Sync:',e)}
+    }
+    renderPlant();
+  }
+
   function renderPlant(){
     const mins=totalLearningMinutes();
     const stages=[
@@ -5344,16 +5388,25 @@ window.addEventListener('load',()=>{try{updateGeminiOAuthStatus()}catch(e){conso
   }
   // Expose a simple hook for the existing timer to add completed minutes.
   window.addLearningPlantMinutes=function(minutes){
-    const n=Number(minutes)||0;
-    if(n>0)localStorage.setItem('msp_total_learning_minutes',String(totalLearningMinutes()+n));
-    renderPlant();
+    const n=Math.max(0,Math.round(Number(minutes)||0));
+    if(!n){renderPlant();return;}
+    savePlantMinutes(totalLearningMinutes()+n);
   };
   const oldGo=window.go;
   if(oldGo&&!window.__plantGoWrapped){
     window.__plantGoWrapped=true;
     window.go=function(page){oldGo(page);if(page==='study-room')setTimeout(renderPlant,0)};
   }
-  document.addEventListener('DOMContentLoaded',()=>setTimeout(renderPlant,100));
+  document.addEventListener('DOMContentLoaded',()=>{
+    setTimeout(()=>{
+      const oldLocal=Number(localStorage.getItem('msp_total_learning_minutes')||0);
+      if((!Number.isFinite(Number(data.plantMinutes))||Number(data.plantMinutes)<oldLocal) && oldLocal>0){
+        data.plantMinutes=Math.round(oldLocal);
+        saveData();
+      }
+      renderPlant();
+    },100);
+  });
   window.renderLearningPlant=renderPlant;
 })();
 </script>
