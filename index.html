@@ -705,6 +705,22 @@ hr{ border-color:#E9E4E2 !important; }
 }
 </style>
 
+
+<style id="msp-v141-task-layout">
+#tasks #taskList{
+  width:100%;
+  display:block;
+  margin-top:4px;
+}
+#tasks .card-head{
+  width:100%;
+}
+</style>
+
+<style id="msp-v142-only-visual">
+#podcast .card + .card{margin-top:18px}
+#podcast #savedPodcastList{width:100%}
+</style>
 </head>
 <body>
 <div class="app">
@@ -754,7 +770,7 @@ hr{ border-color:#E9E4E2 !important; }
   </div>
  </section>
 
- <section id="tasks" class="page"><div class="card"><div class="card-head"><div><button class="btn" onclick="openTask()">＋ Neue Aufgabe</button></div><div class="tabs"><button class="tab active" onclick="setTaskFilter('open',this)">Anstehend</button><button class="tab" onclick="setTaskFilter('done',this)">Abgehakt</button><button class="tab" onclick="setTaskFilter('all',this)">Alle</button></div><div id="taskList"></div></div></section>
+ <section id="tasks" class="page"><div class="card"><div class="card-head"><div><button class="btn" onclick="openTask()">＋ Neue Aufgabe</button></div><div class="tabs"><button class="tab active" onclick="setTaskFilter('open',this)">Anstehend</button><button class="tab" onclick="setTaskFilter('done',this)">Abgehakt</button><button class="tab" onclick="setTaskFilter('all',this)">Alle</button></div></div><div id="taskList"></div></div></section>
 
  <section id="calendar" class="page">
   <div class="deadlines-page-layout">
@@ -808,15 +824,24 @@ hr{ border-color:#E9E4E2 !important; }
 
 <section id="podcast" class="page">
 <div class="card">
-<div class="card-head"><div><h2>🎙️ KI-Podcast</h2><div class="muted">Deine Zusammenfassungen als Lern-Podcast.</div></div></div>
-<div style="display:flex;align-items:center;gap:14px">
-<div style="font-size:28px">🤖</div><div><div style="font-weight:800;margin-bottom:4px">Zusammenfassung in Podcast umwandeln</div><div class="muted" style="margin-bottom:10px">Text einfügen und die KI erstellt daraus einen gesprochenen Lern-Podcast.</div><button id="openPodcastBtn" type="button" class="btn">🎙️ Podcast erstellen</button></div>
+  <div class="card-head">
+    <div><h2>🎙️ KI-Podcast</h2></div>
+  </div>
+  <div style="display:flex;align-items:center;gap:14px">
+    <div style="font-size:28px">🤖</div>
+    <div>
+      <div style="font-weight:800;margin-bottom:9px">Zusammenfassung als Podcast</div>
+      <button id="openPodcastBtn" type="button" class="btn">🎙️ Podcast erstellen</button>
+    </div>
+  </div>
 </div>
-<div class="podcast-library">
-  <div class="podcast-library-head"><h3>🎧 Meine gespeicherten Podcasts</h3></div>
+<div class="card" style="margin-top:18px">
+  <div class="card-head">
+    <div><h2>🎧 Gespeicherte Podcasts</h2></div>
+  </div>
   <div id="savedPodcastList" class="podcast-list"></div>
 </div>
-</div></section>
+</section>
 
 <section id="planner-calendar" class="page">
 
