@@ -3637,6 +3637,17 @@ aside.sidebar{
   }
 }
 </style>
+
+<style id="msp-v248-start-greeting-style">
+/* V248 – große Tagesbegrüßung ausschließlich auf der Startseite */
+.start-page-greeting{
+  font-size:2em !important;
+  line-height:1.12 !important;
+  font-weight:700 !important;
+  margin:0 0 14px !important;
+  display:block !important;
+}
+</style>
 </head>
 <body>
 <div class="app">
@@ -6661,26 +6672,7 @@ function renderStudyTimer(){
 
 
 
-<script id="msp-v246-greeting-emoji-sina">
-(function(){
-  function setTimeGreeting(){
-    const h=new Date().getHours();
-    const greeting = h>=5 && h<12 ? '🌅 Guten Morgen, Sina' :
-                     h>=12 && h<18 ? '☀️ Guten Tag, Sina' :
-                     '🌙 Guten Abend, Sina';
-    const all=[...document.querySelectorAll('h1,h2,h3,p,div,span')];
-    const el=all.find(x=>
-      /Guten Morgen|Hallo Sina|Guten Tag|Guten Abend/i.test(x.textContent.trim())
-      && x.children.length===0
-    );
-    if(el) el.textContent=greeting;
-  }
-  function run(){ setTimeGreeting(); setTimeout(setTimeGreeting,100); }
-  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',run);
-  else run();
-  setInterval(setTimeGreeting,60000);
-})();
-</script>
+
 
 
 <script id="msp-v247-timer-end-signal">
@@ -6707,6 +6699,49 @@ function renderStudyTimer(){
       else {play(660,0);play(880,.23);}
     }catch(e){}
   };
+})();
+</script>
+
+
+<script id="msp-v248-start-greeting">
+(function(){
+  function getGreeting(){
+    const h=new Date().getHours();
+    return h>=5 && h<12 ? '🌅 Guten Morgen, Sina' :
+           h>=12 && h<18 ? '☀️ Guten Tag, Sina' :
+           '🌙 Guten Abend, Sina';
+  }
+
+  function update(){
+    // Only act on the overview/start page.
+    const page=document.querySelector('#overview, #start, [data-page="overview"], [data-page="start"], .page.active');
+    if(!page)return;
+
+    let el=page.querySelector('.start-page-greeting');
+    if(!el){
+      // Find the main heading on the start page and turn it into the greeting.
+      const heading=page.querySelector('h1,h2');
+      if(!heading)return;
+      el=document.createElement('div');
+      el.className='start-page-greeting';
+      heading.parentNode.insertBefore(el,heading);
+      heading.style.display='none';
+    }
+    el.textContent=getGreeting();
+  }
+
+  function run(){
+    update();
+    setTimeout(update,200);
+    setTimeout(update,700);
+  }
+
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',run);
+  else run();
+  setInterval(update,60000);
+
+  // Re-run when the SPA changes page.
+  new MutationObserver(function(){update();}).observe(document.body,{childList:true,subtree:true});
 })();
 </script>
 
