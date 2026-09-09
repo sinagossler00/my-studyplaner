@@ -1041,6 +1041,26 @@ hr{ border-color:#E9E4E2 !important; }
 }
 </style>
 
+
+<style id="msp-study-timer-style">
+.study-timer-card{max-width:760px}
+.study-timer-wrap{text-align:center;padding:8px 0 2px}
+.study-timer-mode{font-size:12px;font-weight:850;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.study-timer-display{font-size:68px;font-weight:900;line-height:1;margin:14px 0 8px;letter-spacing:-.04em}
+.study-timer-status{font-size:12px;color:var(--muted);min-height:18px}
+.study-timer-custom{display:flex;flex-direction:column;align-items:center;gap:6px;margin:18px 0 12px}
+.study-timer-custom>label{font-size:11px;font-weight:800}
+.study-timer-custom-input{display:flex;align-items:center;justify-content:center;gap:7px}
+.study-timer-custom-input input{width:78px;height:30px;box-sizing:border-box;padding:4px 7px;border:1px solid #b6b6b6;border-radius:9px;background:#fff;color:#111;font-family:inherit;font-size:11px;font-weight:700;text-align:center}
+.study-timer-custom-input span{font-size:11px;color:var(--muted)}
+.study-timer-actions{display:flex;justify-content:center;gap:8px;flex-wrap:wrap}
+.study-timer-stats{display:flex;justify-content:center;gap:10px;margin-top:20px}
+.study-timer-stats>div{border:1px solid var(--line);border-radius:9px;padding:9px 18px;min-width:130px}
+.study-timer-stats span{display:block;font-size:10px;color:var(--muted);margin-bottom:3px}
+.study-timer-stats strong{font-size:15px}
+@media(max-width:600px){.study-timer-display{font-size:56px}.study-timer-stats{gap:7px}.study-timer-stats>div{min-width:110px;padding:8px 12px}}
+</style>
+
 </head>
 <body>
 <div class="app">
@@ -1053,6 +1073,7 @@ hr{ border-color:#E9E4E2 !important; }
   <button data-page="calendar"><span class="icon">❗</span><span>Deadlines</span></button>
   <button data-page="files"><span class="icon">📁</span><span>Dateien & Infos</span></button>
   <button data-page="podcast"><span class="icon">🎙️</span><span>KI-Podcast</span></button>
+  <button data-page="study-timer"><span class="icon">⏱️</span><span>Lern-Timer</span></button>
     <button data-page="uni-links"><span class="icon">🔗</span><span>Uni-Webseiten</span></button>
     </nav>
 </aside>
@@ -1169,6 +1190,39 @@ hr{ border-color:#E9E4E2 !important; }
   </div>
 </section>
 
+
+<section id="study-timer" class="page">
+  <div class="card study-timer-card">
+    <div class="card-head">
+      <div>
+        <h2>⏱️ Lern-Timer</h2>
+        <div class="muted">Fokuszeit einstellen und einfach loslernen.</div>
+      </div>
+    </div>
+    <div class="study-timer-wrap">
+      <div class="study-timer-mode" id="studyTimerMode">Lernzeit</div>
+      <div class="study-timer-display" id="studyTimerDisplay">25:00</div>
+      <div class="study-timer-status" id="studyTimerStatus">Bereit zum Lernen</div>
+      <div class="study-timer-custom">
+        <label for="studyTimerMinutes">Lernzeit</label>
+        <div class="study-timer-custom-input">
+          <input id="studyTimerMinutes" type="number" min="1" max="180" value="25" inputmode="numeric" aria-label="Lernzeit in Minuten">
+          <span>Minuten</span>
+          <button class="btn secondary small" type="button" onclick="applyStudyTimerCustom()">Übernehmen</button>
+        </div>
+      </div>
+      <div class="study-timer-actions">
+        <button class="btn" id="studyTimerStart" type="button" onclick="toggleStudyTimer()">▶️ Start</button>
+        <button class="btn secondary" type="button" onclick="resetStudyTimer()">↺ Zurücksetzen</button>
+      </div>
+      <div class="study-timer-stats">
+        <div><span>Heute gelernt</span><strong id="studyTimerToday">0 Min</strong></div>
+        <div><span>Sessions</span><strong id="studyTimerSessions">0</strong></div>
+      </div>
+    </div>
+  </div>
+</section>
+
 <section id="planner-calendar" class="page">
 
   <div class="google-calendar-bar" id="googleCalendarBar">
@@ -1276,7 +1330,7 @@ function go(page){
  setActiveNav(page);
  document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));$(page).classList.add('active');
  document.querySelectorAll('.nav button').forEach(x=>x.classList.toggle('active',x.dataset.page===page));
- const t={home:['🏠 Hallo Sina!','Schön, dass du hier bist. Bleib dran!'],tasks:['☑️ Aufgaben','Was steht heute, diese Woche oder diesen Monat an?'],'planner-calendar':['Kalender 📅','Deadlines und Termine übersichtlich im Monatskalender.'],calendar:['❗ Deadlines & Termine','Behalte alle wichtigen Fristen im Blick.'],podcast:['🎙️ KI-Podcast','Deine Zusammenfassungen als Lern-Podcast.'],files:['📁 Dateien & Infos','Alles Wichtige schnell griffbereit.'],modules:['📚 Meine Module','Deine Module und ihre Dateien.'],stats:['📊 Statistiken','Dein aktueller Studienfortschritt.'],'uni-links':['Uni-Webseiten 🔗','Wichtige Webseiten rund ums Studium an einem Ort.']}[page];
+ const t={home:['🏠 Hallo Sina!','Schön, dass du hier bist. Bleib dran!'],tasks:['☑️ Aufgaben','Was steht heute, diese Woche oder diesen Monat an?'],'planner-calendar':['Kalender 📅','Deadlines und Termine übersichtlich im Monatskalender.'],calendar:['❗ Deadlines & Termine','Behalte alle wichtigen Fristen im Blick.'],podcast:['🎙️ KI-Podcast','Deine Zusammenfassungen als Lern-Podcast.'],'study-timer':['⏱️ Lern-Timer','Konzentriert lernen – mit klaren Lern- und Pausenzeiten.'],files:['📁 Dateien & Infos','Alles Wichtige schnell griffbereit.'],modules:['📚 Meine Module','Deine Module und ihre Dateien.'],stats:['📊 Statistiken','Dein aktueller Studienfortschritt.'],'uni-links':['Uni-Webseiten 🔗','Wichtige Webseiten rund ums Studium an einem Ort.']}[page];
  $('pageTitle').textContent=t[0];$('pageSubtitle').textContent=t[1];renderAll()
 }
 document.querySelectorAll('.nav button').forEach(b=>b.onclick=()=>go(b.dataset.page));
@@ -3033,6 +3087,70 @@ window.addEventListener('load',()=>{try{updateGeminiOAuthStatus()}catch(e){conso
 #homeOverview .exam-overview-card{cursor:pointer;user-select:none}
 #homeOverview .exam-overview-card:hover{border-color:#b8b8b8;background:#f7f7f7}
 </style>
+
+
+<script id="msp-study-timer-script">
+(function(){
+ let timer=null,running=false,isBreak=false,duration=25*60,remaining=duration,endAt=0,presetMinutes=25;
+ function timerStats(){
+  data.timerStats=data.timerStats||{date:getTodayKey(),minutes:0,sessions:0};
+  const today=getTodayKey();
+  if(data.timerStats.date!==today)data.timerStats={date:today,minutes:0,sessions:0};
+  return data.timerStats;
+ }
+ function fmtTimer(sec){
+  sec=Math.max(0,Math.ceil(sec));const m=Math.floor(sec/60),s=sec%60;
+  return String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
+ }
+ function renderStudyTimer(){
+  const d=document.getElementById('studyTimerDisplay'),mode=document.getElementById('studyTimerMode'),status=document.getElementById('studyTimerStatus'),start=document.getElementById('studyTimerStart'),today=document.getElementById('studyTimerToday'),sessions=document.getElementById('studyTimerSessions');
+  if(!d)return;
+  d.textContent=fmtTimer(remaining);mode.textContent=isBreak?'Pause':'Lernzeit';
+  status.textContent=running?(isBreak?'Pause läuft…':'Fokus läuft…'):'Bereit zum Lernen';
+  start.textContent=running?'⏸️ Pause':'▶️ Start';
+  const st=timerStats();today.textContent=(st.minutes||0)+' Min';sessions.textContent=String(st.sessions||0);
+ }
+ function finishPhase(){
+  running=false;clearInterval(timer);timer=null;
+  if(!isBreak){
+   const st=timerStats();st.minutes=(st.minutes||0)+presetMinutes;st.sessions=(st.sessions||0)+1;saveData();
+   isBreak=true;duration=5*60;remaining=duration;renderStudyTimer();
+   const s=document.getElementById('studyTimerStatus');if(s)s.textContent='🎉 Lernzeit geschafft! 5 Minuten Pause.';
+  }else{
+   isBreak=false;duration=presetMinutes*60;remaining=duration;renderStudyTimer();
+   const s=document.getElementById('studyTimerStatus');if(s)s.textContent='☀️ Pause vorbei – bereit für die nächste Lernrunde.';
+  }
+ }
+ function tick(){
+  remaining=Math.max(0,(endAt-Date.now())/1000);
+  if(remaining<=0){finishPhase();return;}renderStudyTimer();
+ }
+ window.applyStudyTimerCustom=function(){
+  if(running)return;
+  const input=document.getElementById('studyTimerMinutes');
+  let minutes=Number(input?.value||25);
+  if(!Number.isFinite(minutes))minutes=25;
+  minutes=Math.max(1,Math.min(180,Math.round(minutes)));
+  if(input)input.value=String(minutes);
+  presetMinutes=minutes;
+  duration=minutes*60;
+  remaining=duration;
+  isBreak=false;
+  renderStudyTimer();
+ };
+ window.toggleStudyTimer=function(){
+  if(running){remaining=Math.max(0,(endAt-Date.now())/1000);running=false;clearInterval(timer);timer=null;renderStudyTimer();return;}
+  if(remaining<=0)remaining=duration;endAt=Date.now()+remaining*1000;running=true;clearInterval(timer);timer=setInterval(tick,250);renderStudyTimer();
+ };
+ window.resetStudyTimer=function(){running=false;clearInterval(timer);timer=null;isBreak=false;duration=presetMinutes*60;remaining=duration;renderStudyTimer();};
+ document.addEventListener('visibilitychange',function(){if(running)tick();});
+ document.addEventListener('DOMContentLoaded',function(){
+  renderStudyTimer();
+  const input=document.getElementById('studyTimerMinutes');
+  if(input)input.addEventListener('keydown',function(e){if(e.key==='Enter')applyStudyTimerCustom();});
+});
+})();
+</script>
 
 </body>
 </html>
