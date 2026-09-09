@@ -1455,6 +1455,38 @@ nav button[data-page] .icon{
   font-size:15px !important;
 }
 </style>
+
+<style id="msp-sidebar-size-scroll">
+.sidebar{
+  overflow:hidden !important;
+}
+.sidebar nav{
+  max-height:calc(100vh - 145px) !important;
+  overflow-y:auto !important;
+  overflow-x:hidden !important;
+  padding-right:5px !important;
+  scrollbar-width:thin !important;
+}
+.sidebar nav button,
+.sidebar .nav button,
+nav button[data-page]{
+  min-height:43px !important;
+  height:43px !important;
+  padding:8px 12px !important;
+  margin:3px 0 !important;
+  gap:10px !important;
+  border-radius:9px !important;
+  font-size:14px !important;
+  box-sizing:border-box !important;
+}
+.sidebar nav button .icon,
+.sidebar .nav button .icon,
+nav button[data-page] .icon{
+  width:21px !important;
+  min-width:21px !important;
+  font-size:16px !important;
+}
+</style>
 </head>
 <body>
 <div class="app">
