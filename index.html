@@ -2789,6 +2789,125 @@ input:focus,select:focus,textarea:focus{
 }
 </style>
 
+
+<style id="msp-tablet-portrait-timer-v213">
+/* V213 – dedicated tablet portrait layout for the timer.
+   The desktop-sized timer was too large for the narrower portrait canvas,
+   causing the time/status/custom controls to collide. */
+@media (min-width:701px) and (max-width:1100px) and (orientation:portrait){
+  #study-timer{
+    padding:10px 12px 24px !important;
+    min-height:auto !important;
+  }
+
+  #study-timer .study-timer-card{
+    max-width:620px !important;
+  }
+
+  #study-timer .study-timer-wrap{
+    min-height:0 !important;
+    height:auto !important;
+    padding:34px 18px 24px !important;
+    justify-content:flex-start !important;
+    gap:0 !important;
+  }
+
+  #study-timer .study-timer-mode{
+    order:1 !important;
+    margin:0 0 10px !important;
+    font-size:12px !important;
+    line-height:1.2 !important;
+    letter-spacing:.18em !important;
+    position:static !important;
+    height:auto !important;
+  }
+
+  #study-timer .study-timer-display{
+    order:2 !important;
+    font-size:clamp(64px,11vw,88px) !important;
+    line-height:1 !important;
+    letter-spacing:-.045em !important;
+    margin:0 0 10px !important;
+    position:static !important;
+    height:auto !important;
+    transform:none !important;
+    white-space:nowrap !important;
+  }
+
+  #study-timer .study-timer-status{
+    order:3 !important;
+    margin:0 0 18px !important;
+    font-size:11px !important;
+    line-height:1.35 !important;
+    letter-spacing:.12em !important;
+    text-align:center !important;
+    position:static !important;
+    height:auto !important;
+  }
+
+  #study-timer .study-timer-actions{
+    order:4 !important;
+    width:min(500px,100%) !important;
+    gap:10px !important;
+    margin:0 0 14px !important;
+    flex-wrap:wrap !important;
+  }
+
+  #study-timer .study-timer-actions .btn,
+  #study-timer .study-timer-actions .btn:first-child{
+    min-width:140px !important;
+    flex:1 1 180px !important;
+    height:42px !important;
+  }
+
+  #study-timer .study-timer-custom{
+    order:5 !important;
+    width:min(500px,100%) !important;
+    margin:0 !important;
+    padding:12px 14px !important;
+    border-radius:14px !important;
+  }
+
+  #study-timer .study-timer-custom-input{
+    gap:8px !important;
+  }
+
+  #study-timer #studyTimerMinutes{
+    height:40px !important;
+  }
+
+  #study-timer .study-timer-stats{
+    order:7 !important;
+    width:min(500px,100%) !important;
+    grid-template-columns:1fr 1fr !important;
+    gap:8px !important;
+    margin-top:10px !important;
+  }
+
+  #study-timer .study-timer-stats > div{
+    padding:10px 12px !important;
+    border-radius:12px !important;
+  }
+
+  #study-timer .study-timer-sounds{
+    order:6 !important;
+    width:min(500px,100%) !important;
+    margin-top:10px !important;
+    padding:11px 13px !important;
+    border-radius:14px !important;
+  }
+
+  #study-timer .study-timer-sound-options{
+    gap:6px !important;
+  }
+
+  #study-timer .study-sound-option{
+    flex:1 1 auto !important;
+    min-width:0 !important;
+  }
+}
+</style>
+
 </head>
 <body>
 <div class="app">
