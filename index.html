@@ -908,6 +908,12 @@ hr{ border-color:#E9E4E2 !important; }
 #createPodcastBtn:disabled{opacity:.6;cursor:wait}
 </style>
 
+
+<style id="msp-podcast-background-style">
+.podcast-speed-note{margin-top:8px}
+.saved-podcast-sync{font-size:10px;color:var(--muted);margin-top:6px}
+.saved-podcast-sync::first-letter{font-size:11px}
+</style>
 </head>
 <body>
 <div class="app">
@@ -2489,10 +2495,10 @@ window.openPodcast=function(){
   <textarea id="podcastSourceText" placeholder="Zusammenfassung hier einfügen..." style="min-height:220px"></textarea>
   <div class="form-grid" style="margin-top:10px">
    <div><label>Stil</label><select id="podcastStyle"><option value="lern">ruhig & verständlich</option><option value="locker">locker & motivierend</option><option value="pruefung">prüfungsorientiert</option></select></div>
-   <div><label>Länge</label><select id="podcastLength"><option value="kurz" selected>kurz</option><option value="mittel">mittel</option></select></div>
+   <div><label>Länge</label><select id="podcastLength"><option value="kurz">kurz</option><option value="mittel" selected>mittel</option></select></div>
   </div>
   <div id="podcastStatus" class="muted" style="margin-top:9px;min-height:18px"></div>
-  <div class="muted podcast-speed-note">💡 „Kurz“ ist deutlich schneller erstellt. Danach wird die Audiodatei noch in Google Drive gespeichert.</div>
+  <div class="muted podcast-speed-note">💡 Der Podcast ist nach der Erstellung sofort abspielbar. Die Speicherung auf Google Drive läuft im Hintergrund, damit du ihn später auch auf Handy und Tablet nutzen kannst.</div>
   <button id="createPodcastBtn" type="button" class="btn" style="margin-top:10px">🎙️ Podcast erstellen</button>
   <div id="podcastResult"></div>`);
   const b=document.getElementById('createPodcastBtn');
@@ -2607,12 +2613,76 @@ ${script}`);
  return pcmWav(concatUint8(pcmParts));
 }
 
-async function savePodcastToDrive(item,audio){
- if(!await googleDriveAuth())throw new Error('Google Drive-Zugriff wurde nicht erteilt. Der Podcast kann ohne Drive nicht dauerhaft gespeichert werden.');
- const file=new File([audio],item.fileName,{type:'audio/wav'});
- const u=await googleDriveUpload(file);
- item.driveFileId=u.id;
- item.url=u.webViewLink||('https://drive.google.com/file/d/'+u.id+'/view');
+/* Podcast audio storage:
+   - IndexedDB keeps the audio immediately available on this device.
+   - Google Drive is used only for cross-device persistence and is uploaded in the background.
+*/
+const MSP_PODCAST_DB='msp_podcast_audio_v1';
+const MSP_PODCAST_STORE='audio';
+
+function mspPodcastDB(){
+ return new Promise((resolve,reject)=>{
+  try{
+   const req=indexedDB.open(MSP_PODCAST_DB,1);
+   req.onupgradeneeded=()=>{const db=req.result;if(!db.objectStoreNames.contains(MSP_PODCAST_STORE))db.createObjectStore(MSP_PODCAST_STORE);};
+   req.onsuccess=()=>resolve(req.result);
+   req.onerror=()=>reject(req.error||new Error('Lokaler Podcast-Speicher konnte nicht geöffnet werden.'));
+  }catch(e){reject(e);}
+ });
+}
+async function cachePodcastAudio(id,audio){
+ const db=await mspPodcastDB();
+ return new Promise((resolve,reject)=>{
+  const tx=db.transaction(MSP_PODCAST_STORE,'readwrite');
+  tx.objectStore(MSP_PODCAST_STORE).put(audio,String(id));
+  tx.oncomplete=()=>{db.close();resolve(true);};
+  tx.onerror=()=>{db.close();reject(tx.error||new Error('Podcast konnte lokal nicht gespeichert werden.'));};
+ });
+}
+async function getPodcastAudio(id){
+ const db=await mspPodcastDB();
+ return new Promise((resolve,reject)=>{
+  const tx=db.transaction(MSP_PODCAST_STORE,'readonly');
+  const req=tx.objectStore(MSP_PODCAST_STORE).get(String(id));
+  req.onsuccess=()=>{const value=req.result;db.close();resolve(value||null);};
+  req.onerror=()=>{db.close();reject(req.error||new Error('Podcast konnte lokal nicht geladen werden.'));};
+ });
+}
+async function deletePodcastAudio(id){
+ try{
+  const db=await mspPodcastDB();
+  return await new Promise((resolve,reject)=>{
+   const tx=db.transaction(MSP_PODCAST_STORE,'readwrite');
+   tx.objectStore(MSP_PODCAST_STORE).delete(String(id));
+   tx.oncomplete=()=>{db.close();resolve(true);};
+   tx.onerror=()=>{db.close();reject(tx.error||new Error('Lokale Podcast-Datei konnte nicht gelöscht werden.'));};
+  });
+ }catch(e){console.warn('Lokales Podcast-Löschen:',e);}
+}
+
+function podcastSyncLabel(p){
+ return p.driveFileId?'☁️ Gespeichert & auf allen Geräten verfügbar':'⏳ Wird im Hintergrund synchronisiert…';
+}
+
+async function uploadPodcastInBackground(id){
+ const p=(data.podcasts||[]).find(x=>String(x.id)===String(id));
+ if(!p||p.driveFileId)return;
+ try{
+  const audio=await getPodcastAudio(id);
+  if(!audio)throw new Error('Lokale Audiodatei fehlt.');
+  if(!await googleDriveAuth())throw new Error('Google Drive-Zugriff nicht verfügbar.');
+  const file=new File([audio],p.fileName,{type:'audio/wav'});
+  const u=await googleDriveUpload(file);
+  p.driveFileId=u.id;
+  p.url=u.webViewLink||('https://drive.google.com/file/d/'+u.id+'/view');
+  p.syncStatus='synced';
+  await saveData();
+  renderSavedPodcasts();
+ }catch(e){
+  p.syncStatus='pending';
+  console.warn('Podcast-Hintergrundspeicherung:',e);
+  renderSavedPodcasts();
+ }
 }
 
 function renderSavedPodcasts(){
@@ -2626,19 +2696,36 @@ function renderSavedPodcasts(){
  el.innerHTML=list.slice().sort((a,b)=>Number(b.createdAt||0)-Number(a.createdAt||0)).map(p=>{
    const date=p.createdAt?new Date(p.createdAt).toLocaleString('de-DE',{dateStyle:'medium',timeStyle:'short'}):'';
    const meta=[date,p.styleLabel,p.lengthLabel].filter(Boolean).join(' · ');
+   const sync=p.driveFileId?'☁️ Auf allen Geräten verfügbar':'⏳ Speicherung läuft im Hintergrund';
+   const retry=!p.driveFileId?`<button class="btn secondary small" type="button" onclick="syncSavedPodcast('${esc(p.id)}',this)">☁️ Synchronisieren</button>`:'';
    return `<article class="saved-podcast">
      <div class="saved-podcast-top">
        <div><div class="saved-podcast-title">🎧 ${esc(p.title||'Lern-Podcast')}</div><div class="saved-podcast-meta">${esc(meta)}</div></div>
        <button class="trash" type="button" onclick="deleteSavedPodcast('${esc(p.id)}')" title="Podcast löschen">×</button>
      </div>
+     <div class="saved-podcast-sync">${sync}</div>
      <div class="saved-podcast-actions">
        <button class="btn small" type="button" onclick="playSavedPodcast('${esc(p.id)}',this)">▶️ Abspielen</button>
        <button class="btn secondary small" type="button" onclick="showSavedPodcastScript('${esc(p.id)}')">📝 Skript</button>
+       ${retry}
      </div>
      <div id="savedPodcastPlayer_${esc(p.id)}"></div>
    </article>`;
  }).join('');
 }
+
+window.syncSavedPodcast=async function(id,btn){
+ const old=btn?.textContent;
+ if(btn){btn.disabled=true;btn.textContent='⏳ Synchronisiere…';}
+ try{
+  await uploadPodcastInBackground(id);
+  const p=(data.podcasts||[]).find(x=>String(x.id)===String(id));
+  if(!p?.driveFileId)alert('Die Synchronisierung konnte noch nicht abgeschlossen werden. Der Podcast bleibt aber lokal gespeichert.');
+ }finally{
+  if(btn){btn.disabled=false;btn.textContent=old||'☁️ Synchronisieren';}
+  renderSavedPodcasts();
+ }
+};
 
 async function playSavedPodcast(id,btn){
  const p=(data.podcasts||[]).find(x=>String(x.id)===String(id));
@@ -2647,11 +2734,15 @@ async function playSavedPodcast(id,btn){
  if(!holder)return;
  try{
    btn.disabled=true;btn.textContent='⏳ Laden…';
-   if(!p.driveFileId)throw new Error('Für diesen Podcast ist keine gespeicherte Audiodatei vorhanden.');
-   if(!await googleDriveAuth())throw new Error('Google Drive-Zugriff wurde nicht erteilt.');
-   const r=await driveFetch('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(p.driveFileId)+'?alt=media');
-   if(!r.ok)throw new Error('Google Drive ('+r.status+'): '+await r.text());
-   const blob=await r.blob();
+   let blob=await getPodcastAudio(id);
+   if(!blob&&p.driveFileId){
+     if(!await googleDriveAuth())throw new Error('Google Drive-Zugriff wurde nicht erteilt.');
+     const r=await driveFetch('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(p.driveFileId)+'?alt=media');
+     if(!r.ok)throw new Error('Google Drive ('+r.status+'): '+await r.text());
+     blob=await r.blob();
+     await cachePodcastAudio(id,blob);
+   }
+   if(!blob)throw new Error('Für diesen Podcast ist keine Audiodatei vorhanden.');
    if(p._objectUrl)URL.revokeObjectURL(p._objectUrl);
    p._objectUrl=URL.createObjectURL(blob);
    holder.innerHTML=`<audio controls autoplay src="${p._objectUrl}"></audio>`;
@@ -2672,13 +2763,15 @@ function showSavedPodcastScript(id){
 async function deleteSavedPodcast(id){
  const p=(data.podcasts||[]).find(x=>String(x.id)===String(id));
  if(!p)return;
- if(!confirm('Diesen gespeicherten Podcast auch aus Google Drive löschen?'))return;
+ if(!confirm('Diesen gespeicherten Podcast löschen?'))return;
  try{
    if(p.driveFileId){
-     if(!await googleDriveAuth())return;
-     await googleDriveDelete(p.driveFileId);
+     try{
+      if(await googleDriveAuth())await googleDriveDelete(p.driveFileId);
+     }catch(e){console.warn('Drive-Löschen:',e);}
    }
    if(p._objectUrl)URL.revokeObjectURL(p._objectUrl);
+   await deletePodcastAudio(id);
    data.podcasts=data.podcasts.filter(x=>String(x.id)!==String(id));
    await saveData();
    renderSavedPodcasts();
@@ -2697,22 +2790,21 @@ window.createAIPodcast=async function(){
   const styleValue=$('podcastStyle').value;
   const style={lern:'ruhig, klar und lernfreundlich',locker:'locker und motivierend',pruefung:'prüfungsorientiert'}[styleValue];
   const isShort=$('podcastLength').value==='kurz';
-  const len=isShort?'180–260':'350–450';
+  const len=isShort?'450–650':'750–1000';
   const title=(($('podcastTitle')?.value||'').trim())||('Lern-Podcast · '+new Date().toLocaleDateString('de-DE'));
   const script=await geminiText(`Erstelle aus dieser Psychologie-Zusammenfassung ein deutsches Lern-Podcast-Skript.
 Stil: ${style}. Länge: etwa ${len} Wörter. Bleibe ausschließlich bei den Inhalten der Zusammenfassung.
-Nutze genau zwei Sprecher: Anna und Ben. Erkläre nur die wichtigsten schwierigen Begriffe kurz. Baue am Ende höchstens 2 kurze Wiederholungsfragen ein und vermeide Einleitung, Füllsätze und Wiederholungen.
+Nutze genau zwei Sprecher: Anna und Ben. Erkläre schwierige Begriffe kurz und baue am Ende 3 Wiederholungsfragen ein.
 Nur Gespräch ausgeben im Format:
 Anna: ...
 Ben: ...
 
 ZUSAMMENFASSUNG:
-${source.slice(0,24000)}`);
+${source.slice(0,45000)}`);
   status.textContent='🎙️ 2/3 Audio wird erzeugt…';
-  // Nur ein TTS-Aufruf: kein künstlicher zweiter Warteversuch.
   const audio=await geminiTTS(script);
 
-  status.textContent='☁️ 3/3 Wird gespeichert…';
+  /* Wichtig: erst lokal speichern und sofort verfügbar machen. */
   const item={
     id:String(Date.now())+Math.random().toString(16).slice(2),
     title,script,createdAt:Date.now(),
@@ -2721,25 +2813,45 @@ ${source.slice(0,24000)}`);
     length:$('podcastLength').value,
     lengthLabel:isShort?'kurz':'mittel',
     fileName:'My Studyplaner – '+title.replace(/[\\/:*?"<>|]/g,'-').slice(0,90)+'.wav',
-    driveFileId:'',url:''
+    driveFileId:'',url:'',syncStatus:'pending'
   };
-  await savePodcastToDrive(item,audio);
+  await cachePodcastAudio(item.id,audio);
   data.podcasts=data.podcasts||[];
   data.podcasts.push(item);
   await saveData();
 
   const url=URL.createObjectURL(audio);
-  result.innerHTML=`<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line)"><b>🎧 Dein Lern-Podcast wurde gespeichert</b><audio controls style="width:100%;margin-top:10px" src="${url}"></audio><div class="muted" style="margin-top:7px">Du findest ihn jetzt unter „🎧 Meine gespeicherten Podcasts“ und kannst ihn auch auf deinen anderen Geräten abrufen.</div><details style="margin-top:9px"><summary>📝 Skript</summary><div style="white-space:pre-wrap;font-size:12px;line-height:1.5;margin-top:7px">${esc(script)}</div></details></div>`;
-  status.textContent='✓ Podcast erstellt und gespeichert.';
+  result.innerHTML=`<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line)">
+    <b>🎧 Dein Lern-Podcast ist fertig</b>
+    <audio controls autoplay style="width:100%;margin-top:10px" src="${url}"></audio>
+    <div class="muted" style="margin-top:7px">Du kannst ihn sofort anhören. Die Speicherung auf Google Drive läuft jetzt im Hintergrund, damit er danach auch auf Handy und Tablet verfügbar ist.</div>
+    <details style="margin-top:9px"><summary>📝 Skript</summary><div style="white-space:pre-wrap;font-size:12px;line-height:1.5;margin-top:7px">${esc(script)}</div></details>
+  </div>`;
+  status.textContent='✓ Podcast erstellt – Speicherung läuft im Hintergrund.';
   renderSavedPodcasts();
+
+  /* Nicht awaiten: der Upload blockiert weder Audio noch Oberfläche. */
+  uploadPodcastInBackground(item.id);
  }catch(e){
   console.error(e);
   status.textContent='❌ Erstellung fehlgeschlagen.';
-  alert('Podcast konnte nicht erstellt werden:\\n\\n'+(e.message||e));
+  alert('Podcast konnte nicht erstellt werden:\n\n'+(e.message||e));
  }finally{
   if(btn){btn.disabled=false;btn.textContent='🎙️ Podcast erstellen';}
  }
 }
+
+/* Nach einem Reload versuchen wir ausstehende Podcasts erneut zu synchronisieren. */
+async function retryPendingPodcastUploads(){
+ const list=Array.isArray(data.podcasts)?data.podcasts:[];
+ for(const p of list){
+  if(p&&p.id&&!p.driveFileId){
+   try{await uploadPodcastInBackground(p.id);}catch(e){console.warn(e);}
+  }
+ }
+}
+setTimeout(()=>{try{retryPendingPodcastUploads()}catch(e){console.warn(e)}},1800);
+
 </script>
 
 <script id="msp-v138-ai-bootstrap">
