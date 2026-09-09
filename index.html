@@ -2505,7 +2505,7 @@ window.addEventListener('DOMContentLoaded',()=>{
 </script>
 
 <script id="msp-v139-podcast">
-const GEMINI_TEXT_MODEL='gemini-2.5-flash';
+const GEMINI_TEXT_MODEL='gemini-3.6-flash';
 const GEMINI_TTS_MODEL='gemini-3.1-flash-tts-preview';
 let mspAI=null;
 
@@ -2562,7 +2562,7 @@ async function geminiText(prompt){
    try{
     const {getGenerativeModel}=await import('https://www.gstatic.com/firebasejs/12.18.0/firebase-ai.js');
     const ai=await mspGetAI();
-    const fallback=getGenerativeModel(ai,{model:'gemini-2.5-flash'});
+    const fallback=getGenerativeModel(ai,{model:'gemini-3.6-flash'});
     const result=await fallback.generateContent(prompt);
     const text=result?.response?.text?.();
     if(text)return text.trim();
