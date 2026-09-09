@@ -2709,6 +2709,74 @@ input:focus,select:focus,textarea:focus{
 }
 </style>
 
+
+<style id="msp-tile-text-v208">
+/* V208 – prevent the first letters of overview labels from being clipped.
+   The previous responsive rule inherited an overly tight text box/overflow. */
+#homeOverview .overview-card{
+  overflow:visible !important;
+  box-sizing:border-box !important;
+}
+#homeOverview .overview-card > *{
+  min-width:0 !important;
+}
+#homeOverview .overview-card > div{
+  overflow:visible !important;
+  min-width:0 !important;
+  padding-left:2px !important;
+  box-sizing:border-box !important;
+}
+#homeOverview .overview-card span:not(.overview-icon){
+  overflow:visible !important;
+  text-overflow:clip !important;
+  white-space:normal !important;
+  word-break:normal !important;
+  overflow-wrap:normal !important;
+  hyphens:none !important;
+  position:relative !important;
+  left:0 !important;
+}
+#homeOverview .overview-card strong{
+  overflow:visible !important;
+  white-space:nowrap !important;
+  position:relative !important;
+  left:0 !important;
+}
+#homeOverview .overview-icon{
+  overflow:visible !important;
+  position:relative !important;
+  left:0 !important;
+  flex-shrink:0 !important;
+}
+
+/* Tablet: give the label a little more horizontal breathing room. */
+@media (min-width:701px) and (max-width:1000px){
+  #homeOverview .overview-card{
+    padding-left:11px !important;
+    padding-right:11px !important;
+    gap:9px !important;
+  }
+  #homeOverview .overview-card > div{
+    padding-left:3px !important;
+  }
+}
+
+/* Phone: same fix while retaining the two-column layout. */
+@media (max-width:700px){
+  #homeOverview .overview-card{
+    padding-left:10px !important;
+    padding-right:10px !important;
+    gap:8px !important;
+  }
+  #homeOverview .overview-card > div{
+    padding-left:2px !important;
+  }
+}
+</style>
+
+
+
+
 </head>
 <body>
 <div class="app">
@@ -3060,7 +3128,7 @@ function go(page){
  setActiveNav(page);
  document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));$(page).classList.add('active');
  document.querySelectorAll('.nav button').forEach(x=>x.classList.toggle('active',x.dataset.page===page));
- const t={'grades':['🎓 Noten','Deine Leistungen und Noten pro Modul im Überblick.'],home:['🏠 Hallo Sina!','Schön, dass du hier bist. Bleib dran!'],tasks:['☑️ Aufgaben','Was steht heute, diese Woche oder diesen Monat an?'],'planner-calendar':['Kalender 📅','Deadlines und Termine übersichtlich im Monatskalender.'],calendar:['❗ Deadlines & Termine','Behalte alle wichtigen Fristen im Blick.'],podcast:['🎙️ KI-Podcast','Deine Zusammenfassungen als Lern-Podcast.'],'study-timer':['⏱️ Lern-Timer','Konzentriert lernen – mit klaren Lern- und Pausenzeiten.'],files:['📁 Dateien & Infos','Alles Wichtige schnell griffbereit.'],modules:['📚 Meine Module','Deine Module und ihre Dateien.'],stats:['📊 Statistiken','Dein aktueller Studienfortschritt.'],'uni-links':['Uni-Webseiten 🔗','Wichtige Webseiten rund ums Studium an einem Ort.']}[page];
+ const t={'grades':['🎓 Noten','Deine Leistungen und Noten pro Modul im Überblick.'],home:['🏠 Hallo Sina!','Schön, dass du hier bist. Bleib dran!'],tasks:['☑️ Aufgaben','Was steht heute, diese Woche oder diesen Monat an?'],'planner-calendar':['Kalender 📅','Deadlines und Termine übersichtlich im Monatskalender.'],calendar:['❗ Deadlines & Termine','Behalte alle wichtigen Fristen im Blick.'],podcast:['🎙️ KI-Podcast','Deine Zusammenfassungen als Lern-Podcast.'],'study-timer':['⏱️ Lern-Timer','Konzentriert lernen – mit klaren Lern- und Pausenzeiten.'],'study-room':['🌱 Meine Lernpflanze','Sie wächst mit deiner Lernzeit.'],files:['📁 Dateien & Infos','Alles Wichtige schnell griffbereit.'],modules:['📚 Meine Module','Deine Module und ihre Dateien.'],stats:['📊 Statistiken','Dein aktueller Studienfortschritt.'],'uni-links':['Uni-Webseiten 🔗','Wichtige Webseiten rund ums Studium an einem Ort.']}[page];
  $('pageTitle').textContent=t[0];$('pageSubtitle').textContent=t[1];renderAll()
 }
 document.querySelectorAll('.nav button').forEach(b=>b.onclick=()=>go(b.dataset.page));
@@ -5277,6 +5345,9 @@ window.addEventListener('load',()=>{try{updateGeminiOAuthStatus()}catch(e){conso
   window.renderLearningPlant=renderPlant;
 })();
 </script>
+
+
+
 </body>
 </html>
 
