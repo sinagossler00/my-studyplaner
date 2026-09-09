@@ -786,10 +786,6 @@ hr{ border-color:#E9E4E2 !important; }
   background:#f5f5f5 !important;
 }
 </style>
-<style id="msp-v145-exam-countdown">
-#homeOverview .exam-overview-card{cursor:pointer;user-select:none}
-#homeOverview .exam-overview-card:hover{border-color:#b8b8b8;background:#f7f7f7}
-</style>
 </head>
 <body>
 <div class="app">
@@ -994,11 +990,10 @@ const defaultData={
   {id:21,name:'Statistik 1',info:'Vorlesungen, Aufgaben und Prüfung'},
   {id:22,name:'Entwicklungspsychologie',info:'Hausarbeit & Literatur'},
   {id:23,name:'Biologische Psychologie',info:'Klausur & Lernmaterial'}
- ],notes:[],podcasts:[],examCountdown:null
+ ],notes:[],podcasts:[]
 };
 let data=JSON.parse(localStorage.getItem(KEY)||'null')||structuredClone(defaultData);
 if(!Array.isArray(data.podcasts))data.podcasts=[];
-if(!Object.prototype.hasOwnProperty.call(data,'examCountdown'))data.examCountdown=null;
 let deadlineFilter='all',taskFilter='open',currentUser=null,fb=null,cloudEnabled=false,calendarMonth=new Date(new Date().getFullYear(),new Date().getMonth(),1);
 const $=id=>document.getElementById(id);
 function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
@@ -1122,35 +1117,6 @@ function daysFromToday(date){
  const a=new Date(getTodayKey()+'T12:00:00'),b=new Date(date+'T12:00:00');
  return Math.round((b-a)/86400000);
 }
-function examCountdownValue(){
- const target=data.examCountdown;
- if(!target)return '–';
- const diff=daysFromToday(target);
- return diff<0?'0':String(diff);
-}
-function openExamCountdownSettings(){
- openModal('🎓 Prüfung',`<div class="muted" style="margin-bottom:10px">Datum der nächsten Prüfung oder Klausur.</div>
- <label>Datum</label>
- <input id="examCountdownDate" type="date" value="${esc(data.examCountdown||'')}">
- <div style="display:flex;gap:8px;margin-top:12px">
-  <button class="btn" type="button" onclick="saveExamCountdown()">Speichern</button>
-  <button class="btn secondary" type="button" onclick="clearExamCountdown()">Zurücksetzen</button>
- </div>`);
-}
-async function saveExamCountdown(){
- const value=($('examCountdownDate')?.value||'').trim();
- if(!value){alert('Bitte ein Datum auswählen.');return;}
- data.examCountdown=value;
- await saveData();
- renderHomeOverview();
- closeModal();
-}
-async function clearExamCountdown(){
- data.examCountdown=null;
- await saveData();
- renderHomeOverview();
- closeModal();
-}
 function renderHomeOverview(){
  const today=getTodayKey();
  const now=new Date();
@@ -1173,9 +1139,8 @@ function renderHomeOverview(){
  $('homeOverview').innerHTML=[
   ['📋','Offene Aufgaben',openTasks],
   ['❗','Deadlines diese Woche',weekDeadlines],
-  ['📅','Deadlines nächste Woche',nextWeekDeadlines],
-  ['🎓','Tage bis Prüfung',examCountdownValue()]
- ].map((x,i)=>`<div class="overview-card ${i===3?'exam-overview-card':''}" ${i===3?'onclick="openExamCountdownSettings()"':''}><span class="overview-icon">${x[0]}</span><div><span>${x[1]}</span><strong>${x[2]}</strong></div></div>`).join('');
+  ['📅','Deadlines nächste Woche',nextWeekDeadlines]
+ ].map(x=>`<div class="overview-card"><span class="overview-icon">${x[0]}</span><div><span>${x[1]}</span><strong>${x[2]}</strong></div></div>`).join('');
 }
 function renderCalendar(){
  const box=$('monthCalendar'),title=$('calendarMonthTitle');
@@ -2635,6 +2600,67 @@ ${source.slice(0,60000)}`);
 <script id="msp-v138-ai-bootstrap">
 window.addEventListener('load',()=>{try{updateGeminiOAuthStatus()}catch(e){console.warn(e)}});
 </script>
+
+<script id="msp-exam-countdown-addon">
+(function(){
+  function examCountdownValue(){
+    const target=data.examCountdown;
+    if(!target)return '–';
+    const diff=daysFromToday(target);
+    return diff<0?'0':String(diff);
+  }
+
+  window.openExamCountdownSettings=function(){
+    openModal('🎓 Prüfung',`<div class="muted" style="margin-bottom:10px">Prüfungsdatum festlegen.</div>
+      <label>Datum</label>
+      <input id="examCountdownDate" type="date" value="${esc(data.examCountdown||'')}">
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button class="btn" type="button" onclick="saveExamCountdown()">Speichern</button>
+        <button class="btn secondary" type="button" onclick="clearExamCountdown()">Zurücksetzen</button>
+      </div>`);
+  };
+
+  window.saveExamCountdown=async function(){
+    const value=($('examCountdownDate')?.value||'').trim();
+    if(!value){alert('Bitte ein Datum auswählen.');return;}
+    data.examCountdown=value;
+    await saveData();
+    renderHomeOverview();
+    closeModal();
+  };
+
+  window.clearExamCountdown=async function(){
+    data.examCountdown=null;
+    await saveData();
+    renderHomeOverview();
+    closeModal();
+  };
+
+  const originalRenderHomeOverview=window.renderHomeOverview;
+  window.renderHomeOverview=function(){
+    originalRenderHomeOverview();
+    const box=$('homeOverview');
+    if(!box)return;
+    const old=$('examCountdownCard');
+    if(old)old.remove();
+    const card=document.createElement('div');
+    card.className='overview-card exam-overview-card';
+    card.id='examCountdownCard';
+    card.setAttribute('role','button');
+    card.setAttribute('tabindex','0');
+    card.title='Prüfungsdatum festlegen oder ändern';
+    card.innerHTML='<span class="overview-icon">🎓</span><div><span>Tage bis Prüfung</span><strong>'+examCountdownValue()+'</strong></div>';
+    card.onclick=window.openExamCountdownSettings;
+    card.onkeydown=function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();window.openExamCountdownSettings();}};
+    box.appendChild(card);
+  };
+})();
+</script>
+<style id="msp-exam-countdown-style">
+#homeOverview .exam-overview-card{cursor:pointer;user-select:none}
+#homeOverview .exam-overview-card:hover{border-color:#b8b8b8;background:#f7f7f7}
+</style>
+
 </body>
 </html>
 
