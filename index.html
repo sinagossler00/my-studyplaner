@@ -904,6 +904,10 @@ hr{ border-color:#E9E4E2 !important; }
 #createPodcastBtn:disabled{opacity:.6;cursor:wait}
 </style>
 
+<style id="msp-podcast-stability-v151">
+#createPodcastBtn:disabled{opacity:.6;cursor:wait}
+</style>
+
 </head>
 <body>
 <div class="app">
@@ -2501,7 +2505,7 @@ window.addEventListener('DOMContentLoaded',()=>{
 </script>
 
 <script id="msp-v139-podcast">
-const GEMINI_TEXT_MODEL='gemini-3.7-flash';
+const GEMINI_TEXT_MODEL='gemini-2.5-flash';
 const GEMINI_TTS_MODEL='gemini-3.1-flash-tts-preview';
 let mspAI=null;
 
@@ -2547,10 +2551,27 @@ async function mspTTSModel(){
 }
 async function geminiText(prompt){
  const model=await mspTextModel();
- const result=await model.generateContent(prompt);
- const text=result?.response?.text?.();
- if(!text)throw new Error('Gemini hat keinen Podcast-Text erstellt.');
- return text.trim();
+ try{
+  const result=await model.generateContent(prompt);
+  const text=result?.response?.text?.();
+  if(!text)throw new Error('Gemini hat keinen Podcast-Text erstellt.');
+  return text.trim();
+ }catch(e){
+  const msg=String(e?.message||e||'');
+  if(/500|high demand|spikes in demand|temporarily/i.test(msg)){
+   try{
+    const {getGenerativeModel}=await import('https://www.gstatic.com/firebasejs/12.18.0/firebase-ai.js');
+    const ai=await mspGetAI();
+    const fallback=getGenerativeModel(ai,{model:'gemini-2.5-flash'});
+    const result=await fallback.generateContent(prompt);
+    const text=result?.response?.text?.();
+    if(text)return text.trim();
+   }catch(fallbackError){
+    console.warn('Gemini-Fallback:',fallbackError);
+   }
+  }
+  throw e;
+ }
 }
 function pcmWav(pcm){
  const rate=24000,ch=1,bits=16,b=new ArrayBuffer(44),v=new DataView(b),w=(o,s)=>{for(let i=0;i<s.length;i++)v.setUint8(o+i,s.charCodeAt(i));};
