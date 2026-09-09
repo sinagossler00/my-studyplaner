@@ -3637,17 +3637,6 @@ aside.sidebar{
   }
 }
 </style>
-
-<style id="msp-v248-start-greeting-style">
-/* V248 – große Tagesbegrüßung ausschließlich auf der Startseite */
-.start-page-greeting{
-  font-size:2em !important;
-  line-height:1.12 !important;
-  font-weight:700 !important;
-  margin:0 0 14px !important;
-  display:block !important;
-}
-</style>
 </head>
 <body>
 <div class="app">
@@ -3674,7 +3663,7 @@ aside.sidebar{
 
 <main>
  <div class="topbar">
-  <div><h1 id="pageTitle">Guten Morgen! ⌁</h1><div class="subtitle" id="pageSubtitle">Schön, dass du hier bist. Bleib dran!</div></div>
+  <div><h1 id="pageTitle">Hallo Sina! ⌁</h1><div class="subtitle" id="pageSubtitle">Schön, dass du hier bist. Bleib dran!</div></div>
   <div class="top-actions"><button class="btn secondary" onclick="openCloud()">☁️️ Konto</button><div class="cloud-status" id="cloudStatus" style="display:none;"><span class="dot"></span><span>Nur auf diesem Gerät</span></div><input class="search" id="search" placeholder="⌕ Suche..." oninput="renderAll()" style="display:none;" aria-hidden="true"></div>
  </div>
 
@@ -4039,7 +4028,7 @@ function go(page){
  setActiveNav(page);
  document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));$(page).classList.add('active');
  document.querySelectorAll('.nav button').forEach(x=>x.classList.toggle('active',x.dataset.page===page));
- const t={'grades':['🎓 Noten','Deine Leistungen und Noten pro Modul im Überblick.'],home:['🏠 Guten Morgen!','Schön, dass du hier bist. Bleib dran!'],tasks:['☑️ Aufgaben','Was steht heute, diese Woche oder diesen Monat an?'],'planner-calendar':['Kalender 📅','Deadlines und Termine übersichtlich im Monatskalender.'],calendar:['❗ Deadlines & Termine','Behalte alle wichtigen Fristen im Blick.'],podcast:['🎙️ KI-Podcast','Deine Zusammenfassungen als Lern-Podcast.'],'study-timer':['⏱️ Lern-Timer','Konzentriert lernen – mit klaren Lern- und Pausenzeiten.'],'study-room':['🌱 Meine Lernpflanze','Sie wächst mit deiner Lernzeit.'],files:['📁 Dateien & Infos','Alles Wichtige schnell griffbereit.'],modules:['📚 Meine Module','Deine Module und ihre Dateien.'],stats:['📊 Statistiken','Dein aktueller Studienfortschritt.'],'uni-links':['Uni-Webseiten 🔗','Wichtige Webseiten rund ums Studium an einem Ort.']}[page];
+ const t={'grades':['🎓 Noten','Deine Leistungen und Noten pro Modul im Überblick.'],home:['🏠 Hallo Sina!','Schön, dass du hier bist. Bleib dran!'],tasks:['☑️ Aufgaben','Was steht heute, diese Woche oder diesen Monat an?'],'planner-calendar':['Kalender 📅','Deadlines und Termine übersichtlich im Monatskalender.'],calendar:['❗ Deadlines & Termine','Behalte alle wichtigen Fristen im Blick.'],podcast:['🎙️ KI-Podcast','Deine Zusammenfassungen als Lern-Podcast.'],'study-timer':['⏱️ Lern-Timer','Konzentriert lernen – mit klaren Lern- und Pausenzeiten.'],'study-room':['🌱 Meine Lernpflanze','Sie wächst mit deiner Lernzeit.'],files:['📁 Dateien & Infos','Alles Wichtige schnell griffbereit.'],modules:['📚 Meine Module','Deine Module und ihre Dateien.'],stats:['📊 Statistiken','Dein aktueller Studienfortschritt.'],'uni-links':['Uni-Webseiten 🔗','Wichtige Webseiten rund ums Studium an einem Ort.']}[page];
  $('pageTitle').textContent=t[0];$('pageSubtitle').textContent=t[1];renderAll()
 }
 document.querySelectorAll('.nav button').forEach(b=>b.onclick=()=>go(b.dataset.page));
@@ -6390,7 +6379,7 @@ function renderStudyTimer(){
  }
  function tick(){
   remaining=Math.max(0,(endAt-Date.now())/1000);
-  if(remaining<=0){ window.playTimerEndSignal&&window.playTimerEndSignal();finishPhase();return;}renderStudyTimer();
+  if(remaining<=0){ window.mspTimerEndSound&&window.mspTimerEndSound();finishPhase();return;}renderStudyTimer();
  }
  window.applyStudyTimerCustom=function(){
   if(running)return;
@@ -6649,35 +6638,9 @@ function renderStudyTimer(){
 </script>
 
 
-<script id="msp-v244-greeting">
+<script id="msp-timer-end-sound-only">
 (function(){
-  function updateGreeting(){
-    const h = new Date().getHours();
-    const text = h >= 5 && h < 12 ? 'Guten Morgen' : (h >= 12 && h < 18 ? 'Guten Tag' : 'Guten Abend');
-    const selectors = ['#greeting','#welcomeGreeting','.greeting','.welcome-greeting'];
-    let el = null;
-    for(const s of selectors){ el=document.querySelector(s); if(el) break; }
-    if(el) el.textContent = text;
-    if(!el){
-      const candidates=[...document.querySelectorAll('h1,h2,h3,p,div,span')];
-      el=candidates.find(x=>/^(Guten Morgen|Guten Tag|Guten Abend)/i.test(x.textContent.trim()));
-      if(el) el.textContent = text;
-    }
-  }
-  updateGreeting();
-  setInterval(updateGreeting, 60000);
-})();
-</script>
-
-
-
-
-
-
-
-<script id="msp-v247-timer-end-signal">
-(function(){
-  window.playTimerEndSignal=function(){
+  window.mspTimerEndSound=function(){
     try{
       if(navigator.vibrate) navigator.vibrate([80,50,120]);
     }catch(e){}
@@ -6686,62 +6649,20 @@ function renderStudyTimer(){
       if(!AC)return;
       const ctx=new AC();
       const play=(freq,delay)=>{
-        const o=ctx.createOscillator(), g=ctx.createGain();
+        const o=ctx.createOscillator(),g=ctx.createGain();
         const t=ctx.currentTime+delay;
-        o.type='sine'; o.frequency.setValueAtTime(freq,t);
+        o.type='sine';
+        o.frequency.setValueAtTime(freq,t);
         g.gain.setValueAtTime(0.0001,t);
-        g.gain.exponentialRampToValueAtTime(0.07,t+0.018);
-        g.gain.exponentialRampToValueAtTime(0.0001,t+0.20);
-        o.connect(g); g.connect(ctx.destination);
-        o.start(t); o.stop(t+0.22);
+        g.gain.exponentialRampToValueAtTime(0.06,t+0.015);
+        g.gain.exponentialRampToValueAtTime(0.0001,t+0.18);
+        o.connect(g);g.connect(ctx.destination);
+        o.start(t);o.stop(t+0.2);
       };
-      if(ctx.state==='suspended') ctx.resume().then(()=>{play(660,0);play(880,.23);});
-      else {play(660,0);play(880,.23);}
+      const run=()=>{play(660,0);play(880,0.23);};
+      if(ctx.state==='suspended') ctx.resume().then(run); else run();
     }catch(e){}
   };
-})();
-</script>
-
-
-<script id="msp-v248-start-greeting">
-(function(){
-  function getGreeting(){
-    const h=new Date().getHours();
-    return h>=5 && h<12 ? '🌅 Guten Morgen, Sina' :
-           h>=12 && h<18 ? '☀️ Guten Tag, Sina' :
-           '🌙 Guten Abend, Sina';
-  }
-
-  function update(){
-    // Only act on the overview/start page.
-    const page=document.querySelector('#overview, #start, [data-page="overview"], [data-page="start"], .page.active');
-    if(!page)return;
-
-    let el=page.querySelector('.start-page-greeting');
-    if(!el){
-      // Find the main heading on the start page and turn it into the greeting.
-      const heading=page.querySelector('h1,h2');
-      if(!heading)return;
-      el=document.createElement('div');
-      el.className='start-page-greeting';
-      heading.parentNode.insertBefore(el,heading);
-      heading.style.display='none';
-    }
-    el.textContent=getGreeting();
-  }
-
-  function run(){
-    update();
-    setTimeout(update,200);
-    setTimeout(update,700);
-  }
-
-  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',run);
-  else run();
-  setInterval(update,60000);
-
-  // Re-run when the SPA changes page.
-  new MutationObserver(function(){update();}).observe(document.body,{childList:true,subtree:true});
 })();
 </script>
 
