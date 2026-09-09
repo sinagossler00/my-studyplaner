@@ -2649,6 +2649,66 @@ input:focus,select:focus,textarea:focus{
 }
 </style>
 
+
+<style id="msp-tablet-sidebar-v207">
+/* V207 – tablet sidebar: scroll the complete sidebar itself.
+   This is more reliable for touch scrolling than a nested scroll container. */
+@media (min-width:701px) and (max-width:1100px){
+  .sidebar{
+    width:205px !important;
+    height:100vh !important;
+    max-height:100vh !important;
+    overflow-y:auto !important;
+    overflow-x:hidden !important;
+    box-sizing:border-box !important;
+    -webkit-overflow-scrolling:touch !important;
+    touch-action:pan-y !important;
+    overscroll-behavior:contain !important;
+    padding-bottom:28px !important;
+  }
+
+  .sidebar nav,
+  .sidebar .nav{
+    max-height:none !important;
+    height:auto !important;
+    overflow:visible !important;
+  }
+
+  .sidebar-note{
+    position:static !important;
+    margin:18px 10px 0 !important;
+  }
+
+  main{
+    margin-left:205px !important;
+    width:calc(100% - 205px) !important;
+    box-sizing:border-box !important;
+  }
+
+  .sidebar nav button,
+  .sidebar .nav button,
+  nav button[data-page]{
+    min-height:43px !important;
+    height:43px !important;
+  }
+}
+
+/* Landscape tablet / short viewport: ensure there is always enough
+   scrollable space for all navigation items. */
+@media (min-width:701px) and (max-width:1100px) and (max-height:750px){
+  .sidebar{
+    padding-top:12px !important;
+  }
+  .sidebar nav button,
+  .sidebar .nav button,
+  nav button[data-page]{
+    min-height:39px !important;
+    height:39px !important;
+    margin:2px 0 !important;
+  }
+}
+</style>
+
 </head>
 <body>
 <div class="app">
