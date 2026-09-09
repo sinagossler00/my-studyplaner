@@ -3815,7 +3815,7 @@ aside.sidebar{
         <div class="plant-stage" id="plantStage">🌱 Keimling</div>
         <div class="plant-time"><strong id="plantMinutes">0</strong> Minuten gelernt</div>
         <div class="plant-progress"><span id="plantProgress"></span></div>
-        <div class="muted" id="plantNext">Noch 30 Minuten bis zur nächsten Wachstumsstufe.</div>
+        <div class="muted" id="plantNext">Noch 25 Min bis zur nächsten Wachstumsstufe.</div>
       </div>
     </div>
   </div>
@@ -6369,7 +6369,7 @@ function renderStudyTimer(){
   if(!isBreak){
    const st=timerStats();st.minutes=(st.minutes||0)+presetMinutes;st.sessions=(st.sessions||0)+1;
    saveData();
-   if(typeof window.addLearningPlantMinutes==='function') window.addLearningPlantMinutes(presetMinutes);
+   if(typeof window.addLearningPlantMinutes==='function') window.addLearningPlantMinutes(25);
    isBreak=true;duration=5*60;remaining=duration;renderStudyTimer();
    const s=document.getElementById('studyTimerStatus');if(s)s.textContent='🎉 Lernzeit geschafft! 5 Minuten Pause.';
   }else{
@@ -6615,6 +6615,25 @@ function renderStudyTimer(){
   }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',initMobileMenu);
   else initMobileMenu();
+})();
+</script>
+
+
+<script id="msp-v243-plant-25min-display">
+(function(){
+  function fixPlant30(){
+    const nodes=document.querySelectorAll('*');
+    nodes.forEach(el=>{
+      if(el.children.length===0 && /30\s*Min/i.test(el.textContent) &&
+         /pflanz|plant|wachstum|growth/i.test((el.parentElement?.textContent||'')+' '+(el.className||''))){
+        el.textContent=el.textContent.replace(/30\s*Min/ig,'25 Min');
+      }
+    });
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',fixPlant30);
+  else fixPlant30();
+  setTimeout(fixPlant30,300);
+  setTimeout(fixPlant30,1000);
 })();
 </script>
 
