@@ -2529,6 +2529,15 @@ input:focus,select:focus,textarea:focus{
 }
 </style>
 
+
+<style id="msp-mobile-v205">
+@media (max-width:700px){
+  .sidebar nav{max-height:300px !important;overflow-y:auto !important;}
+  .sidebar .nav button span:last-child,
+  nav button[data-page] span:last-child{visibility:visible !important;opacity:1 !important;}
+}
+</style>
+
 </head>
 <body>
 <div class="app">
@@ -2860,7 +2869,7 @@ data.gradeModules=Array.isArray(data.gradeModules)?data.gradeModules:[];
 data.grades=Array.isArray(data.grades)?data.grades:[];
 if(!Array.isArray(data.podcasts))data.podcasts=[];
 if(!Array.isArray(data.tasks))data.tasks=[];data.tasks.forEach(t=>{if(typeof t.deadline!=='string')t.deadline='';});
-let deadlineFilter='all',taskFilter='open',taskTimeFilter='all',taskSort='deadline',currentUser=null,fb=null,cloudEnabled=false,calendarMonth=new Date(new Date().getFullYear(),new Date().getMonth(),1);
+let deadlineFilter='all',taskFilter='open',taskTimeFilter='all',taskSort='deadline',currentUser=null,fb=null,cloudEnabled=false,cloudUnsubscribe=null,calendarMonth=new Date(new Date().getFullYear(),new Date().getMonth(),1);
 const $=id=>document.getElementById(id);
 function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
 function saveLocal(){localStorage.setItem(KEY,JSON.stringify(data))}
@@ -3241,7 +3250,7 @@ function renderGrades(){
  }).join(''):'<div class="card"><div class="empty">Noch keine Module angelegt. Klicke oben auf „＋ Modul hinzufügen“.</div></div>';
 }
 function renderAll(){if(!data.events)data.events=[];
- data.deadlines=(data.deadlines||[]).map(d=>({...d,priority:['hoch','mittel','leicht'].includes(String(d.priority||'').toLowerCase())?String(d.priority||'').toLowerCase():'mittel'}));renderHomeOverview();renderDeadlines('home');renderDeadlines('calendar');renderTasks();renderFiles();renderCalendar();renderPlannerCalendar();renderReminders();renderPsychologyDay();renderSavedPodcasts();updateGoogleCalendarStatus()}
+ data.deadlines=(data.deadlines||[]).map(d=>({...d,priority:['hoch','mittel','leicht'].includes(String(d.priority||'').toLowerCase())?String(d.priority||'').toLowerCase():'mittel'}));renderHomeOverview();renderDeadlines('home');renderDeadlines('calendar');renderTasks();renderGrades();renderFiles();renderCalendar();renderPlannerCalendar();renderReminders();renderPsychologyDay();renderSavedPodcasts();updateGoogleCalendarStatus()}
 function setDeadlineFilter(v,btn){
  deadlineFilter=v;
  const h=$('homeDeadlineFilter'), c=$('deadlineFilterSelect');
@@ -3619,23 +3628,24 @@ async function initCloud(){
   fb={auth:firebase.auth(),db:firebase.firestore()};
   fb.auth.onAuthStateChanged(async user=>{
    currentUser=user;
+
+   if(cloudUnsubscribe){cloudUnsubscribe();cloudUnsubscribe=null;}
+
    if(user){
     cloudEnabled=true;
     updateCloudStatus(true,user.email||'Angemeldet');
+
     try{
      const localBeforeCloud=structuredClone(data||{});
      const localLinks=(typeof getLocalUniLinks==='function')?getLocalUniLinks():[];
-     const snap=await fb.db.collection('users').doc(user.uid).get();
+     const ref=fb.db.collection('users').doc(user.uid);
+     const snap=await ref.get();
 
      if(snap.exists&&snap.data().data){
       const cloudData=snap.data().data||{};
 
-      // IMPORTANT: merge grade modules + grades instead of replacing the local
-      // dataset. This prevents grades entered on a device before/while syncing
-      // from disappearing when another device logs in.
       const mergeById=(cloudArr,localArr)=>{
-       const result=[];
-       const seen=new Set();
+       const result=[],seen=new Set();
        [...(Array.isArray(cloudArr)?cloudArr:[]),...(Array.isArray(localArr)?localArr:[])].forEach(item=>{
         if(!item)return;
         const id=String(item.id??'');
@@ -3650,30 +3660,50 @@ async function initCloud(){
       cloudData.gradeModules=mergeById(cloudData.gradeModules,localBeforeCloud.gradeModules);
       cloudData.grades=mergeById(cloudData.grades,localBeforeCloud.grades);
 
-      // Keep local links if they exist and the cloud document has none.
       const cloudLinks=Array.isArray(cloudData.uniLinks)?cloudData.uniLinks:[];
-      if(!cloudLinks.length && localLinks.length) cloudData.uniLinks=localLinks;
+      if(!cloudLinks.length&&localLinks.length)cloudData.uniLinks=localLinks;
 
       data=cloudData;
       data.gradeModules=Array.isArray(data.gradeModules)?data.gradeModules:[];
       data.grades=Array.isArray(data.grades)?data.grades:[];
 
       saveLocal();
-      await fb.db.collection('users').doc(user.uid).set({
-       data,
-       updatedAt:firebase.firestore.FieldValue.serverTimestamp()
-      },{merge:true});
-
+      await ref.set({data,updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});
       renderAll();
      }else{
-      // First login on this account: upload the complete local dataset.
-      if(!data||typeof data!=='object')data={};
       data.gradeModules=Array.isArray(data.gradeModules)?data.gradeModules:[];
       data.grades=Array.isArray(data.grades)?data.grades:[];
-      if(localLinks.length && !data.uniLinks)data.uniLinks=localLinks;
+      if(localLinks.length&&!data.uniLinks)data.uniLinks=localLinks;
       await saveData();
       renderAll();
      }
+
+     // Real-time sync: another phone/tablet/PC changing grades (or other
+     // planner data) updates this device automatically.
+     cloudUnsubscribe=ref.onSnapshot(remoteSnap=>{
+      if(!remoteSnap.exists||!remoteSnap.data().data)return;
+      const remoteData=remoteSnap.data().data||{};
+      const remoteGrades=Array.isArray(remoteData.grades)?remoteData.grades:[];
+      const remoteModules=Array.isArray(remoteData.gradeModules)?remoteData.gradeModules:[];
+
+      const localGradeSignature=JSON.stringify({
+       gradeModules:Array.isArray(data.gradeModules)?data.gradeModules:[],
+       grades:Array.isArray(data.grades)?data.grades:[]
+      });
+      const remoteGradeSignature=JSON.stringify({
+       gradeModules:remoteModules,
+       grades:remoteGrades
+      });
+
+      // Only replace when the remote grade state is actually different.
+      if(localGradeSignature!==remoteGradeSignature){
+       data.gradeModules=remoteModules;
+       data.grades=remoteGrades;
+       saveLocal();
+       renderGrades();
+      }
+     },err=>console.warn('Cloud-Echtzeit-Sync:',err));
+
     }catch(e){console.warn('Cloud-Sync:',e)}
    }else{
     cloudEnabled=false;
