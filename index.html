@@ -786,6 +786,120 @@ hr{ border-color:#E9E4E2 !important; }
   background:#f5f5f5 !important;
 }
 </style>
+
+<style id="msp-deadline-filter-style">
+#home .deadline-controls-row,
+#calendar .calendar-deadline-controls{
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:10px;
+  margin:-2px 0 10px;
+}
+#home .deadline-controls-row .deadline-sort-control,
+#calendar .calendar-deadline-controls .deadline-sort-control{
+  margin:0 !important;
+  display:flex;
+  align-items:center;
+  gap:6px;
+}
+#home .deadline-controls-row .deadline-sort-control label,
+#calendar .calendar-deadline-controls .deadline-sort-control label{
+  margin:0;
+}
+#home .deadline-filter-select,
+#calendar .deadline-filter-select{
+  width:125px !important;
+  min-width:125px !important;
+  height:28px !important;
+  min-height:28px !important;
+  padding:2px 6px !important;
+  font-size:10px !important;
+  box-sizing:border-box !important;
+}
+</style>
+
+
+<style id="msp-deadline-controls-v147">
+#calendar .deadline-card-head{
+  align-items:flex-start !important;
+  gap:12px;
+}
+#calendar .deadline-card-head .deadline-top-controls{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  order:2;
+  margin-left:auto;
+}
+#calendar .deadline-card-head > .btn{
+  order:3;
+  flex:0 0 auto;
+}
+#calendar .deadline-card-head .deadline-sort-control{
+  display:flex !important;
+  align-items:center !important;
+  gap:6px !important;
+  margin:0 !important;
+}
+#calendar .deadline-card-head .deadline-sort-control label{
+  margin:0 !important;
+  font-family:inherit !important;
+  font-size:10px !important;
+  font-weight:800 !important;
+}
+#calendar #deadlineSort,
+#calendar #deadlineFilterSelect{
+  width:125px !important;
+  min-width:125px !important;
+  height:28px !important;
+  min-height:28px !important;
+  padding:2px 7px !important;
+  box-sizing:border-box !important;
+  border:2px solid #b69b3a !important;
+  border-radius:9px !important;
+  background:#fff !important;
+  color:var(--text) !important;
+  font-family:inherit !important;
+  font-size:10px !important;
+  font-weight:700 !important;
+  line-height:1.2 !important;
+}
+#calendar #deadlineSort:focus,
+#calendar #deadlineFilterSelect:focus{
+  outline:none !important;
+  box-shadow:0 0 0 2px rgba(182,155,58,.14) !important;
+}
+@media(max-width:900px){
+  #calendar .deadline-card-head{
+    flex-wrap:wrap;
+  }
+  #calendar .deadline-card-head .deadline-top-controls{
+    order:2;
+    margin-left:0;
+  }
+  #calendar .deadline-card-head > .btn{
+    order:1;
+    margin-left:auto;
+  }
+}
+@media(max-width:650px){
+  #calendar .deadline-card-head .deadline-top-controls{
+    width:100%;
+    justify-content:flex-end;
+    gap:6px;
+  }
+  #calendar #deadlineSort,
+  #calendar #deadlineFilterSelect{
+    width:115px !important;
+    min-width:115px !important;
+  }
+  #calendar .deadline-card-head .deadline-sort-control label{
+    display:none;
+  }
+}
+</style>
+
 </head>
 <body>
 <div class="app">
@@ -813,12 +927,18 @@ hr{ border-color:#E9E4E2 !important; }
   <div class="dashboard">
    <div class="card">
     <div class="card-head"><span class="title-chip rose">❗ Nächste Deadlines</span><button class="btn" onclick="openDeadline()">＋ Hinzufügen</button></div>
-    <div class="tabs"><button class="tab active" onclick="setDeadlineFilter('all',this)">Alle</button><button class="tab" onclick="setDeadlineFilter('task',this)">☑️ Aufgaben</button><button class="tab" onclick="setDeadlineFilter('reg',this)">Anmeldungen</button></div>
-    <div class="deadline-sort-control home-deadline-sort">
-      <label for="homeDeadlineSort">Sortieren nach</label>
-      <select id="homeDeadlineSort">
-        <option value="date">Deadline</option>
-        <option value="priority">Priorität</option>
+    <div class="deadline-controls-row">
+      <div class="deadline-sort-control home-deadline-sort">
+        <label for="homeDeadlineSort">Sortieren nach</label>
+        <select id="homeDeadlineSort">
+          <option value="date">Deadline</option>
+          <option value="priority">Priorität</option>
+        </select>
+      </div>
+      <select id="homeDeadlineFilter" class="deadline-filter-select" aria-label="Deadlines filtern" onchange="setDeadlineFilter(this.value,this)">
+        <option value="all">Alle</option>
+        <option value="task">☑️ Aufgaben</option>
+        <option value="reg">Anmeldungen</option>
       </select>
     </div>
     <div id="homeDeadlines"></div><button class="btn secondary full" onclick="go('calendar')">Alle Deadlines anzeigen →</button>
@@ -840,21 +960,22 @@ hr{ border-color:#E9E4E2 !important; }
  <section id="calendar" class="page">
   <div class="deadlines-page-layout">
     <div class="card deadlines-list-card">
-      <div class="card-head"><div></div><button class="btn" onclick="openDeadline()">＋ Neuer Eintrag</button></div>
-
-      <div id="deadlineSortControl" class="deadline-sort-control">
-        <label for="deadlineSort">Sortieren nach</label>
-        <select id="deadlineSort">
-          <option value="date">Deadline</option>
-          <option value="priority">Priorität</option>
+      <div class="card-head deadline-card-head"><div class="deadline-top-controls">
+        <div class="deadline-sort-control">
+          <label for="deadlineSort">Sortieren nach</label>
+          <select id="deadlineSort">
+            <option value="date">Deadline</option>
+            <option value="priority">Priorität</option>
+          </select>
+        </div>
+        <select id="deadlineFilterSelect" class="deadline-filter-select" aria-label="Deadlines filtern" onchange="setDeadlineFilter(this.value,this)">
+          <option value="all">Alle</option>
+          <option value="task">☑️ Aufgaben</option>
+          <option value="reg">Anmeldungen</option>
         </select>
-      </div>
+      </div><button class="btn" onclick="openDeadline()">＋ Neuer Eintrag</button></div>
 
-      <div class="tabs">
-        <button class="tab active" onclick="setDeadlineFilter('all',this)">Alle</button>
-        <button class="tab" onclick="setDeadlineFilter('task',this)">☑️ Aufgaben</button>
-        <button class="tab" onclick="setDeadlineFilter('reg',this)">Anmeldungen</button>
-      </div>
+
       <div id="deadlineList"></div>
     </div>
 
@@ -1225,7 +1346,13 @@ function renderPsychologyDay(){
 
 function renderAll(){if(!data.events)data.events=[];
  data.deadlines=(data.deadlines||[]).map(d=>({...d,priority:['hoch','mittel','leicht'].includes(String(d.priority||'').toLowerCase())?String(d.priority||'').toLowerCase():'mittel'}));renderHomeOverview();renderDeadlines('home');renderDeadlines('calendar');renderTasks();renderFiles();renderCalendar();renderPlannerCalendar();renderReminders();renderPsychologyDay();renderSavedPodcasts();updateGoogleCalendarStatus()}
-function setDeadlineFilter(v,btn){deadlineFilter=v;document.querySelectorAll('.tabs .tab').forEach(x=>{if(x.closest('#home')||x.closest('#calendar'))x.classList.remove('active')});if(btn)btn.classList.add('active');renderAll()}
+function setDeadlineFilter(v,btn){
+ deadlineFilter=v;
+ const h=$('homeDeadlineFilter'), c=$('deadlineFilterSelect');
+ if(h)h.value=v;
+ if(c)c.value=v;
+ renderAll();
+}
 function setTaskFilter(v,btn){taskFilter=v;document.querySelectorAll('#tasks .tab').forEach(x=>x.classList.remove('active'));btn.classList.add('active');renderTasks()}
 function reminderLabel(v){
  return v==='7'?'7 Tage vorher':v==='3'?'3 Tage vorher':v==='1'?'1 Tag vorher':v==='0'?'Am Tag selbst':'Keine Erinnerung';
