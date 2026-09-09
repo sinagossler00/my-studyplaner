@@ -2505,7 +2505,7 @@ window.addEventListener('DOMContentLoaded',()=>{
 </script>
 
 <script id="msp-v139-podcast">
-const GEMINI_TEXT_MODEL='gemini-3.6-flash';
+const GEMINI_TEXT_MODEL='gemini-3.5-flash-lite';
 const GEMINI_TTS_MODEL='gemini-3.1-flash-tts-preview';
 let mspAI=null;
 
@@ -2562,7 +2562,7 @@ async function geminiText(prompt){
    try{
     const {getGenerativeModel}=await import('https://www.gstatic.com/firebasejs/12.18.0/firebase-ai.js');
     const ai=await mspGetAI();
-    const fallback=getGenerativeModel(ai,{model:'gemini-3.6-flash'});
+    const fallback=getGenerativeModel(ai,{model:'gemini-3.5-flash-lite'});
     const result=await fallback.generateContent(prompt);
     const text=result?.response?.text?.();
     if(text)return text.trim();
@@ -2697,17 +2697,17 @@ window.createAIPodcast=async function(){
   const styleValue=$('podcastStyle').value;
   const style={lern:'ruhig, klar und lernfreundlich',locker:'locker und motivierend',pruefung:'prüfungsorientiert'}[styleValue];
   const isShort=$('podcastLength').value==='kurz';
-  const len=isShort?'280–400':'500–650';
+  const len=isShort?'180–260':'350–450';
   const title=(($('podcastTitle')?.value||'').trim())||('Lern-Podcast · '+new Date().toLocaleDateString('de-DE'));
   const script=await geminiText(`Erstelle aus dieser Psychologie-Zusammenfassung ein deutsches Lern-Podcast-Skript.
 Stil: ${style}. Länge: etwa ${len} Wörter. Bleibe ausschließlich bei den Inhalten der Zusammenfassung.
-Nutze genau zwei Sprecher: Anna und Ben. Erkläre nur die wichtigsten schwierigen Begriffe kurz. Baue am Ende 2 kurze Wiederholungsfragen ein.
+Nutze genau zwei Sprecher: Anna und Ben. Erkläre nur die wichtigsten schwierigen Begriffe kurz. Baue am Ende höchstens 2 kurze Wiederholungsfragen ein und vermeide Einleitung, Füllsätze und Wiederholungen.
 Nur Gespräch ausgeben im Format:
 Anna: ...
 Ben: ...
 
 ZUSAMMENFASSUNG:
-${source.slice(0,45000)}`);
+${source.slice(0,24000)}`);
   status.textContent='🎙️ 2/3 Audio wird erzeugt…';
   // Nur ein TTS-Aufruf: kein künstlicher zweiter Warteversuch.
   const audio=await geminiTTS(script);
