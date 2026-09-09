@@ -2418,6 +2418,117 @@ input:focus,select:focus,textarea:focus{
 }
 </style>
 
+
+<style id="msp-mobile-v204">
+@media (max-width:700px){
+  body{overflow-x:hidden !important;}
+  .sidebar{
+    position:sticky !important;
+    top:0 !important;
+    left:0 !important;
+    width:100% !important;
+    height:auto !important;
+    min-height:0 !important;
+    padding:9px 10px 10px !important;
+    display:block !important;
+    overflow:visible !important;
+    z-index:100 !important;
+    background:#f7efe7 !important;
+    border-right:0 !important;
+    border-bottom:1px solid #e2d6cf !important;
+  }
+  .sidebar .logo,.sidebar .tagline,.sidebar-note{display:none !important;}
+  .sidebar nav{
+    width:100% !important;
+    max-height:238px !important;
+    overflow-y:auto !important;
+    overflow-x:hidden !important;
+    padding-right:2px !important;
+  }
+  .sidebar .nav{
+    display:grid !important;
+    grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+    gap:5px !important;
+  }
+  .sidebar .nav button,
+  .sidebar nav button,
+  nav button[data-page]{
+    width:100% !important;
+    min-width:0 !important;
+    height:39px !important;
+    padding:7px 8px !important;
+    display:flex !important;
+    align-items:center !important;
+    justify-content:flex-start !important;
+    gap:7px !important;
+    white-space:nowrap !important;
+    overflow:hidden !important;
+    text-overflow:ellipsis !important;
+    font-size:12px !important;
+    border-radius:8px !important;
+  }
+  .sidebar .nav button span:last-child,
+  nav button[data-page] span:last-child{
+    display:block !important;
+    overflow:hidden !important;
+    text-overflow:ellipsis !important;
+  }
+  .sidebar .nav button .icon,
+  nav button[data-page] .icon{
+    display:inline-flex !important;
+    flex:0 0 20px !important;
+    width:20px !important;
+    min-width:20px !important;
+    justify-content:center !important;
+  }
+  main{
+    margin:0 !important;
+    width:100% !important;
+    max-width:none !important;
+    padding:14px 11px 28px !important;
+  }
+  .topbar{
+    gap:10px !important;
+    margin-bottom:15px !important;
+    flex-wrap:wrap !important;
+  }
+  .topbar > div:first-child{min-width:0 !important;flex:1 1 100% !important;}
+  .top-actions{width:100% !important;justify-content:stretch !important;}
+  .search{width:100% !important;min-width:0 !important;}
+  .cloud-status{display:none !important;}
+  .page-title,.page-header h1,h1{font-size:1.85rem !important;}
+  .card{padding:13px !important;border-radius:10px !important;}
+  .dashboard,.two-col{grid-template-columns:1fr !important;}
+  .quick{grid-template-columns:1fr 1fr !important;}
+  .form-grid{grid-template-columns:1fr !important;}
+  .wide{grid-column:auto !important;}
+  .stats{grid-template-columns:1fr !important;}
+  .deadlines-page-layout{grid-template-columns:1fr !important;gap:14px !important;}
+  .deadlines-calendar-card{min-width:0 !important;}
+  .deadline{
+    grid-template-columns:48px 48px minmax(0,1fr) auto !important;
+    gap:6px !important;
+  }
+  .deadline-priority-front{font-size:9px !important;}
+  .deadline-title{font-size:12px !important;}
+  .type{font-size:9px !important;}
+  .calendar-wrap,.calendar{max-width:100% !important;overflow:hidden !important;}
+  .file-grid{grid-template-columns:repeat(2,minmax(0,1fr)) !important;}
+  .modal{padding:10px !important;}
+  .modal-box{max-height:92vh !important;border-radius:13px !important;padding:15px !important;}
+}
+
+/* Extra-small phones: keep all tabs usable without horizontal clipping. */
+@media (max-width:390px){
+  .sidebar .nav{grid-template-columns:1fr 1fr !important;}
+  .sidebar .nav button{font-size:11px !important;height:37px !important;padding:6px !important;}
+  .sidebar nav{max-height:225px !important;}
+  main{padding-left:9px !important;padding-right:9px !important;}
+  .quick{grid-template-columns:1fr !important;}
+  .file-grid{grid-template-columns:1fr !important;}
+}
+</style>
+
 </head>
 <body>
 <div class="app">
@@ -3512,25 +3623,54 @@ async function initCloud(){
     cloudEnabled=true;
     updateCloudStatus(true,user.email||'Angemeldet');
     try{
+     const localBeforeCloud=structuredClone(data||{});
      const localLinks=(typeof getLocalUniLinks==='function')?getLocalUniLinks():[];
-     let snap=await fb.db.collection('users').doc(user.uid).get();
+     const snap=await fb.db.collection('users').doc(user.uid).get();
+
      if(snap.exists&&snap.data().data){
       const cloudData=snap.data().data||{};
+
+      // IMPORTANT: merge grade modules + grades instead of replacing the local
+      // dataset. This prevents grades entered on a device before/while syncing
+      // from disappearing when another device logs in.
+      const mergeById=(cloudArr,localArr)=>{
+       const result=[];
+       const seen=new Set();
+       [...(Array.isArray(cloudArr)?cloudArr:[]),...(Array.isArray(localArr)?localArr:[])].forEach(item=>{
+        if(!item)return;
+        const id=String(item.id??'');
+        const key=id||JSON.stringify(item);
+        if(seen.has(key))return;
+        seen.add(key);
+        result.push(item);
+       });
+       return result;
+      };
+
+      cloudData.gradeModules=mergeById(cloudData.gradeModules,localBeforeCloud.gradeModules);
+      cloudData.grades=mergeById(cloudData.grades,localBeforeCloud.grades);
+
+      // Keep local links if they exist and the cloud document has none.
       const cloudLinks=Array.isArray(cloudData.uniLinks)?cloudData.uniLinks:[];
-      if(!cloudData.uniLinks && localLinks.length){
-       cloudData.uniLinks=localLinks;
-       data=cloudData;
-       saveLocal();
-       await saveData();
-      }else{
-       data=cloudData;
-       data.uniLinks=cloudLinks;
-       saveLocal();
-      }
+      if(!cloudLinks.length && localLinks.length) cloudData.uniLinks=localLinks;
+
+      data=cloudData;
+      data.gradeModules=Array.isArray(data.gradeModules)?data.gradeModules:[];
+      data.grades=Array.isArray(data.grades)?data.grades:[];
+
+      saveLocal();
+      await fb.db.collection('users').doc(user.uid).set({
+       data,
+       updatedAt:firebase.firestore.FieldValue.serverTimestamp()
+      },{merge:true});
+
       renderAll();
-     }else if(localLinks.length){
+     }else{
+      // First login on this account: upload the complete local dataset.
       if(!data||typeof data!=='object')data={};
-      data.uniLinks=localLinks;
+      data.gradeModules=Array.isArray(data.gradeModules)?data.gradeModules:[];
+      data.grades=Array.isArray(data.grades)?data.grades:[];
+      if(localLinks.length && !data.uniLinks)data.uniLinks=localLinks;
       await saveData();
       renderAll();
      }
