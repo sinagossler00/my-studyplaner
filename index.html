@@ -6504,29 +6504,24 @@ function renderStudyTimer(){
 (function(){
   const plantKey='msp_learning_plant_v1';
 
-  // The plant's cumulative minutes now live in data.plantMinutes and therefore
-  // travel with the normal Firestore-synced planner document.
-  function totalLearningMinutes(){
-    const cloudValue=Number(data&&data.plantMinutes);
-    if(Number.isFinite(cloudValue) && cloudValue>=0) return Math.round(cloudValue);
+  // The plant is based ONLY on today's completed learning minutes.
+  // timerStats already resets itself when the date changes, so the plant
+  // automatically starts from 0 each new day.
+  function todayLearningMinutes(){
+    const today=typeof getTodayKey==='function'
+      ? getTodayKey()
+      : new Date().toISOString().slice(0,10);
 
-    // One-time migration from the old device-local plant counter.
-    const oldLocal=Number(localStorage.getItem('msp_total_learning_minutes')||0);
-    return Math.max(0,Math.round(Number.isFinite(oldLocal)?oldLocal:0));
-  }
+    const stats=(data&&data.timerStats)||{};
+    if(stats.date!==today) return 0;
 
-  async function savePlantMinutes(minutes){
-    const n=Math.max(0,Math.round(Number(minutes)||0));
-    data.plantMinutes=n;
-    saveLocal();
-    if(typeof saveData==='function'){
-      try{await saveData();}catch(e){console.warn('Pflanzen-Sync:',e)}
-    }
-    renderPlant();
+    const mins=Number(stats.minutes);
+    return Number.isFinite(mins) && mins>0 ? Math.floor(mins) : 0;
   }
 
   function renderPlant(){
-    const mins=totalLearningMinutes();
+    const mins=todayLearningMinutes();
+
     const stages=[
       [0,'Keimling',25,18,.35],
       [25,'Kleines Pflänzchen',50,45,.55],
@@ -6535,39 +6530,94 @@ function renderStudyTimer(){
       [100,'Blühende Pflanze',125,145,1.02],
       [125,'Meisterpflanze',null,170,1.15]
     ];
+
     let stage=stages[0];
-    for(const s of stages)if(mins>=s[0])stage=s;
+    for(const s of stages){
+      if(mins>=s[0]) stage=s;
+    }
+
     const next=stages.find(s=>s[0]>mins);
-    const currentStart=stage[0], nextAt=next?next[0]:stage[0]+1;
-    const pct=next?Math.min(100,((mins-currentStart)/(nextAt-currentStart))*100):100;
+    const currentStart=stage[0];
+    const nextAt=next ? next[0] : null;
+    const remainingToGrowth=nextAt===null ? 0 : Math.max(0, nextAt-mins);
+    const pct=next
+      ? Math.min(100,Math.max(0,((mins-currentStart)/(nextAt-currentStart))*100))
+      : 100;
+
     const growth=document.getElementById('plantGrowth');
-    if(growth){growth.style.setProperty('--plant-height',stage[3]+'px');growth.style.setProperty('--plant-scale',stage[4]);growth.querySelectorAll('.leaf').forEach((l,i)=>l.style.opacity=mins>=25+(i*25)?'1':'0');const flower=growth.querySelector('.flower');if(flower)flower.style.transform=mins>=100?'translateX(-50%) scale(.72)':'translateX(-50%) scale(0)';}
-    const m=document.getElementById('plantMinutes');if(m)m.textContent=mins;
-    const st=document.getElementById('plantStage');if(st)st.textContent=stage[1];
-    const p=document.getElementById('plantProgress');if(p)p.style.width=pct+'%';
-    const n=document.getElementById('plantNext');if(n)n.textContent=next?'Noch '+Math.max(0,nextAt-mins)+' Minuten bis zur nächsten Wachstumsstufe.':'Deine Pflanze ist ausgewachsen. 🌳';
+    if(growth){
+      growth.style.setProperty('--plant-height',stage[3]+'px');
+      growth.style.setProperty('--plant-scale',stage[4]);
+      growth.querySelectorAll('.leaf').forEach((l,i)=>{
+        l.style.opacity=mins >= 25+(i*25) ? '1' : '0';
+      });
+      const flower=growth.querySelector('.flower');
+      if(flower){
+        flower.style.transform=mins>=100
+          ? 'translateX(-50%) scale(.72)'
+          : 'translateX(-50%) scale(0)';
+      }
+    }
+
+    const m=document.getElementById('plantMinutes');
+    if(m)m.textContent=mins;
+
+    const st=document.getElementById('plantStage');
+    if(st)st.textContent=stage[1];
+
+    const p=document.getElementById('plantProgress');
+    if(p)p.style.width=pct+'%';
+
+    const n=document.getElementById('plantNext');
+    if(n){
+      n.textContent=next
+        ? 'Noch '+remainingToGrowth+' Minuten bis zur nächsten Wachstumsstufe.'
+        : 'Deine Pflanze ist ausgewachsen. 🌳';
+    }
   }
-  // Expose a simple hook for the existing timer to add completed minutes.
-  window.addLearningPlantMinutes=function(minutes){
-    const n=Math.max(0,Math.round(Number(minutes)||0));
-    if(!n){renderPlant();return;}
-    savePlantMinutes(totalLearningMinutes()+n);
+
+  // Keep the existing timer hook, but the displayed plant progress always
+  // comes from today's timerStats rather than a cumulative plant counter.
+  window.addLearningPlantMinutes=function(){
+    renderPlant();
   };
+
   const oldGo=window.go;
   if(oldGo&&!window.__plantGoWrapped){
     window.__plantGoWrapped=true;
-    window.go=function(page){oldGo(page);if(page==='study-room')setTimeout(renderPlant,0)};
+    window.go=function(page){
+      oldGo(page);
+      if(page==='study-room')setTimeout(renderPlant,0);
+    };
   }
+
   document.addEventListener('DOMContentLoaded',()=>{
-    setTimeout(()=>{
-      const oldLocal=Number(localStorage.getItem('msp_total_learning_minutes')||0);
-      if((!Number.isFinite(Number(data.plantMinutes))||Number(data.plantMinutes)<oldLocal) && oldLocal>0){
-        data.plantMinutes=Math.round(oldLocal);
+    setTimeout(renderPlant,100);
+  });
+
+  // At midnight the plant must reset to zero growth for the new day.
+  // timerStats() performs the date reset when accessed; this interval makes
+  // the visual plant update immediately after 00:00 without requiring a click.
+  let lastPlantDate = typeof getTodayKey==='function'
+    ? getTodayKey()
+    : new Date().toISOString().slice(0,10);
+
+  setInterval(function(){
+    const today = typeof getTodayKey==='function'
+      ? getTodayKey()
+      : new Date().toISOString().slice(0,10);
+
+    if(today !== lastPlantDate){
+      lastPlantDate = today;
+      if(data && data.timerStats && data.timerStats.date !== today){
+        data.timerStats = {date:today, minutes:0, sessions:0};
         saveData();
       }
       renderPlant();
-    },100);
-  });
+    }else{
+      renderPlant();
+    }
+  },1000);
   window.renderLearningPlant=renderPlant;
 })();
 </script>
