@@ -820,41 +820,46 @@ hr{ border-color:#E9E4E2 !important; }
 </style>
 
 
-<style id="msp-deadline-controls-v147">
+<style id="msp-deadline-controls-v149">
 #calendar .deadline-card-head{
-  align-items:flex-start !important;
-  gap:12px;
+  display:grid !important;
+  grid-template-columns:minmax(0,1fr) auto !important;
+  align-items:start !important;
+  gap:10px !important;
+  width:100% !important;
+  box-sizing:border-box !important;
 }
 #calendar .deadline-card-head .deadline-top-controls{
-  display:flex;
-  align-items:center;
-  gap:10px;
-  order:2;
-  margin-left:auto;
-}
-#calendar .deadline-card-head > .btn{
-  order:3;
-  flex:0 0 auto;
+  display:flex !important;
+  align-items:center !important;
+  justify-content:flex-start !important;
+  gap:8px !important;
+  min-width:0 !important;
+  margin:0 !important;
 }
 #calendar .deadline-card-head .deadline-sort-control{
   display:flex !important;
   align-items:center !important;
-  gap:6px !important;
+  gap:5px !important;
+  min-width:0 !important;
   margin:0 !important;
 }
 #calendar .deadline-card-head .deadline-sort-control label{
+  flex:0 0 auto !important;
   margin:0 !important;
   font-family:inherit !important;
   font-size:10px !important;
   font-weight:800 !important;
+  line-height:1.05 !important;
+  max-width:58px !important;
 }
 #calendar #deadlineSort,
 #calendar #deadlineFilterSelect{
-  width:125px !important;
-  min-width:125px !important;
+  width:116px !important;
+  min-width:116px !important;
   height:28px !important;
   min-height:28px !important;
-  padding:2px 7px !important;
+  padding:2px 6px !important;
   box-sizing:border-box !important;
   border:2px solid #b69b3a !important;
   border-radius:9px !important;
@@ -865,37 +870,31 @@ hr{ border-color:#E9E4E2 !important; }
   font-weight:700 !important;
   line-height:1.2 !important;
 }
-#calendar #deadlineSort:focus,
-#calendar #deadlineFilterSelect:focus{
-  outline:none !important;
-  box-shadow:0 0 0 2px rgba(182,155,58,.14) !important;
+#calendar .deadline-card-head .deadline-new-btn{
+  flex:0 0 auto !important;
+  margin:0 !important;
+  white-space:nowrap !important;
+  align-self:start !important;
 }
-@media(max-width:900px){
+@media(max-width:1100px){
   #calendar .deadline-card-head{
-    flex-wrap:wrap;
+    gap:8px !important;
   }
   #calendar .deadline-card-head .deadline-top-controls{
-    order:2;
-    margin-left:0;
-  }
-  #calendar .deadline-card-head > .btn{
-    order:1;
-    margin-left:auto;
-  }
-}
-@media(max-width:650px){
-  #calendar .deadline-card-head .deadline-top-controls{
-    width:100%;
-    justify-content:flex-end;
-    gap:6px;
+    gap:6px !important;
   }
   #calendar #deadlineSort,
   #calendar #deadlineFilterSelect{
-    width:115px !important;
-    min-width:115px !important;
+    width:108px !important;
+    min-width:108px !important;
   }
-  #calendar .deadline-card-head .deadline-sort-control label{
-    display:none;
+}
+@media(max-width:700px){
+  #calendar .deadline-card-head{
+    grid-template-columns:1fr auto !important;
+  }
+  #calendar .deadline-card-head .deadline-top-controls{
+    flex-wrap:wrap !important;
   }
 }
 </style>
@@ -960,22 +959,23 @@ hr{ border-color:#E9E4E2 !important; }
  <section id="calendar" class="page">
   <div class="deadlines-page-layout">
     <div class="card deadlines-list-card">
-      <div class="card-head deadline-card-head"><div class="deadline-top-controls">
-        <div class="deadline-sort-control">
-          <label for="deadlineSort">Sortieren nach</label>
-          <select id="deadlineSort">
-            <option value="date">Deadline</option>
-            <option value="priority">Priorität</option>
+      <div class="card-head deadline-card-head">
+        <div class="deadline-top-controls">
+          <div id="deadlineSortControl" class="deadline-sort-control">
+            <label for="deadlineSort">Sortieren nach</label>
+            <select id="deadlineSort">
+              <option value="date">Deadline</option>
+              <option value="priority">Priorität</option>
+            </select>
+          </div>
+          <select id="deadlineFilterSelect" class="deadline-filter-select" aria-label="Deadlines filtern" onchange="setDeadlineFilter(this.value,this)">
+            <option value="all">Alle</option>
+            <option value="task">☑️ Aufgaben</option>
+            <option value="reg">Anmeldungen</option>
           </select>
         </div>
-        <select id="deadlineFilterSelect" class="deadline-filter-select" aria-label="Deadlines filtern" onchange="setDeadlineFilter(this.value,this)">
-          <option value="all">Alle</option>
-          <option value="task">☑️ Aufgaben</option>
-          <option value="reg">Anmeldungen</option>
-        </select>
-      </div><button class="btn" onclick="openDeadline()">＋ Neuer Eintrag</button></div>
-
-
+        <button class="btn deadline-new-btn" onclick="openDeadline()">＋ Neuer Eintrag</button>
+      </div>
       <div id="deadlineList"></div>
     </div>
 
