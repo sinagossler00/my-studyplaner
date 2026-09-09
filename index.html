@@ -899,6 +899,11 @@ hr{ border-color:#E9E4E2 !important; }
 }
 </style>
 
+<style id="msp-podcast-speed-v150">
+.podcast-speed-note{font-size:10px;margin-top:3px;line-height:1.35}
+#createPodcastBtn:disabled{opacity:.6;cursor:wait}
+</style>
+
 </head>
 <body>
 <div class="app">
@@ -2480,9 +2485,10 @@ window.openPodcast=function(){
   <textarea id="podcastSourceText" placeholder="Zusammenfassung hier einfügen..." style="min-height:220px"></textarea>
   <div class="form-grid" style="margin-top:10px">
    <div><label>Stil</label><select id="podcastStyle"><option value="lern">ruhig & verständlich</option><option value="locker">locker & motivierend</option><option value="pruefung">prüfungsorientiert</option></select></div>
-   <div><label>Länge</label><select id="podcastLength"><option value="kurz">kurz</option><option value="mittel" selected>mittel</option></select></div>
+   <div><label>Länge</label><select id="podcastLength"><option value="kurz" selected>kurz</option><option value="mittel">mittel</option></select></div>
   </div>
   <div id="podcastStatus" class="muted" style="margin-top:9px;min-height:18px"></div>
+  <div class="muted podcast-speed-note">💡 „Kurz“ ist deutlich schneller erstellt. Danach wird die Audiodatei noch in Google Drive gespeichert.</div>
   <button id="createPodcastBtn" type="button" class="btn" style="margin-top:10px">🎙️ Podcast erstellen</button>
   <div id="podcastResult"></div>`);
   const b=document.getElementById('createPodcastBtn');
@@ -2663,45 +2669,38 @@ async function deleteSavedPodcast(id){
 window.createAIPodcast=async function(){
  const source=($('podcastSourceText')?.value||'').trim();
  if(source.length<100){alert('Bitte zuerst deine Zusammenfassung einfügen.');return;}
- const status=$('podcastStatus'),result=$('podcastResult');
+ const status=$('podcastStatus'),result=$('podcastResult'),btn=$('createPodcastBtn');
  try{
-  status.textContent='🤖 Podcast-Skript wird erstellt…';result.innerHTML='';
+  if(btn){btn.disabled=true;btn.textContent='⏳ Wird erstellt…';}
+  status.textContent='🤖 1/3 Skript wird erstellt…';result.innerHTML='';
   const styleValue=$('podcastStyle').value;
   const style={lern:'ruhig, klar und lernfreundlich',locker:'locker und motivierend',pruefung:'prüfungsorientiert'}[styleValue];
-  const len=$('podcastLength').value==='kurz'?'450–650':'750–1000';
+  const isShort=$('podcastLength').value==='kurz';
+  const len=isShort?'280–400':'500–650';
   const title=(($('podcastTitle')?.value||'').trim())||('Lern-Podcast · '+new Date().toLocaleDateString('de-DE'));
   const script=await geminiText(`Erstelle aus dieser Psychologie-Zusammenfassung ein deutsches Lern-Podcast-Skript.
 Stil: ${style}. Länge: etwa ${len} Wörter. Bleibe ausschließlich bei den Inhalten der Zusammenfassung.
-Nutze genau zwei Sprecher: Anna und Ben. Erkläre schwierige Begriffe kurz und baue am Ende 3 Wiederholungsfragen ein.
+Nutze genau zwei Sprecher: Anna und Ben. Erkläre nur die wichtigsten schwierigen Begriffe kurz. Baue am Ende 2 kurze Wiederholungsfragen ein.
 Nur Gespräch ausgeben im Format:
 Anna: ...
 Ben: ...
 
 ZUSAMMENFASSUNG:
-${source.slice(0,60000)}`);
-  status.textContent='🎙️ Audio wird erzeugt…';
-  let audio;
-  for(let attempt=1;attempt<=2;attempt++){
-   try{audio=await geminiTTS(script);break;}
-   catch(e){
-    if(attempt===2)throw e;
-    await new Promise(r=>setTimeout(r,900));
-   }
-  }
+${source.slice(0,45000)}`);
+  status.textContent='🎙️ 2/3 Audio wird erzeugt…';
+  // Nur ein TTS-Aufruf: kein künstlicher zweiter Warteversuch.
+  const audio=await geminiTTS(script);
 
-  status.textContent='☁️ Podcast wird dauerhaft gespeichert…';
+  status.textContent='☁️ 3/3 Wird gespeichert…';
   const item={
     id:String(Date.now())+Math.random().toString(16).slice(2),
-    title,
-    script,
-    createdAt:Date.now(),
+    title,script,createdAt:Date.now(),
     style:styleValue,
     styleLabel:{lern:'ruhig & verständlich',locker:'locker & motivierend',pruefung:'prüfungsorientiert'}[styleValue],
     length:$('podcastLength').value,
-    lengthLabel:$('podcastLength').value==='kurz'?'kurz':'mittel',
+    lengthLabel:isShort?'kurz':'mittel',
     fileName:'My Studyplaner – '+title.replace(/[\\/:*?"<>|]/g,'-').slice(0,90)+'.wav',
-    driveFileId:'',
-    url:''
+    driveFileId:'',url:''
   };
   await savePodcastToDrive(item,audio);
   data.podcasts=data.podcasts||[];
@@ -2714,12 +2713,10 @@ ${source.slice(0,60000)}`);
   renderSavedPodcasts();
  }catch(e){
   console.error(e);
-  status.textContent='';
-  let msg=e?.message||String(e);
-  if(/permission|unauthorized|forbidden|app check|api key|billing|quota/i.test(msg)){
-    msg+='\\n\\nFalls Firebase AI Logic noch nicht für das Projekt eingerichtet ist, muss es einmal in Firebase Console → AI Logic aktiviert werden.';
-  }
-  alert('Podcast konnte nicht erstellt werden:\\n\\n'+msg);
+  status.textContent='❌ Erstellung fehlgeschlagen.';
+  alert('Podcast konnte nicht erstellt werden:\\n\\n'+(e.message||e));
+ }finally{
+  if(btn){btn.disabled=false;btn.textContent='🎙️ Podcast erstellen';}
  }
 }
 </script>
