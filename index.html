@@ -1391,6 +1391,11 @@ hr{ border-color:#E9E4E2 !important; }
   #homeOverview .overview-card strong{font-size:15px !important}
 }
 </style>
+
+<style id="msp-sounds-below-counter">
+#study-timer .study-timer-stats{order:6 !important;}
+#study-timer .study-timer-sounds{order:7 !important;margin-top:14px !important;}
+</style>
 </head>
 <body>
 <div class="app">
@@ -1578,6 +1583,9 @@ hr{ border-color:#E9E4E2 !important; }
         <button class="btn secondary" type="button" onclick="resetStudyTimer()">↺ Zurücksetzen</button>
       </div>
       
+<div class="study-timer-stats">
+        <div><span>Heute gelernt</span><strong id="studyTimerToday">0 Min</strong></div>
+        <div><span>Sessions</span><strong id="studyTimerSessions">0</strong></div>
 <div class="study-timer-sounds">
   <div class="study-timer-sounds-head">
     <div>
@@ -1595,10 +1603,6 @@ hr{ border-color:#E9E4E2 !important; }
     <span>🔈</span><input id="studySoundVolume" type="range" min="0" max="100" value="35" oninput="setStudySoundVolume(this.value)" aria-label="Lautstärke Cozy Sounds"><span>🔊</span>
   </div>
 </div>
-
-<div class="study-timer-stats">
-        <div><span>Heute gelernt</span><strong id="studyTimerToday">0 Min</strong></div>
-        <div><span>Sessions</span><strong id="studyTimerSessions">0</strong></div>
       </div>
     </div>
   </div>
