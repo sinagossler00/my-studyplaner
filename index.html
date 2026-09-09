@@ -3496,12 +3496,68 @@ aside.sidebar{
   margin-bottom:50px !important;
 }
 </style>
+
+<style id="msp-v237-mobile-dropdown">
+.mobile-menu-toggle{display:none;}
+@media(max-width:700px){
+  .sidebar{
+    position:sticky !important; top:0 !important; left:0 !important;
+    width:100% !important; height:58px !important; min-height:58px !important;
+    padding:9px 10px !important; box-sizing:border-box !important;
+    overflow:visible !important; z-index:1000 !important;
+  }
+  .mobile-menu-toggle{
+    width:100% !important; height:40px !important;
+    display:flex !important; align-items:center !important;
+    justify-content:flex-start !important; gap:9px !important;
+    padding:7px 12px !important;
+    border:1px solid #d8c2ba !important; border-radius:11px !important;
+    background:#f1ddd7 !important; color:#443a37 !important;
+    font-size:13px !important; font-weight:750 !important;
+    box-shadow:0 2px 8px rgba(91,64,54,.08) !important;
+  }
+  .mobile-menu-icon{font-size:20px !important;line-height:1 !important;}
+  .mobile-menu-chevron{
+    margin-left:auto !important;font-size:18px !important;line-height:1 !important;
+    transition:transform .2s ease !important;
+  }
+  .sidebar.mobile-menu-open .mobile-menu-chevron{transform:rotate(180deg) !important;}
+  .sidebar nav{
+    display:none !important;
+    position:absolute !important; top:58px !important; left:10px !important; right:10px !important;
+    width:auto !important; max-height:calc(100vh - 76px) !important;
+    overflow-y:auto !important; overflow-x:hidden !important;
+    padding:8px !important; margin:0 !important; box-sizing:border-box !important;
+    background:#fffaf7 !important; border:1px solid #decfc9 !important;
+    border-radius:13px !important; box-shadow:0 10px 28px rgba(70,50,43,.16) !important;
+  }
+  .sidebar.mobile-menu-open nav{
+    display:grid !important; grid-template-columns:1fr !important; gap:5px !important;
+  }
+  .sidebar .nav button,.sidebar nav button,nav button[data-page]{
+    width:100% !important; min-width:0 !important; height:43px !important;
+    padding:8px 10px !important; font-size:13px !important; border-radius:9px !important;
+    display:flex !important; align-items:center !important; justify-content:flex-start !important;
+    gap:8px !important; white-space:nowrap !important;
+  }
+  .sidebar .nav button span:last-child,nav button[data-page] span:last-child{display:block !important;}
+  .sidebar .nav button .icon,nav button[data-page] .icon{
+    display:inline-flex !important; flex:0 0 22px !important; width:22px !important;
+    min-width:22px !important; justify-content:center !important;
+  }
+}
+</style>
 </head>
 <body>
 <div class="app">
 <aside class="sidebar">
  <div class="logo">🎓 My Studyplaner ♡</div><div class="tagline">Kleine Schritte. Große Ziele.</div>
- <nav class="nav">
+ <button class="mobile-menu-toggle" id="mobileMenuToggle" type="button" aria-expanded="false" aria-controls="mobileNav">
+  <span class="mobile-menu-icon">☰</span>
+  <span>Menü</span>
+  <span class="mobile-menu-chevron">⌄</span>
+</button>
+<nav class="nav" id="mobileNav">
       <button class="active" data-page="home"><span class="icon">🏠</span><span>Startseite</span></button>
       <button data-page="planner-calendar"><span class="icon">📅</span><span>Kalender</span></button>
       <button data-page="calendar"><span class="icon">❗</span><span>Deadlines</span></button>
@@ -6440,6 +6496,38 @@ function renderStudyTimer(){
   </div>
  </div>
 </div>
+
+<script id="msp-v237-mobile-menu-js">
+(function(){
+  function initMobileMenu(){
+    const sidebar=document.querySelector('.sidebar');
+    const toggle=document.getElementById('mobileMenuToggle');
+    const nav=document.getElementById('mobileNav');
+    if(!sidebar||!toggle||!nav)return;
+    toggle.addEventListener('click',function(e){
+      e.preventDefault(); e.stopPropagation();
+      const open=sidebar.classList.toggle('mobile-menu-open');
+      toggle.setAttribute('aria-expanded',String(open));
+    });
+    nav.addEventListener('click',function(e){
+      const btn=e.target.closest('button[data-page]');
+      if(btn){
+        sidebar.classList.remove('mobile-menu-open');
+        toggle.setAttribute('aria-expanded','false');
+      }
+    });
+    document.addEventListener('click',function(e){
+      if(window.innerWidth<=700 && sidebar.classList.contains('mobile-menu-open') && !sidebar.contains(e.target)){
+        sidebar.classList.remove('mobile-menu-open');
+        toggle.setAttribute('aria-expanded','false');
+      }
+    });
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',initMobileMenu);
+  else initMobileMenu();
+})();
+</script>
+
 </body>
 </html>
 
