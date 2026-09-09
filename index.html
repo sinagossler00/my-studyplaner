@@ -3548,20 +3548,55 @@ aside.sidebar{
 }
 </style>
 
-<style id="msp-v238-mobile-menu-only-when-open">
-/* V238 – auf dem Handy sind die Seiten-Reiter wirklich NUR im aufgeklappten Menü sichtbar */
-@media(max-width:700px){
-  .sidebar nav#mobileNav{
+<style id="msp-v239-mobile-nav-final">
+/* V239 – Mobile: Reiter sind geschlossen KOMPLETT weg und erscheinen nur beim Öffnen */
+@media screen and (max-width:700px){
+  aside.sidebar{
+    height:58px !important;
+    min-height:58px !important;
+    max-height:58px !important;
+    overflow:visible !important;
+  }
+
+  aside.sidebar > nav#mobileNav,
+  aside.sidebar > .nav#mobileNav{
     display:none !important;
     visibility:hidden !important;
+    height:0 !important;
+    max-height:0 !important;
+    min-height:0 !important;
+    overflow:hidden !important;
     opacity:0 !important;
     pointer-events:none !important;
+    position:absolute !important;
+    top:58px !important;
+    left:10px !important;
+    right:10px !important;
+    width:auto !important;
   }
-  .sidebar.mobile-menu-open nav#mobileNav{
+
+  aside.sidebar.mobile-menu-open > nav#mobileNav,
+  aside.sidebar.mobile-menu-open > .nav#mobileNav{
     display:grid !important;
     visibility:visible !important;
+    height:auto !important;
+    max-height:calc(100vh - 76px) !important;
+    min-height:0 !important;
+    overflow-y:auto !important;
+    overflow-x:hidden !important;
     opacity:1 !important;
     pointer-events:auto !important;
+    position:absolute !important;
+    top:58px !important;
+    left:10px !important;
+    right:10px !important;
+    width:auto !important;
+    padding:8px !important;
+    background:#fffaf7 !important;
+    border:1px solid #decfc9 !important;
+    border-radius:13px !important;
+    box-shadow:0 10px 28px rgba(70,50,43,.16) !important;
+    z-index:1001 !important;
   }
 }
 </style>
