@@ -2908,6 +2908,313 @@ input:focus,select:focus,textarea:focus{
 }
 </style>
 
+
+<style id="msp-file-folders-v214">
+.file-folder-area{display:flex;flex-wrap:wrap;gap:9px;margin:2px 0 14px}
+.file-folder{
+  min-width:145px;max-width:230px;flex:1 1 145px;
+  padding:11px 12px;border:1px solid #ead7d2;border-radius:10px;
+  background:#f7ebe7;cursor:pointer;display:flex;align-items:center;gap:9px;
+}
+.file-folder:hover{background:#f0ded9}
+.file-folder.active{background:#e8cfc9;border-color:#d4aaa1}
+.file-folder-icon{font-size:22px;flex:0 0 auto}
+.file-folder-info{min-width:0;flex:1}
+.file-folder-name{font-weight:700;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.file-folder-count{font-size:10px;color:#88756f;margin-top:2px}
+.file-folder-delete{border:0;background:transparent;color:#a96860;font-size:16px;cursor:pointer;padding:2px 5px}
+.file-folder-toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+.file-folder-current{font-family:'Cormorant Garamond',Georgia,serif;font-size:19px;font-weight:600;color:#a96860}
+.file-move-select{max-width:150px;font-size:10px!important;padding:5px 6px!important}
+@media(max-width:700px){
+ .file-folder{min-width:calc(50% - 5px);max-width:none;flex-basis:calc(50% - 5px)}
+ .file-folder-toolbar{align-items:flex-start;flex-direction:column}
+}
+</style>
+
+
+<style id="msp-file-card-folder-select-v214">
+.file.file-clickable + .file-move-select{display:block;margin:-4px 0 9px auto}
+.file-grid .file-move-select{background:#fffefa;border:1px solid #ddd4ce;border-radius:7px;color:#56433e}
+</style>
+
+
+<style id="msp-files-clean-v215">
+/* V215 – clear file manager layout with actually clickable controls */
+.files-layout{
+  display:grid;
+  grid-template-columns:minmax(190px,240px) minmax(0,1fr);
+  gap:14px;
+  align-items:start;
+}
+.files-sidebar-card,.files-content-card{min-width:0}
+.files-section-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:14px;
+}
+.files-section-head h2{margin:0 0 2px}
+.folder-add-btn{white-space:nowrap}
+.file-folder-list{display:flex;flex-direction:column;gap:5px}
+.file-folder-wrap{display:flex;align-items:stretch;gap:3px}
+.file-folder{
+  flex:1;
+  min-width:0;
+  border:1px solid transparent;
+  background:transparent;
+  color:#51453f;
+  border-radius:8px;
+  padding:10px 9px;
+  display:flex;
+  align-items:center;
+  gap:9px;
+  text-align:left;
+  cursor:pointer;
+  font-family:'DM Sans',Arial,sans-serif;
+}
+.file-folder:hover{background:#f4e5e1}
+.file-folder.active{
+  background:#ead5d0;
+  border-color:#dcc0b9;
+  color:#4e3d38;
+}
+.folder-icon{font-size:20px;flex:0 0 22px;text-align:center}
+.folder-main{min-width:0;display:flex;flex-direction:column;gap:2px}
+.folder-main strong{font-size:12px;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.folder-main small{font-size:10px;color:#8a7871}
+.folder-delete-btn{
+  flex:0 0 31px;
+  border:0;
+  border-radius:7px;
+  background:transparent;
+  color:#a96860;
+  cursor:pointer;
+  font-size:18px;
+  line-height:1;
+}
+.folder-delete-btn:hover{background:#f1d9d4}
+.file-grid{
+  display:flex !important;
+  flex-direction:column !important;
+  gap:8px !important;
+}
+.file-card-row{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  gap:8px;
+  align-items:stretch;
+  padding:8px;
+  border:1px solid #e7dcd6;
+  border-radius:10px;
+  background:#fffdf9;
+}
+.file-card-row .file{
+  min-width:0;
+  border:0 !important;
+  box-shadow:none !important;
+  padding:5px 7px !important;
+}
+.file-card-tools{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  min-width:180px;
+}
+.file-move-select{
+  width:150px !important;
+  min-width:0 !important;
+  height:34px !important;
+  padding:5px 7px !important;
+  background:#f8efec !important;
+  border:1px solid #dfcbc5 !important;
+  color:#574640 !important;
+  border-radius:7px !important;
+  font-size:10px !important;
+}
+.file-delete-btn{
+  height:34px !important;
+  padding:6px 9px !important;
+  white-space:nowrap !important;
+  font-size:10px !important;
+}
+.file-empty{
+  padding:35px 15px !important;
+  text-align:center !important;
+}
+.file-empty span{color:#91817a;font-size:11px}
+.files-sync-note{margin-top:13px !important}
+
+@media(max-width:900px){
+  .files-layout{grid-template-columns:1fr !important}
+  .files-sidebar-card{order:1}
+  .files-content-card{order:2}
+  .file-folder-list{
+    display:grid !important;
+    grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+    gap:6px !important;
+  }
+  .file-folder-wrap{min-width:0}
+}
+@media(max-width:600px){
+  .files-section-head{
+    align-items:flex-start !important;
+    flex-direction:column !important;
+  }
+  .files-section-head .btn{width:100% !important}
+  .file-folder-list{grid-template-columns:1fr !important}
+  .file-card-row{
+    grid-template-columns:1fr !important;
+    gap:7px !important;
+  }
+  .file-card-tools{
+    min-width:0 !important;
+    width:100% !important;
+    display:grid !important;
+    grid-template-columns:minmax(0,1fr) auto !important;
+  }
+  .file-move-select{width:100% !important}
+  .file-delete-btn{width:auto !important}
+}
+</style>
+
+
+<style id="msp-files-explorer-v216">
+.files-explorer-card{min-width:0}
+.files-explorer-head{
+ display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:14px
+}
+.files-toolbar{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.files-breadcrumb{
+ min-height:38px;padding:9px 12px;margin-bottom:7px;border:1px solid #e7dcd6;
+ background:#fbf6f2;border-radius:8px;color:#65554e;font-size:11px;
+ display:flex;align-items:center;gap:8px
+}
+.crumb-btn{
+ border:0;background:transparent;color:#9b625c;font:inherit;font-weight:600;
+ cursor:pointer;padding:2px 4px;border-radius:5px
+}
+.crumb-btn:hover{background:#ead5d0}
+.crumb-sep{color:#b9a69f;font-size:17px}
+.file-explorer{
+ border:1px solid #e3d8d2;border-radius:9px;overflow:hidden;background:#fffdf9
+}
+.file-explorer-header,.file-explorer-row{
+ display:grid;grid-template-columns:minmax(220px,2.2fr) minmax(100px,.8fr) minmax(90px,.6fr) minmax(240px,1.25fr);
+ align-items:center
+}
+.file-explorer-header{
+ min-height:36px;padding:0 10px;background:#f5ebe7;border-bottom:1px solid #e3d8d2;
+ color:#8b756e;font-family:'DM Mono',monospace;font-size:9px;text-transform:uppercase;letter-spacing:.07em
+}
+.file-explorer-row{
+ min-height:52px;padding:5px 10px;border-bottom:1px solid #eee5df;font-size:11px;color:#5b4c46
+}
+.file-explorer-row:last-child{border-bottom:0}
+.file-explorer-row:hover{background:#fcf5f2}
+.folder-row{cursor:pointer}
+.folder-row:focus{outline:2px solid #d4aaa2;outline-offset:-2px}
+.explorer-name{min-width:0;display:flex;align-items:center;gap:10px}
+.explorer-name strong,.explorer-name>span:last-child{
+ min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap
+}
+.explorer-icon{width:25px;flex:0 0 25px;text-align:center;font-size:20px}
+.explorer-type,.explorer-size{color:#8a7972;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.explorer-actions{
+ display:flex;align-items:center;justify-content:flex-end;gap:5px;min-width:0
+}
+.file-open-name{cursor:pointer}
+.file-open-name:hover{color:#9b625c}
+.file-move-select{
+ width:145px !important;height:31px !important;padding:4px 7px !important;
+ border:1px solid #decac4 !important;background:#faf1ee !important;color:#604e47 !important;
+ border-radius:6px !important;font-size:9px !important;cursor:pointer
+}
+.icon-action{
+ width:31px;height:31px;padding:0;border:1px solid #dfd2cc;background:#fffaf7;
+ border-radius:6px;cursor:pointer;color:#725e56;display:inline-flex;align-items:center;justify-content:center
+}
+.icon-action:hover{background:#ead5d0;border-color:#d5b3ac}
+.icon-action.danger{color:#a25f58}
+.icon-action.danger:hover{background:#f2dcd7}
+.file-explorer-empty{text-align:center;padding:40px 15px;color:#8b7b74;font-size:11px}
+.file-explorer-empty span{font-size:10px}
+.files-sync-note{margin-top:12px !important}
+
+@media(max-width:800px){
+ .files-explorer-head{align-items:flex-start;flex-direction:column}
+ .files-toolbar{width:100%;justify-content:flex-start}
+ .files-toolbar .btn{flex:1}
+ .file-explorer{overflow-x:auto}
+ .file-explorer-header,.file-explorer-row{
+  min-width:690px;
+  grid-template-columns:250px 105px 90px 245px
+ }
+}
+@media(max-width:600px){
+ .files-toolbar{display:grid;grid-template-columns:1fr 1fr}
+ .files-toolbar .btn{width:100%}
+ .file-explorer-header,.file-explorer-row{
+  min-width:0;
+  grid-template-columns:minmax(0,1fr) 0 0 auto;
+ }
+ .file-explorer-header span:nth-child(2),.file-explorer-header span:nth-child(3),
+ .explorer-type,.explorer-size{display:none}
+ .explorer-actions{gap:3px}
+ .file-move-select{width:105px !important}
+ .icon-action{width:29px;height:29px}
+}
+</style>
+
+
+<style id="msp-folder-modal-v217">
+#mspFolderModal{
+ position:fixed;inset:0;background:rgba(55,40,35,.28);display:none;align-items:center;justify-content:center;
+ z-index:99999;padding:20px
+}
+#mspFolderModal.open{display:flex}
+#mspFolderModal .folder-modal-box{
+ width:min(420px,100%);background:#fffaf7;border:1px solid #e2d4ce;border-radius:12px;
+ box-shadow:0 18px 50px rgba(70,45,38,.18);padding:22px
+}
+#mspFolderModal h3{margin:0 0 6px;color:#5d4a43;font-family:'Cormorant Garamond',serif;font-size:25px}
+#mspFolderModal p{margin:0 0 14px;color:#8a7972;font-size:11px}
+#mspFolderName{
+ width:100%;box-sizing:border-box;padding:11px 12px;border:1px solid #ddcbc5;border-radius:7px;
+ background:#fff;outline:none;color:#5d4a43;font-size:12px
+}
+#mspFolderName:focus{border-color:#b9857d;box-shadow:0 0 0 2px rgba(185,133,125,.12)}
+.msp-folder-modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}
+</style>
+
+<style id="msp-dragdrop-v218">
+.file-explorer-row.dragging{opacity:.45}
+.file-explorer-row.drag-over{
+ background:#f1dfdb !important;
+ outline:2px dashed #b9857d;
+ outline-offset:-2px
+}
+.folder-row .explorer-name{cursor:grab}
+.file-row[draggable="true"] .file-open-name{cursor:grab}
+.drag-hint{
+ margin-top:7px;color:#9a8880;font-size:9px
+}
+@media(max-width:600px){
+ .drag-hint{font-size:8px}
+}
+</style>
+
+<style id="msp-root-drop-v219">
+.file-root-drop{
+ margin:7px 0 8px;padding:11px 14px;border:2px dashed #dcc2bb;border-radius:8px;
+ background:#fffaf7;color:#8b6d65;font-size:10px;text-align:center;
+ transition:.12s ease
+}
+.file-root-drop.drag-over{
+ background:#f1dfdb;border-color:#b9857d;color:#76564f
+}
+</style>
 </head>
 <body>
 <div class="app">
@@ -3031,7 +3338,30 @@ input:focus,select:focus,textarea:focus{
     </div>
   </div>
  </section>
- <section id="files" class="page"><div class="card"><div class="card-head"><div></div><button class="btn" onclick="triggerUpload()">＋ Dateien hochladen</button></div><input id="fileInput2" type="file" accept=".pdf,image/*,.doc,.docx,.txt" multiple hidden onchange="handleFiles(this.files)"><div id="fileList" class="file-grid"></div><div class="note" style="margin-top:13px">☁️ Mit einem verbundenen Konto werden deine Daten zwischen Geräten synchronisiert. Dateien werden in der Cloud gespeichert, wenn du dein Firebase-Konto eingerichtet hast.</div></div></section>
+ <section id="files" class="page">
+  <div class="card files-explorer-card">
+    <div class="files-explorer-head">
+      <div>
+        <h2>📁 Dateien</h2>
+        <div class="muted">Deine Lernmaterialien übersichtlich wie auf dem PC.</div>
+      </div>
+      <div class="files-toolbar">
+        <button class="btn secondary" type="button" onclick="createFileFolder()">＋ Neuer Ordner</button>
+        <button class="btn" type="button" onclick="triggerUpload2()">＋ Datei hochladen</button>
+      </div>
+    </div>
+
+    <div class="files-breadcrumb" id="fileBreadcrumb"></div><div id="fileRootDrop" class="file-root-drop" style="display:none" ondragover="fileDragOverRoot(event,this)" ondragleave="fileDragLeaveRoot(this)" ondrop="fileDropOnRoot(event,this)">↩️ Hierher ziehen = aus dem Ordner entfernen</div>
+    <input id="fileInput2" type="file" accept=".pdf,image/*,.doc,.docx,.txt" multiple hidden onchange="handleFiles(this.files)">
+    <div class="file-explorer">
+      <div class="file-explorer-header">
+        <span>Name</span><span>Typ</span><span>Größe</span><span>Aktion</span>
+      </div>
+      <div id="fileList"></div>
+    </div>
+    <div class="note files-sync-note">☁️ Ordner und Zuordnungen werden mit deinem Konto synchronisiert. Dateien werden in Google Drive gespeichert.</div>
+  </div>
+</section>
 
 
 
@@ -3227,7 +3557,7 @@ const defaultData={
   {id:13,title:'Vorlesung Statistik anschauen',period:'wöchentlich',done:false},
   {id:14,title:'Literatur für Hausarbeit recherchieren',period:'monatlich',done:false}
  ],
- files:[],modules:[
+ files:[],fileFolders:[],modules:[
   {id:21,name:'Statistik 1',info:'Vorlesungen, Aufgaben und Prüfung'},
   {id:22,name:'Entwicklungspsychologie',info:'Hausarbeit & Literatur'},
   {id:23,name:'Biologische Psychologie',info:'Klausur & Lernmaterial'}
@@ -3236,6 +3566,8 @@ const defaultData={
 let data=JSON.parse(localStorage.getItem(KEY)||'null')||structuredClone(defaultData);
 data.semester=Math.max(1,Math.min(6,Number(data.semester)||1));
 data.gradeModules=Array.isArray(data.gradeModules)?data.gradeModules:[];
+data.fileFolders=Array.isArray(data.fileFolders)?data.fileFolders:[];
+data.files=Array.isArray(data.files)?data.files:[];
 data.grades=Array.isArray(data.grades)?data.grades:[];
 if(!Array.isArray(data.podcasts))data.podcasts=[];
 if(!Array.isArray(data.tasks))data.tasks=[];data.tasks.forEach(t=>{if(typeof t.deadline!=='string')t.deadline='';});
@@ -3370,9 +3702,240 @@ function renderFileCard(f,home=false){
    <div class="file-open-hint">↗ Öffnen</div>
  </div>`;
 }
+let currentFileFolder=null;
+
+function fileFolderById(id){
+ return (data.fileFolders||[]).find(x=>String(x.id)===String(id));
+}
+
+function createFileFolder(){
+ const modal=$('mspFolderModal');
+ const input=$('mspFolderName');
+ if(!modal||!input){
+  // Fallback if the modal was stripped by an older cached page.
+  const name=window.prompt('Name des neuen Ordners:');
+  if(name&&name.trim()) createFileFolderNamed(name.trim());
+  return;
+ }
+ input.value='';
+ modal.classList.add('open');
+ modal.setAttribute('aria-hidden','false');
+ setTimeout(()=>input.focus(),30);
+}
+
+function closeFolderModal(){
+ const modal=$('mspFolderModal');
+ if(modal){
+  modal.classList.remove('open');
+  modal.setAttribute('aria-hidden','true');
+ }
+}
+
+function confirmCreateFileFolder(){
+ const input=$('mspFolderName');
+ const name=input ? input.value.trim() : '';
+ if(!name){
+  if(input){input.focus();input.setCustomValidity('Bitte einen Namen eingeben.');input.reportValidity();}
+  return;
+ }
+ if(input) input.setCustomValidity('');
+ createFileFolderNamed(name);
+ closeFolderModal();
+}
+
+function createFileFolderNamed(name){
+ data.fileFolders=Array.isArray(data.fileFolders)?data.fileFolders:[];
+ data.fileFolders.push({
+  id:'ff_'+Date.now()+Math.random().toString(16).slice(2),
+  name:name
+ });
+ saveData();
+ renderFiles();
+}
+
+document.addEventListener('keydown',function(e){
+ const modal=$('mspFolderModal');
+ if(!modal||!modal.classList.contains('open'))return;
+ if(e.key==='Escape'){e.preventDefault();closeFolderModal();}
+ if(e.key==='Enter' && document.activeElement===$('mspFolderName')){
+  e.preventDefault();confirmCreateFileFolder();
+ }
+});
+
+
+async function deleteFileFolder(id){
+ const folder=fileFolderById(id);
+ if(!folder)return;
+ const count=(data.files||[]).filter(f=>String(f.folderId)===String(id)).length;
+ const msg=count
+  ? `Ordner „${folder.name}“ löschen?\n\nDie ${count} Datei(en) bleiben erhalten und werden in „Alle Dateien“ verschoben.`
+  : `Ordner „${folder.name}“ löschen?`;
+ if(!confirm(msg))return;
+ (data.files||[]).forEach(f=>{
+  if(String(f.folderId)===String(id))f.folderId=null;
+ });
+ data.fileFolders=(data.fileFolders||[]).filter(x=>String(x.id)!==String(id));
+ currentFileFolder=null;
+ await saveData();
+ renderFiles();
+}
+
+async function moveFileToFolder(id,folderId){
+ const f=(data.files||[]).find(x=>String(x.id)===String(id));
+ if(!f)return;
+ f.folderId=folderId||null;
+ await saveData();
+ renderFiles();
+}
+
+function fileFolderSelect(f){
+ const opts=[
+  `<option value="">📂 Alle Dateien</option>`,
+  ...(data.fileFolders||[]).map(folder=>
+   `<option value="${esc(folder.id)}" ${String(f.folderId||'')===String(folder.id)?'selected':''}>📁 ${esc(folder.name)}</option>`
+  )
+ ];
+ return `<select class="file-move-select" title="Datei verschieben"
+   onclick="event.stopPropagation()"
+   onchange="event.stopPropagation();moveFileToFolder('${f.id}',this.value)">
+   ${opts.join('')}
+ </select>`;
+}
+
+function renderExplorerFolder(folder){
+ const count=(data.files||[]).filter(f=>String(f.folderId)===String(folder.id)).length;
+ return `<div class="file-explorer-row folder-row" role="button" tabindex="0" data-folder-id="${esc(folder.id)}"
+   ondragover="fileDragOver(event,this)"
+   ondragleave="fileDragLeave(this)"
+   ondrop="fileDropOnFolder(event,'${folder.id}',this)"
+   onclick="currentFileFolder='${folder.id}';renderFiles()"
+   onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();currentFileFolder='${folder.id}';renderFiles()}">
+   <div class="explorer-name"><span class="explorer-icon">📁</span><strong>${esc(folder.name)}</strong></div>
+   <div class="explorer-type">Ordner</div>
+   <div class="explorer-size">${count} Dateien</div>
+   <div class="explorer-actions">
+     <button class="icon-action danger" type="button" title="Ordner löschen"
+       onclick="event.stopPropagation();deleteFileFolder('${folder.id}')">🗑️</button>
+   </div>
+ </div>`;
+}
+
+function renderExplorerFile(f){
+ return `<div class="file-explorer-row file-row" draggable="true" data-file-id="${esc(f.id)}"
+   ondragstart="fileDragStart(event,'${f.id}')"
+   ondragend="fileDragEnd(event)">
+   <div class="explorer-name file-open-name" onclick="openFile('${f.id}')" title="Datei öffnen">
+     <span class="explorer-icon">${fileIcon(f).replace('📁','📄')}</span><span>${esc(f.name)}</span>
+   </div>
+   <div class="explorer-type">${esc(f.type||'Datei')}</div>
+   <div class="explorer-size">${Math.max(1,Math.round((f.size||0)/1024))} KB</div>
+   <div class="explorer-actions" onclick="event.stopPropagation()">
+     <button class="icon-action" type="button" title="Datei öffnen" onclick="openFile('${f.id}')">↗</button>
+     <button class="icon-action danger" type="button" title="Datei löschen" onclick="deleteFile('${f.id}')">🗑️</button>
+   </div>
+ </div>`;
+}
+
+let draggedFileId=null;
+
+function fileDragStart(event,id){
+ draggedFileId=id;
+ const row=event.currentTarget;
+ row.classList.add('dragging');
+ if(event.dataTransfer){
+  event.dataTransfer.effectAllowed='move';
+  event.dataTransfer.setData('text/plain',id);
+ }
+}
+
+function fileDragEnd(event){
+ draggedFileId=null;
+ document.querySelectorAll('.file-explorer-row.dragging,.file-explorer-row.drag-over')
+  .forEach(el=>el.classList.remove('dragging','drag-over'));
+}
+
+function fileDragOver(event,row){
+ event.preventDefault();
+ if(!draggedFileId)return;
+ if(event.dataTransfer)event.dataTransfer.dropEffect='move';
+ row.classList.add('drag-over');
+}
+
+function fileDragLeave(row){
+ row.classList.remove('drag-over');
+}
+
+async function fileDropOnFolder(event,folderId,row){
+ event.preventDefault();
+ row.classList.remove('drag-over');
+ const id=draggedFileId || event.dataTransfer?.getData('text/plain');
+ if(!id)return;
+ const f=(data.files||[]).find(x=>String(x.id)===String(id));
+ if(!f)return;
+ f.folderId=folderId;
+ draggedFileId=null;
+ await saveData();
+ renderFiles();
+}
+
+function fileDragOverRoot(event,row){
+ event.preventDefault();
+ if(!draggedFileId)return;
+ if(event.dataTransfer)event.dataTransfer.dropEffect='move';
+ row.classList.add('drag-over');
+}
+
+function fileDragLeaveRoot(row){
+ row.classList.remove('drag-over');
+}
+
+async function fileDropOnRoot(event,row){
+ event.preventDefault();
+ row.classList.remove('drag-over');
+ const id=draggedFileId || event.dataTransfer?.getData('text/plain');
+ if(!id)return;
+ const f=(data.files||[]).find(x=>String(x.id)===String(id));
+ if(!f)return;
+ f.folderId=null;
+ draggedFileId=null;
+ await saveData();
+ renderFiles();
+}
+
 function renderFiles(){
- $('fileList').innerHTML=data.files.map(f=>renderFileCard(f,false)).join('')||'<div class="empty">Noch keine Dateien hochgeladen.</div>';
- $('homeFiles').innerHTML=data.files.slice(0,5).map(f=>renderFileCard(f,true)).join('')||'<div class="empty">Noch keine Dateien.</div>';
+ const folders=Array.isArray(data.fileFolders)?data.fileFolders:[];
+ const allFiles=Array.isArray(data.files)?data.files:[];
+ if(currentFileFolder!==null && !folders.some(x=>String(x.id)===String(currentFileFolder))){
+  currentFileFolder=null;
+ }
+
+ const currentFolder=fileFolderById(currentFileFolder);
+ const shownFiles=currentFolder
+  ? allFiles.filter(f=>String(f.folderId)===String(currentFolder.id))
+  : allFiles.filter(f=>!f.folderId);
+
+ const rootDrop=$('fileRootDrop');
+ if(rootDrop) rootDrop.style.display=currentFolder?'block':'none';
+
+ const breadcrumb=$('fileBreadcrumb');
+ if(breadcrumb){
+  breadcrumb.innerHTML=currentFolder
+   ? `<button type="button" class="crumb-btn" onclick="currentFileFolder=null;renderFiles()">📂 Alle Dateien</button>
+      <span class="crumb-sep">›</span><span>📁 ${esc(currentFolder.name)}</span>`
+   : `<span class="crumb-current">📂 Alle Dateien</span>`;
+ }
+
+ const list=$('fileList');
+ if(!list)return;
+
+ const folderRows=currentFolder ? '' : folders.map(renderExplorerFolder).join('');
+ const fileRows=shownFiles.map(renderExplorerFile).join('');
+ list.innerHTML=(folderRows+fileRows) || `<div class="file-explorer-empty">Dieser Ordner ist leer.<br><span>Erstelle einen Ordner oder lade eine Datei hoch.</span></div>`;
+
+ if($('homeFiles')){
+  $('homeFiles').innerHTML=allFiles.slice(0,5).map(f=>renderFileCard(f,true)).join('')
+   || '<div class="empty">Noch keine Dateien.</div>';
+ }
 }
 function moduleFiles(id){return data.files.filter(f=>String(f.moduleId)===String(id))}
 function renderModules(){
@@ -3853,9 +4416,9 @@ async function deleteTask(id){
  renderAll();
  try{await saveData()}catch(err){console.warn('Speichern nach Löschen fehlgeschlagen',err)}
 }
-function triggerUpload(){let f=$('fileInput');f.value='';f.click()}
+function triggerUpload(){triggerUpload2()}
 function triggerUpload2(){let f=$('fileInput2');f.value='';f.click()}
-async function handleFiles(files){for(const f of [...files])await addFile(f,null);await saveData();renderAll()}
+async function handleFiles(files){for(const f of [...files])await addFile(f,null,currentFileFolder);await saveData();renderAll()}
 async function uploadModule(id){let f=$('moduleInput_'+id);f.value='';f.click()}
 async function handleModuleFiles(id,files){for(const f of [...files])await addFile(f,id);await saveData();renderAll()}
 
@@ -3921,13 +4484,13 @@ async function googleDriveDelete(id){
  const r=await driveFetch('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(id),{method:'DELETE'});
  if(!r.ok&&r.status!==404)throw new Error('Google Drive ('+r.status+'): '+await r.text());
 }
-async function addFile(f,moduleId){
+async function addFile(f,moduleId,folderId=null){
  data.files=Array.isArray(data.files)?data.files:[];
  const item={
   id:String(Date.now())+Math.random().toString(16).slice(2),
   name:f.name,size:f.size,type:f.type||'application/octet-stream',
   kind:f.type&&f.type.startsWith('image/')?'image':f.type==='application/pdf'?'pdf':'file',
-  moduleId:moduleId||null,url:'',storagePath:'',driveFileId:'',uploadStatus:'pending'
+  moduleId:moduleId||null,folderId:folderId||null,url:'',storagePath:'',driveFileId:'',uploadStatus:'pending'
  };
  // Show it immediately in the planner.
  data.files.push(item);
@@ -5532,6 +6095,18 @@ window.addEventListener('load',()=>{try{updateGeminiOAuthStatus()}catch(e){conso
 
 
 
+
+<div id="mspFolderModal" aria-hidden="true">
+ <div class="folder-modal-box" role="dialog" aria-modal="true" aria-labelledby="mspFolderTitle">
+  <h3 id="mspFolderTitle">Neuen Ordner erstellen</h3>
+  <p>Gib deinem neuen Lernordner einen Namen.</p>
+  <input id="mspFolderName" type="text" autocomplete="off" placeholder="z. B. Statistik">
+  <div class="msp-folder-modal-actions">
+   <button class="btn secondary" type="button" onclick="closeFolderModal()">Abbrechen</button>
+   <button class="btn" type="button" onclick="confirmCreateFileFolder()">Ordner erstellen</button>
+  </div>
+ </div>
+</div>
 </body>
 </html>
 
