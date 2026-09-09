@@ -831,6 +831,20 @@ hr{ border-color:#E9E4E2 !important; }
   .home-exam-countdown-days{font-size:13px}
 }
 </style>
+<style id="msp-v146-exam-overview">
+#homeOverview .exam-overview-card{
+  cursor:pointer;
+  user-select:none;
+  transition:background .15s ease,border-color .15s ease;
+}
+#homeOverview .exam-overview-card:hover{
+  background:#f7f7f7;
+  border-color:#b8b8b8;
+}
+#homeOverview .exam-overview-card strong{
+  font-size:16px;
+}
+</style>
 </head>
 <body>
 <div class="app">
@@ -874,64 +888,6 @@ hr{ border-color:#E9E4E2 !important; }
    </div>
   </div>
   <div class="card reminder-card"><div class="card-head"><h2>🔔 Erinnerungen</h2><button class="btn small" onclick="requestReminderPermission()">Aktivieren</button></div><div id="homeReminders"></div></div>
-  <div class="home-exam-countdown" id="homeExamCountdown" onclick="openExamCountdownSettings()" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' ')openExamCountdownSettings()">
-  <div class="home-exam-countdown-dot"></div>
-  <div class="home-exam-countdown-main">
-    <div class="home-exam-countdown-label">Tage bis Prüfung</div>
-    <div class="home-exam-countdown-days" id="homeExamCountdownDays">–</div>
-  </div>
-</div>
-<div class="two-col">
-   <div class="card"><div class="card-head"><h2>📁 Wichtige Dateien & Infos</h2><button class="btn" onclick="triggerUpload()">＋ Upload</button></div><input id="fileInput" type="file" accept=".pdf,image/*,.doc,.docx,.txt" multiple hidden onchange="handleFiles(this.files)"><div id="homeFiles" class="file-grid"></div><button class="btn secondary full" onclick="go('files')">Alle Dateien anzeigen →</button></div>
-   <div class="card psychology-day-card"><div class="card-head"><h2>🧠 Psychologie des Tages</h2></div><div id="psychologyDay"></div></div>
-  </div>
- </section>
-
- <section id="tasks" class="page"><div class="card"><div class="card-head"><div><button class="btn" onclick="openTask()">＋ Neue Aufgabe</button></div><div class="tabs"><button class="tab active" onclick="setTaskFilter('open',this)">Anstehend</button><button class="tab" onclick="setTaskFilter('done',this)">Abgehakt</button><button class="tab" onclick="setTaskFilter('all',this)">Alle</button></div></div><div id="taskList"></div></div></section>
-
- <section id="calendar" class="page">
-  <div class="deadlines-page-layout">
-    <div class="card deadlines-list-card">
-      <div class="card-head"><div></div><button class="btn" onclick="openDeadline()">＋ Neuer Eintrag</button></div>
-
-      <div id="deadlineSortControl" class="deadline-sort-control">
-        <label for="deadlineSort">Sortieren nach</label>
-        <select id="deadlineSort">
-          <option value="date">Deadline</option>
-          <option value="priority">Priorität</option>
-        </select>
-      </div>
-
-      <div class="tabs">
-        <button class="tab active" onclick="setDeadlineFilter('all',this)">Alle</button>
-        <button class="tab" onclick="setDeadlineFilter('task',this)">☑️ Aufgaben</button>
-        <button class="tab" onclick="setDeadlineFilter('reg',this)">Anmeldungen</button>
-      </div>
-      <div id="deadlineList"></div>
-    </div>
-
-    <div class="card deadlines-calendar-card">
-      <div class="google-calendar-bar google-calendar-bar-deadlines" id="googleCalendarBarDeadlines">
-        <div class="google-calendar-main">
-          <div class="google-calendar-title">🗓️ Google Kalender</div>
-          <div class="google-calendar-status" id="googleCalendarStatusDeadlines">Wird mit dem Kalender synchronisiert.</div>
-        </div>
-        <div class="google-calendar-actions">
-          <button class="btn secondary small" onclick="openGoogleCalendarSettings()">⚙️</button>
-          <button class="btn small" onclick="connectGoogleCalendar()">☁️ Synchronisieren</button>
-        </div>
-      </div>
-      <div class="calendar-wrap">
-        <div class="calendar-nav">
-          <button class="btn secondary" onclick="changeCalendarMonth(-1)">‹</button>
-          <strong id="calendarMonthTitle"></strong>
-          <button class="btn secondary" onclick="changeCalendarMonth(1)">›</button>
-        </div>
-        <div class="calendar-weekdays"><span>Mo</span><span>Di</span><span>Mi</span><span>Do</span><span>Fr</span><span>Sa</span><span>So</span></div>
-        <div id="monthCalendar" class="month-calendar"></div>
-      </div>
-    </div>
-  </div>
  </section>
  <section id="files" class="page"><div class="card"><div class="card-head"><div></div><button class="btn" onclick="triggerUpload()">＋ Dateien hochladen</button></div><input id="fileInput2" type="file" accept=".pdf,image/*,.doc,.docx,.txt" multiple hidden onchange="handleFiles(this.files)"><div id="fileList" class="file-grid"></div><div class="note" style="margin-top:13px">☁️ Mit einem verbundenen Konto werden deine Daten zwischen Geräten synchronisiert. Dateien werden in der Cloud gespeichert, wenn du dein Firebase-Konto eingerichtet hast.</div></div></section>
 
@@ -1170,6 +1126,16 @@ function daysFromToday(date){
  const a=new Date(getTodayKey()+'T12:00:00'),b=new Date(date+'T12:00:00');
  return Math.round((b-a)/86400000);
 }
+function examCountdownValue(){
+ const target=data.examCountdown;
+ if(!target)return '–';
+ const d=new Date(target+'T23:59:59');
+ const today=new Date();
+ const t=new Date(today.getFullYear(),today.getMonth(),today.getDate());
+ const diff=Math.ceil((d-t)/86400000);
+ if(diff<0)return '0';
+ return String(diff);
+}
 function renderHomeOverview(){
  const today=getTodayKey();
  const now=new Date();
@@ -1192,8 +1158,9 @@ function renderHomeOverview(){
  $('homeOverview').innerHTML=[
   ['📋','Offene Aufgaben',openTasks],
   ['❗','Deadlines diese Woche',weekDeadlines],
-  ['📅','Deadlines nächste Woche',nextWeekDeadlines]
- ].map(x=>`<div class="overview-card"><span class="overview-icon">${x[0]}</span><div><span>${x[1]}</span><strong>${x[2]}</strong></div></div>`).join('');
+  ['📅','Deadlines nächste Woche',nextWeekDeadlines],
+  ['🎓','Tage bis Prüfung',examCountdownValue()]
+ ].map((x,i)=>`<div class="overview-card ${i===3?'exam-overview-card':''}" ${i===3?'onclick="openExamCountdownSettings()" role="button" tabindex="0" onkeydown="if(event.key===\'Enter\'||event.key===\' \')openExamCountdownSettings()"':''}><span class="overview-icon">${x[0]}</span><div><span>${x[1]}</span><strong>${x[2]}</strong></div></div>`).join('');
 }
 function renderCalendar(){
  const box=$('monthCalendar'),title=$('calendarMonthTitle');
@@ -2516,25 +2483,7 @@ async function savePodcastToDrive(item,audio){
 
 
 function renderExamCountdown(){
- const el=$('homeExamCountdown');
- const daysEl=$('homeExamCountdownDays');
- if(!el||!daysEl)return;
- const target=data.examCountdown;
- if(!target){
-   daysEl.textContent='–';
-   el.title='Prüfungsdatum festlegen';
-   return;
- }
- const d=new Date(target+'T23:59:59');
- const today=new Date();
- const t=new Date(today.getFullYear(),today.getMonth(),today.getDate());
- const diff=Math.ceil((d-t)/86400000);
- if(diff<0){
-   daysEl.textContent='0 Tage';
- }else{
-   daysEl.textContent=diff===1?'1 Tag':diff+' Tage';
- }
- el.title='Prüfungsdatum ändern';
+ renderHomeOverview();
 }
 
 function openExamCountdownSettings(){
