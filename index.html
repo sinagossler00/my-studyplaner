@@ -1352,6 +1352,45 @@ hr{ border-color:#E9E4E2 !important; }
 #grades .edit-btn{border:0;background:transparent;padding:2px 4px;cursor:pointer}
 #grades .edit-btn:hover{background:#f3f3f3;border-radius:5px}
 </style>
+<style id="msp-exam-semester-style">#homeOverview .exam-overview-card,#homeOverview .semester-overview-card{cursor:pointer;user-select:none}#homeOverview .exam-overview-card:hover,#homeOverview .semester-overview-card:hover{border-color:#b8b8b8;background:#f7f7f7}</style>
+<style id="msp-five-tiles-final">
+/* Nur die fünf kleinen Startseiten-Kacheln: gleichmäßig über exakt dieselbe Breite wie die Aufgaben-Kachel verteilen. */
+#homeOverview{
+  display:flex !important;
+  width:100% !important;
+  gap:8px !important;
+  box-sizing:border-box !important;
+}
+#homeOverview .overview-card{
+  flex:1 1 0 !important;
+  width:auto !important;
+  min-width:0 !important;
+  max-width:none !important;
+  padding:8px 7px !important;
+  gap:6px !important;
+  min-height:54px !important;
+  box-sizing:border-box !important;
+}
+#homeOverview .overview-icon{
+  width:20px !important;
+  min-width:20px !important;
+  font-size:17px !important;
+}
+#homeOverview .overview-card span:not(.overview-icon){
+  font-size:9px !important;
+  white-space:nowrap !important;
+}
+#homeOverview .overview-card strong{
+  font-size:17px !important;
+}
+@media(max-width:700px){
+  #homeOverview{gap:5px !important}
+  #homeOverview .overview-card{padding:7px 4px !important}
+  #homeOverview .overview-icon{width:18px !important;min-width:18px !important;font-size:15px !important}
+  #homeOverview .overview-card span:not(.overview-icon){font-size:7px !important}
+  #homeOverview .overview-card strong{font-size:15px !important}
+}
+</style>
 </head>
 <body>
 <div class="app">
@@ -1651,6 +1690,7 @@ const defaultData={
  ],notes:[],podcasts:[]
 };
 let data=JSON.parse(localStorage.getItem(KEY)||'null')||structuredClone(defaultData);
+data.semester=Math.max(1,Math.min(6,Number(data.semester)||1));
 data.gradeModules=Array.isArray(data.gradeModules)?data.gradeModules:[];
 data.grades=Array.isArray(data.grades)?data.grades:[];
 if(!Array.isArray(data.podcasts))data.podcasts=[];
@@ -1779,7 +1819,7 @@ function renderFileCard(f,home=false){
  return `<div class="file file-clickable" onclick="openFile('${f.id}')" title="Klicken zum Öffnen">
    <div class="file-icon">${fileIcon(f)}</div>
    <div class="file-name">${esc(f.name)}</div>
-   <div class="file-meta">${esc(f.type||'Datei')} · ${Math.max(1,Math.round((f.size||0)/1024))} KB</div>
+   <div class="file-meta">${esc(f.type||'Datei')} · ${Math.max(1,Math.round((f.size||0)/1024))} KB${f.uploadStatus==='pending'?' · ⏳ Upload…':f.uploadStatus==='error'?' · ⚠️ nicht in Drive':f.driveFileId?' · ☁️ Drive':''}</div>
    <div class="file-actions">
      ${!home?`<button class="trash" onclick="event.stopPropagation();deleteFile('${f.id}')">×</button>`:''}
    </div>
@@ -2338,13 +2378,33 @@ async function googleDriveDelete(id){
  if(!r.ok&&r.status!==404)throw new Error('Google Drive ('+r.status+'): '+await r.text());
 }
 async function addFile(f,moduleId){
- if(!await googleDriveAuth()){alert('Bitte zuerst den Zugriff auf Google Drive erlauben.');return;}
- const item={id:String(Date.now())+Math.random().toString(16).slice(2),name:f.name,size:f.size,type:f.type,kind:f.type.startsWith('image/')?'image':f.type==='application/pdf'?'pdf':'file',moduleId:moduleId||null,url:'',storagePath:'',driveFileId:''};
+ data.files=Array.isArray(data.files)?data.files:[];
+ const item={
+  id:String(Date.now())+Math.random().toString(16).slice(2),
+  name:f.name,size:f.size,type:f.type||'application/octet-stream',
+  kind:f.type&&f.type.startsWith('image/')?'image':f.type==='application/pdf'?'pdf':'file',
+  moduleId:moduleId||null,url:'',storagePath:'',driveFileId:'',uploadStatus:'pending'
+ };
+ // Show it immediately in the planner.
+ data.files.push(item);
+ saveLocal();
+ renderFiles();
  try{
+  const ok=await googleDriveAuth();
+  if(!ok)throw new Error('Google Drive-Zugriff wurde nicht erteilt.');
   const u=await googleDriveUpload(f);
-  item.driveFileId=u.id;item.url=u.webViewLink||('https://drive.google.com/file/d/'+u.id+'/view');
-  data.files=data.files||[];data.files.push(item);await saveData();renderAll();
- }catch(e){console.error(e);alert('Datei konnte nicht hochgeladen werden:\n'+(e.message||e));}
+  item.driveFileId=u.id;
+  item.url=u.webViewLink||('https://drive.google.com/file/d/'+u.id+'/view');
+  item.uploadStatus='synced';
+  await saveData();
+  renderFiles();
+ }catch(e){
+  console.error('Datei-Upload:',e);
+  item.uploadStatus='error';
+  saveLocal();
+  renderFiles();
+  alert('Datei wurde angezeigt, aber nicht in Google Drive gespeichert.\n\n'+(e.message||e));
+ }
 }
 async function openFile(id){
  const f=(data.files||[]).find(x=>String(x.id)===String(id));if(!f)return;
@@ -3534,6 +3594,9 @@ window.addEventListener('load',()=>{try{updateGeminiOAuthStatus()}catch(e){conso
     const diff=daysFromToday(target);
     return diff<0?'0':String(diff);
   }
+  function semesterValue(){
+    return String(Math.max(1,Math.min(6,Number(data.semester)||1)));
+  }
 
   window.openExamCountdownSettings=function(){
     openModal('🎓 Prüfung',`<div class="muted" style="margin-bottom:10px">Prüfungsdatum festlegen.</div>
@@ -3544,21 +3607,29 @@ window.addEventListener('load',()=>{try{updateGeminiOAuthStatus()}catch(e){conso
         <button class="btn secondary" type="button" onclick="clearExamCountdown()">Zurücksetzen</button>
       </div>`);
   };
-
   window.saveExamCountdown=async function(){
     const value=($('examCountdownDate')?.value||'').trim();
     if(!value){alert('Bitte ein Datum auswählen.');return;}
-    data.examCountdown=value;
-    await saveData();
-    renderHomeOverview();
-    closeModal();
+    data.examCountdown=value; await saveData(); renderHomeOverview(); closeModal();
+  };
+  window.clearExamCountdown=async function(){
+    data.examCountdown=null; await saveData(); renderHomeOverview(); closeModal();
   };
 
-  window.clearExamCountdown=async function(){
-    data.examCountdown=null;
-    await saveData();
-    renderHomeOverview();
-    closeModal();
+  window.openSemesterSettings=function(){
+    openModal('📚 Semester',`<div class="muted" style="margin-bottom:10px">Wähle dein aktuelles Semester.</div>
+      <label>Aktuelles Semester</label>
+      <select id="semesterCounterValue">
+        ${[1,2,3,4,5,6].map(n=>`<option value="${n}" ${Number(data.semester||1)===n?'selected':''}>${n}. Semester</option>`).join('')}
+      </select>
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button class="btn" type="button" onclick="saveSemesterCounter()">Speichern</button>
+      </div>`);
+  };
+  window.saveSemesterCounter=async function(){
+    const value=Number($('semesterCounterValue')?.value||1);
+    if(!Number.isInteger(value)||value<1||value>6)return;
+    data.semester=value; await saveData(); renderHomeOverview(); closeModal();
   };
 
   const originalRenderHomeOverview=window.renderHomeOverview;
@@ -3566,19 +3637,37 @@ window.addEventListener('load',()=>{try{updateGeminiOAuthStatus()}catch(e){conso
     originalRenderHomeOverview();
     const box=$('homeOverview');
     if(!box)return;
-    const old=$('examCountdownCard');
-    if(old)old.remove();
-    const card=document.createElement('div');
-    card.className='overview-card exam-overview-card';
-    card.id='examCountdownCard';
-    card.setAttribute('role','button');
-    card.setAttribute('tabindex','0');
-    card.title='Prüfungsdatum festlegen oder ändern';
-    card.innerHTML='<span class="overview-icon">🎓</span><div><span>Tage bis Prüfung</span><strong>'+examCountdownValue()+'</strong></div>';
-    card.onclick=window.openExamCountdownSettings;
-    card.onkeydown=function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();window.openExamCountdownSettings();}};
-    box.appendChild(card);
+    ['examCountdownCard','semesterCounterCard'].forEach(id=>{const el=$(id);if(el)el.remove();});
+
+    const exam=document.createElement('div');
+    exam.className='overview-card exam-overview-card';
+    exam.id='examCountdownCard';
+    exam.setAttribute('role','button');
+    exam.setAttribute('tabindex','0');
+    exam.title='Prüfungsdatum festlegen oder ändern';
+    exam.innerHTML='<span class="overview-icon">🎓</span><div><span>Tage bis Prüfung</span><strong>'+examCountdownValue()+'</strong></div>';
+    exam.onclick=window.openExamCountdownSettings;
+    exam.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();window.openExamCountdownSettings();}};
+    box.appendChild(exam);
+
+    const sem=document.createElement('div');
+    sem.className='overview-card semester-overview-card';
+    sem.id='semesterCounterCard';
+    sem.setAttribute('role','button');
+    sem.setAttribute('tabindex','0');
+    sem.title='Aktuelles Semester festlegen';
+    sem.innerHTML='<span class="overview-icon">📚</span><div><span>Semester</span><strong>'+semesterValue()+' / 6</strong></div>';
+    sem.onclick=window.openSemesterSettings;
+    sem.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();window.openSemesterSettings();}};
+    box.appendChild(sem);
   };
+
+  // The original initial render may already have happened before this addon loads.
+  if(document.readyState==='loading'){
+    document.addEventListener('DOMContentLoaded',()=>{try{renderHomeOverview()}catch(e){console.warn(e)}});
+  }else{
+    try{renderHomeOverview()}catch(e){console.warn(e)}
+  }
 })();
 </script>
 <style id="msp-exam-countdown-style">
