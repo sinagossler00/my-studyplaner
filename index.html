@@ -3637,6 +3637,15 @@ aside.sidebar{
   }
 }
 </style>
+
+<link rel="manifest" href="./manifest.webmanifest">
+<meta name="theme-color" content="#c98f9c">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="My Studyplaner">
+<link rel="apple-touch-icon" href="./icons/icon-192.png">
+
 </head>
 <body>
 <div class="app">
@@ -6713,6 +6722,19 @@ function renderStudyTimer(){
       if(ctx.state==='suspended') ctx.resume().then(run); else run();
     }catch(e){}
   };
+})();
+</script>
+
+
+<script id="msp-pwa-registration">
+(function(){
+  if('serviceWorker' in navigator){
+    window.addEventListener('load', function(){
+      navigator.serviceWorker.register('./sw.js').catch(function(err){
+        console.warn('PWA Service Worker konnte nicht registriert werden:', err);
+      });
+    });
+  }
 })();
 </script>
 
