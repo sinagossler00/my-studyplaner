@@ -3215,6 +3215,108 @@ input:focus,select:focus,textarea:focus{
  background:#f1dfdb;border-color:#b9857d;color:#76564f
 }
 </style>
+
+<style id="msp-home-files-explorer-v222">
+#homeFiles{
+ display:flex;flex-direction:column;border:1px solid #e5d9d3;border-radius:9px;
+ overflow:hidden;background:#fffdf9
+}
+.home-file-row{
+ min-height:45px;padding:5px 10px;display:grid;grid-template-columns:minmax(0,1fr) 110px 28px;
+ align-items:center;gap:8px;border-bottom:1px solid #eee5df;cursor:pointer;transition:.12s ease
+}
+.home-file-row:last-child{border-bottom:0}
+.home-file-row:hover{background:#fbf1ee}
+.home-file-main{display:flex;align-items:center;gap:9px;min-width:0}
+.home-file-icon{width:25px;flex:0 0 25px;text-align:center;font-size:19px}
+.home-file-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px;color:#5d4c45}
+.home-folder-row .home-file-name{font-weight:600}
+.home-file-type{font-size:9px;color:#97857e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.home-file-arrow{text-align:center;color:#a6756d;font-size:16px}
+@media(max-width:600px){
+ .home-file-row{grid-template-columns:minmax(0,1fr) 75px 24px}
+ .home-file-type{font-size:8px}
+}
+</style>
+
+<style id="msp-timer-shadow-fix-v223">
+/* Entfernt den übrig gebliebenen Schatten/Strich links am Timer */
+#timer.page .timer-shell,
+#timer.page .timer-wrap,
+#timer.page .timer-card,
+#timer.page .timer-main,
+#timer.page .timer-panel{
+  box-shadow:none !important;
+}
+#timer.page .timer-shell::before,
+#timer.page .timer-shell::after,
+#timer.page .timer-wrap::before,
+#timer.page .timer-wrap::after,
+#timer.page .timer-card::before,
+#timer.page .timer-card::after,
+#timer.page .timer-main::before,
+#timer.page .timer-main::after,
+#timer.page .timer-panel::before,
+#timer.page .timer-panel::after{
+  display:none !important;
+  box-shadow:none !important;
+  border:0 !important;
+}
+</style>
+
+<style id="msp-timer-edge-fix-v224">
+/* Der sichtbare Strich links kommt vom allgemeinen .card-Rahmen des Timer-Bereichs. */
+#study-timer{
+  border:0 !important;
+  box-shadow:none !important;
+}
+</style>
+
+<style id="msp-timer-left-line-v225">
+/* Entfernt ausschließlich den dekorativen vertikalen Strich links im Timer */
+#timer *{
+  border-left-color:transparent !important;
+}
+#timer .timer-card::before,
+#timer .timer-card::after,
+#timer .timer-shell::before,
+#timer .timer-shell::after,
+#timer .timer-wrap::before,
+#timer .timer-wrap::after,
+#timer .timer-panel::before,
+#timer .timer-panel::after,
+#timer .timer-container::before,
+#timer .timer-container::after{
+  content:none !important;
+  display:none !important;
+  border:0 !important;
+  box-shadow:none !important;
+}
+</style>
+
+<style id="msp-timer-stripe-final-v226">
+/* Der sichtbare Strich ist der 3px-Inset des allgemeinen Karten-Stils. */
+#study-timer .card{
+  box-shadow:none !important;
+}
+</style>
+
+<style id="msp-timer-inner-border-v228">
+/* Der sichtbare Strich sitzt auf dem inneren .card innerhalb der gelben Timer-Fläche. */
+#study-timer > .card.study-timer-card{
+  border:0 !important;
+  box-shadow:none !important;
+  outline:0 !important;
+}
+</style>
+
+<style id="msp-timer-no-generic-card-v229">
+#study-timer .study-timer-card{
+ border:0 !important;
+ box-shadow:none !important;
+ outline:0 !important;
+}
+</style>
 </head>
 <body>
 <div class="app">
@@ -3428,7 +3530,7 @@ input:focus,select:focus,textarea:focus{
   <div id="gradeModulesList"></div>
 </section>
 <section id="study-timer" class="page">
-  <div class="card study-timer-card">
+  <div class="study-timer-card">
     <div class="card-head">
       <div>
         <h2>⏱️ Lern-Timer</h2>
@@ -3670,7 +3772,14 @@ function renderTasks(){
  if($('taskSort'))$('taskSort').value=taskSort;
 }
 function fileIcon(f){
- return '<span class="folder-file-icon" aria-hidden="true">📁</span>';
+ const name=String(f?.name||'').toLowerCase();
+ const type=String(f?.type||'').toLowerCase();
+ let icon='📄';
+ if(type.includes('pdf')||name.endsWith('.pdf')) icon='📕';
+ else if(type.startsWith('image/')||/\.(png|jpg|jpeg|gif|webp|svg)$/i.test(name)) icon='🖼️';
+ else if(type.includes('word')||/\.(doc|docx)$/i.test(name)) icon='📝';
+ else if(type.includes('text')||name.endsWith('.txt')) icon='📄';
+ return `<span class="folder-file-icon" aria-hidden="true">${icon}</span>`;
 }
 async function openFile(id){
  const f=data.files.find(x=>String(x.id)===String(id));
@@ -3933,8 +4042,24 @@ function renderFiles(){
  list.innerHTML=(folderRows+fileRows) || `<div class="file-explorer-empty">Dieser Ordner ist leer.<br><span>Erstelle einen Ordner oder lade eine Datei hoch.</span></div>`;
 
  if($('homeFiles')){
-  $('homeFiles').innerHTML=allFiles.slice(0,5).map(f=>renderFileCard(f,true)).join('')
-   || '<div class="empty">Noch keine Dateien.</div>';
+  const homeFolders=folders.slice(0,4);
+  const homeFiles=allFiles.filter(f=>!f.folderId).slice(0,6);
+  const homeRows=[
+   ...homeFolders.map(folder=>`
+    <div class="home-file-row home-folder-row" onclick="currentFileFolder='${esc(folder.id)}';go('files');renderFiles()" title="Ordner öffnen">
+      <div class="home-file-main"><span class="home-file-icon">📁</span><span class="home-file-name">${esc(folder.name)}</span></div>
+      <span class="home-file-type">Ordner</span>
+      <span class="home-file-arrow">›</span>
+    </div>`),
+   ...homeFiles.map(f=>`
+    <div class="home-file-row" onclick="openFile('${f.id}')" title="Datei öffnen">
+      <div class="home-file-main"><span class="home-file-icon">${fileIcon(f)}</span><span class="home-file-name">${esc(f.name)}</span></div>
+      <span class="home-file-type">${esc(f.type||'Datei')}</span>
+      <span class="home-file-arrow">↗</span>
+    </div>`)
+  ];
+  $('homeFiles').innerHTML=homeRows.join('')
+   || '<div class="empty">Noch keine Dateien oder Ordner.</div>';
  }
 }
 function moduleFiles(id){return data.files.filter(f=>String(f.moduleId)===String(id))}
