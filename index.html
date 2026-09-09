@@ -2823,7 +2823,7 @@ ${source.slice(0,45000)}`);
   const url=URL.createObjectURL(audio);
   result.innerHTML=`<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line)">
     <b>🎧 Dein Lern-Podcast ist fertig</b>
-    <audio controls autoplay style="width:100%;margin-top:10px" src="${url}"></audio>
+    <audio controls style="width:100%;margin-top:10px" src="${url}"></audio>
     <div class="muted" style="margin-top:7px">Du kannst ihn sofort anhören. Die Speicherung auf Google Drive läuft jetzt im Hintergrund, damit er danach auch auf Handy und Tablet verfügbar ist.</div>
     <details style="margin-top:9px"><summary>📝 Skript</summary><div style="white-space:pre-wrap;font-size:12px;line-height:1.5;margin-top:7px">${esc(script)}</div></details>
   </div>`;
