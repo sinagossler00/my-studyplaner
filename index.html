@@ -6528,12 +6528,12 @@ function renderStudyTimer(){
   function renderPlant(){
     const mins=totalLearningMinutes();
     const stages=[
-      [0,'Keimling',30,18,.35],
-      [30,'Kleines Pflänzchen',60,45,.55],
-      [60,'Junge Pflanze',120,78,.72],
-      [120,'Große Pflanze',240,112,.88],
-      [240,'Blühende Pflanze',480,145,1.02],
-      [480,'Meisterpflanze',null,170,1.15]
+      [0,'Keimling',25,18,.35],
+      [25,'Kleines Pflänzchen',50,45,.55],
+      [50,'Junge Pflanze',75,78,.72],
+      [75,'Große Pflanze',100,112,.88],
+      [100,'Blühende Pflanze',125,145,1.02],
+      [125,'Meisterpflanze',null,170,1.15]
     ];
     let stage=stages[0];
     for(const s of stages)if(mins>=s[0])stage=s;
@@ -6541,7 +6541,7 @@ function renderStudyTimer(){
     const currentStart=stage[0], nextAt=next?next[0]:stage[0]+1;
     const pct=next?Math.min(100,((mins-currentStart)/(nextAt-currentStart))*100):100;
     const growth=document.getElementById('plantGrowth');
-    if(growth){growth.style.setProperty('--plant-height',stage[3]+'px');growth.style.setProperty('--plant-scale',stage[4]);growth.querySelectorAll('.leaf').forEach((l,i)=>l.style.opacity=mins>=30+i*35?'1':'0');const flower=growth.querySelector('.flower');if(flower)flower.style.transform=mins>=240?'translateX(-50%) scale(.72)':'translateX(-50%) scale(0)';}
+    if(growth){growth.style.setProperty('--plant-height',stage[3]+'px');growth.style.setProperty('--plant-scale',stage[4]);growth.querySelectorAll('.leaf').forEach((l,i)=>l.style.opacity=mins>=25+(i*25)?'1':'0');const flower=growth.querySelector('.flower');if(flower)flower.style.transform=mins>=100?'translateX(-50%) scale(.72)':'translateX(-50%) scale(0)';}
     const m=document.getElementById('plantMinutes');if(m)m.textContent=mins;
     const st=document.getElementById('plantStage');if(st)st.textContent=stage[1];
     const p=document.getElementById('plantProgress');if(p)p.style.width=pct+'%';
