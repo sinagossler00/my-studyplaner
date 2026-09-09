@@ -962,7 +962,6 @@ hr{ border-color:#E9E4E2 !important; }
     <div id="homeTasks"></div><button class="btn secondary full" onclick="go('tasks')">Alle Aufgaben anzeigen →</button>
    </div>
   </div>
-  <div class="card reminder-card"><div class="card-head"><h2>🔔 Erinnerungen</h2><button class="btn small" onclick="requestReminderPermission()">Aktivieren</button></div><div id="homeReminders"></div></div>
   <div class="two-col">
    <div class="card"><div class="card-head"><h2>📁 Wichtige Dateien & Infos</h2><button class="btn" onclick="triggerUpload()">＋ Upload</button></div><input id="fileInput" type="file" accept=".pdf,image/*,.doc,.docx,.txt" multiple hidden onchange="handleFiles(this.files)"><div id="homeFiles" class="file-grid"></div><button class="btn secondary full" onclick="go('files')">Alle Dateien anzeigen →</button></div>
    <div class="card psychology-day-card"><div class="card-head"><h2>🧠 Psychologie des Tages</h2></div><div id="psychologyDay"></div></div>
@@ -1383,31 +1382,6 @@ function renderReminders(){
    return `<div class="reminder-row">🔔 <div><b>${esc(d.title)}</b><span>${days===0?'Heute':days===1?'Morgen':'in '+days+' Tagen'} · ${reminderLabel(String(d.reminder))}</span></div></div>`;
  }).join(''):'<div class="empty">Keine anstehenden Erinnerungen.</div>';
 }
-function requestReminderPermission(){
- if(!('Notification' in window)){alert('Dein Browser unterstützt keine Benachrichtigungen.');return;}
- Notification.requestPermission().then(p=>{
-   if(p==='granted'){
-     alert('🔔 Erinnerungen sind aktiviert. Beim Öffnen des Studyplaners werden fällige Erinnerungen angezeigt.');
-     checkBrowserReminders();
-   }else alert('Benachrichtigungen wurden nicht aktiviert.');
- });
-}
-function checkBrowserReminders(){
- if(!('Notification' in window)||Notification.permission!=='granted')return;
- const today=getTodayKey();
- data.deadlines.filter(d=>d.date>=today).forEach(d=>{
-   const days=daysFromToday(d.date),r=String(d.reminder??'none');
-   if((r==='0'&&days===0)||(r==='1'&&days===1)||(r==='3'&&days===3)||(r==='7'&&days===7)){
-     const key='studyflow_notified_'+d.id+'_'+today;
-     if(!localStorage.getItem(key)){
-       new Notification('My Studyplaner – Erinnerung',{body:`${d.title} · ${days===0?'heute':days+' Tage'}`});
-       localStorage.setItem(key,'1');
-     }
-   }
- });
-}
-
-
 function eventDateTimeText(e){
  const time=e.time?` · ${e.time} Uhr`:'';
  return `${fmt(e.date)}${time}`;
@@ -1528,7 +1502,7 @@ function openModal(title,body){$('modalTitle').textContent=title;$('modalBody').
 function closeModal(){$('modal').classList.remove('show')}
 function openDeadline(){openModal('Neuer Deadline-Eintrag',`<form onsubmit="addDeadline(event)"><div class="form-grid"><div><label>Art</label><select id="dType"><option value="task">Aufgabe / Abgabe</option><option value="reg">Anmeldung / Termin</option></select></div><div><label>Datum</label><input id="dDate" type="date" required></div>
   <div><label>Uhrzeit (optional)</label><input id="dTime" type="time"></div><div class="wide"><label>Titel</label><input id="dTitle" placeholder="z. B. Hausarbeit abgeben" required></div><div class="wide"><label>Modul (optional)</label><input id="dModule" placeholder="z. B. Statistik 1"></div><div class="wide"><label>Priorität</label><select id="dPriority"><option value="leicht">🟢 Leicht</option><option value="mittel" selected>🟡 Mittel</option><option value="hoch">🔴 Hoch</option></select></div></div><br><button class="btn" type="submit">💾 Speichern</button></form>`)}
-async function addDeadline(e){e.preventDefault();data.deadlines.push({id:Date.now(),title:dTitle.value,date:dDate.value,type:dType.value,module:dModule.value,priority:(typeof dPriority!=='undefined'&&dPriority.value)||'mittel',reminder:(typeof dReminder!=='undefined'&&dReminder.value)||'none'});await saveData();closeModal();renderAll()}
+async function addDeadline(e){e.preventDefault();await saveData();closeModal();renderAll()}
 async function deleteDeadline(id){
  data.deadlines=data.deadlines.filter(x=>Number(x.id)!==Number(id));
  renderAll();
@@ -1556,7 +1530,7 @@ function editDeadline(id){
     </select>
    </div>
    <div class="wide"><label>🔔 Erinnerung</label>
-    <select id="dReminder">
+
      <option value="none" ${String(d.reminder??"none")==="none"?"selected":""}>Keine Erinnerung</option>
      <option value="7" ${String(d.reminder)==="7"?"selected":""}>7 Tage vorher</option>
      <option value="3" ${String(d.reminder)==="3"?"selected":""}>3 Tage vorher</option>
@@ -1577,7 +1551,7 @@ async function updateDeadline(e,id){
  d.module=dModule.value;
  d.time=dTime.value||'';
  d.priority=dPriority.value||'mittel';
- d.reminder=dReminder.value||'none';
+
  await saveData();closeModal();renderAll()
 }
 
