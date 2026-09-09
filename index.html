@@ -3640,27 +3640,21 @@ aside.sidebar{
 
 <style id="msp-home-greeting-style">
 #msp-home-greeting{
-  margin:0 0 22px 0;
+  margin:0 0 24px 0;
   text-align:left;
 }
 #msp-home-greeting .msp-home-greeting-line{
-  font-size:20px;
+  font-size:32px;
   line-height:1.15;
   font-weight:500;
   color:var(--text) !important;
 }
 #msp-home-greeting .msp-home-greeting-name{
-  margin-top:2px;
-  font-family:"Cormorant Garamond", Georgia, serif !important;
-  font-size:42px;
-  line-height:1;
-  font-weight:600;
-  color:var(--text) !important;
+  display:none !important;
 }
 @media(max-width:700px){
-  #msp-home-greeting{margin-bottom:16px}
-  #msp-home-greeting .msp-home-greeting-line{font-size:18px}
-  #msp-home-greeting .msp-home-greeting-name{font-size:36px}
+  #msp-home-greeting{margin-bottom:18px}
+  #msp-home-greeting .msp-home-greeting-line{font-size:27px}
 }
 </style>
 
@@ -3695,9 +3689,11 @@ aside.sidebar{
  </div>
 
  <section id="home" class="page active">
-  <div id="msp-home-greeting" class="msp-home-greeting" aria-live="polite">
+<div id="msp-home-greeting" class="msp-home-greeting" aria-live="polite">
   <div class="msp-home-greeting-line"><span id="mspGreetingText">Guten Morgen</span> <span id="mspGreetingEmoji">☀️</span></div>
   <div class="msp-home-greeting-name">Sina</div>
+</div>
+<div class="msp-home-greeting-name">Sina</div>
 </div>
   <div class="overview-grid" id="homeOverview"></div>
   <div class="dashboard">
