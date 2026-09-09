@@ -1061,6 +1061,202 @@ hr{ border-color:#E9E4E2 !important; }
 @media(max-width:600px){.study-timer-display{font-size:56px}.study-timer-stats{gap:7px}.study-timer-stats>div{min-width:110px;padding:8px 12px}}
 </style>
 
+
+<style id="msp-pastel-timer-theme">
+/* V167 – pastel study-timer look inspired by the user's reference */
+#study-timer{
+  background:#f8efad !important;
+  border-radius:18px !important;
+  padding:26px !important;
+  min-height:calc(100vh - 150px) !important;
+  box-sizing:border-box !important;
+  position:relative !important;
+  overflow:hidden !important;
+}
+#study-timer::before{
+  content:"" !important;
+  position:absolute !important;
+  width:min(720px,78vw) !important;
+  height:min(720px,78vw) !important;
+  min-width:470px !important;
+  min-height:470px !important;
+  left:50% !important;
+  top:50% !important;
+  transform:translate(-50%,-52%) !important;
+  border-radius:50% !important;
+  background:#edcbd3 !important;
+  z-index:0 !important;
+}
+#study-timer::after{
+  content:"FOCUS ON\\A YOURSELF   ♡" !important;
+  white-space:pre !important;
+  position:absolute !important;
+  left:50% !important;
+  top:calc(50% - 315px) !important;
+  transform:translateX(-50%) !important;
+  text-align:center !important;
+  font-size:15px !important;
+  line-height:1.55 !important;
+  letter-spacing:.30em !important;
+  font-weight:700 !important;
+  color:#343234 !important;
+  z-index:1 !important;
+  pointer-events:none !important;
+}
+#study-timer > *{
+  position:relative !important;
+  z-index:2 !important;
+}
+#study-timer .study-timer-card{
+  background:transparent !important;
+  border:0 !important;
+  box-shadow:none !important;
+  padding:0 !important;
+  max-width:980px !important;
+  margin:0 auto !important;
+}
+#study-timer .study-timer-card > .card-head{
+  display:none !important;
+}
+#study-timer .study-timer-wrap{
+  position:relative !important;
+  min-height:690px !important;
+  display:flex !important;
+  flex-direction:column !important;
+  align-items:center !important;
+  justify-content:center !important;
+  padding:72px 20px 20px !important;
+  box-sizing:border-box !important;
+}
+#study-timer .study-timer-mode{
+  order:1 !important;
+  margin-top:10px !important;
+  margin-bottom:6px !important;
+  font-size:13px !important;
+  font-weight:700 !important;
+  letter-spacing:.26em !important;
+  text-transform:uppercase !important;
+  color:#3d393b !important;
+}
+#study-timer .study-timer-display{
+  order:2 !important;
+  font-size:clamp(72px,9vw,128px) !important;
+  line-height:.95 !important;
+  font-weight:500 !important;
+  letter-spacing:-.055em !important;
+  color:#343234 !important;
+  margin:4px 0 8px !important;
+  text-shadow:none !important;
+}
+#study-timer .study-timer-status{
+  order:3 !important;
+  font-size:13px !important;
+  letter-spacing:.22em !important;
+  text-transform:uppercase !important;
+  color:#514b4e !important;
+  margin-bottom:20px !important;
+}
+#study-timer .study-timer-actions{
+  order:4 !important;
+  display:flex !important;
+  align-items:flex-start !important;
+  justify-content:center !important;
+  gap:24px !important;
+  margin:0 0 18px !important;
+}
+#study-timer .study-timer-actions .btn{
+  min-width:112px !important;
+  border-radius:999px !important;
+  border:1px solid rgba(70,55,60,.15) !important;
+  background:rgba(255,255,255,.62) !important;
+  color:#343234 !important;
+  box-shadow:none !important;
+}
+#study-timer .study-timer-actions .btn:first-child{
+  background:#d99ba6 !important;
+  color:#fff !important;
+  border-color:#d99ba6 !important;
+  min-width:150px !important;
+}
+#study-timer .study-timer-custom{
+  order:5 !important;
+  width:min(490px,92%) !important;
+  background:rgba(255,255,255,.62) !important;
+  border:1px solid rgba(255,255,255,.72) !important;
+  border-radius:18px !important;
+  padding:14px 18px !important;
+  box-sizing:border-box !important;
+  margin-top:4px !important;
+}
+#study-timer .study-timer-custom-input{
+  display:flex !important;
+  align-items:center !important;
+  gap:10px !important;
+}
+#study-timer .study-timer-custom label{
+  display:block !important;
+  margin:0 0 7px !important;
+  font-size:12px !important;
+  font-weight:800 !important;
+  color:#3f393c !important;
+}
+#study-timer #studyTimerMinutes{
+  flex:1 1 auto !important;
+  min-width:0 !important;
+  height:42px !important;
+  border:1px solid rgba(70,55,60,.15) !important;
+  border-radius:12px !important;
+  background:rgba(255,255,255,.82) !important;
+  color:#343234 !important;
+  font-size:15px !important;
+  padding:8px 12px !important;
+  box-sizing:border-box !important;
+}
+#study-timer .study-timer-custom-input .btn{
+  flex:0 0 auto !important;
+  height:42px !important;
+  border-radius:12px !important;
+  background:#d99ba6 !important;
+  border-color:#d99ba6 !important;
+  color:#fff !important;
+}
+#study-timer .study-timer-stats{
+  order:6 !important;
+  display:grid !important;
+  grid-template-columns:repeat(2,minmax(150px,230px)) !important;
+  gap:14px !important;
+  margin-top:18px !important;
+}
+#study-timer .study-timer-stats > div{
+  background:rgba(255,255,255,.58) !important;
+  border:1px solid rgba(255,255,255,.7) !important;
+  border-radius:15px !important;
+  padding:12px 18px !important;
+  text-align:center !important;
+}
+#study-timer .study-timer-stats span{
+  display:block !important;
+  font-size:11px !important;
+  color:#595256 !important;
+}
+#study-timer .study-timer-stats strong{
+  display:block !important;
+  margin-top:3px !important;
+  font-size:20px !important;
+  color:#343234 !important;
+}
+@media(max-width:700px){
+  #study-timer{padding:14px !important;min-height:calc(100vh - 120px) !important;}
+  #study-timer::before{min-width:380px !important;min-height:380px !important;}
+  #study-timer::after{top:calc(50% - 250px) !important;font-size:12px !important;}
+  #study-timer .study-timer-wrap{min-height:620px !important;padding-top:60px !important;}
+  #study-timer .study-timer-actions{gap:8px !important;}
+  #study-timer .study-timer-actions .btn{min-width:92px !important;}
+  #study-timer .study-timer-actions .btn:first-child{min-width:120px !important;}
+  #study-timer .study-timer-stats{grid-template-columns:1fr 1fr !important;width:92% !important;}
+}
+</style>
+
 </head>
 <body>
 <div class="app">
