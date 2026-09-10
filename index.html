@@ -3650,8 +3650,37 @@ aside.sidebar{
 <link rel="icon" type="image/png" sizes="512x512" href="./icons/icon-512.png">
 <link rel="apple-touch-icon" sizes="192x192" href="./icons/icon-192.png">
 
+<style id="msp-v257-link-sync-badge">
+/* V257: Uni-Webseiten use the same cloud data object as the rest of the planner. */
+</style>
+<style id="msp-account-v258">
+.account-clean{max-width:620px;margin:0 auto}.account-status{display:flex;gap:11px;align-items:flex-start;padding:13px 14px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.38)}.account-status.is-on{background:rgba(201,143,156,.10)}.account-dot{width:9px;height:9px;border-radius:50%;background:#b9aaa5;margin-top:6px;flex:0 0 auto}.account-status.is-on .account-dot{background:#7ca77f}.account-small{font-size:11px;line-height:1.4}.account-actions{margin-top:8px}.account-login{margin-top:12px}.account-or{display:flex;align-items:center;gap:8px;margin:10px 0;color:var(--muted);font-size:10px}.account-or span{height:1px;background:var(--line);flex:1}.account-login-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}.account-login-grid select{grid-column:1/-1}.account-services{display:grid;gap:7px;margin-top:14px}.account-service{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:12px}.account-service .compact{padding:7px 10px;font-size:11px}.account-note{font-size:10px;color:var(--muted);margin-top:10px;line-height:1.45}.account-advanced{margin-top:14px;border-top:1px solid var(--line);padding-top:10px}.account-advanced summary{cursor:pointer;font-size:11px;color:var(--muted)}.account-advanced textarea{width:100%;box-sizing:border-box;min-height:100px;margin-top:6px}@media(max-width:600px){.account-login-grid{grid-template-columns:1fr}.account-login-grid select{grid-column:auto}.account-service{align-items:flex-start}.account-service .compact{flex:0 0 auto}}
+</style>
+
+<style id="msp-sync-v259-css">
+.msp-live-sync-status{
+  display:flex;align-items:center;gap:8px;
+  margin:8px 0 12px;padding:8px 10px;
+  border-radius:10px;border:1px solid rgba(0,0,0,.08);
+  background:rgba(255,255,255,.55);font-size:12px;
+}
+.msp-live-sync-dot{width:9px;height:9px;border-radius:50%;flex:0 0 9px;background:#999;}
+.msp-live-sync-status[data-state="connected"] .msp-live-sync-dot{background:#4b9b69;}
+.msp-live-sync-status[data-state="syncing"] .msp-live-sync-dot{background:#d29a3a;}
+.msp-live-sync-status[data-state="offline"] .msp-live-sync-dot{background:#b85b5b;}
+.msp-live-sync-main{font-weight:600;}
+.msp-live-sync-detail{opacity:.7;margin-left:auto;}
+</style>
+
 </head>
 <body>
+
+<div id="mspLiveSyncStatus" class="msp-live-sync-status" data-state="offline">
+  <span class="msp-live-sync-dot"></span>
+  <span class="msp-live-sync-main">Cloud: nicht verbunden</span>
+  <span class="msp-live-sync-detail"></span>
+</div>
+
 <div class="app">
 <aside class="sidebar">
  <div class="logo">🎓 My Studyplaner ♡</div><div class="tagline">Kleine Schritte. Große Ziele.</div>
@@ -4019,6 +4048,7 @@ data.gradeModules=Array.isArray(data.gradeModules)?data.gradeModules:[];
 data.fileFolders=Array.isArray(data.fileFolders)?data.fileFolders:[];
 data.files=Array.isArray(data.files)?data.files:[];
 data.grades=Array.isArray(data.grades)?data.grades:[];
+data.uniLinks=Array.isArray(data.uniLinks)?data.uniLinks:[];
 if(!Array.isArray(data.podcasts))data.podcasts=[];
 if(!Array.isArray(data.tasks))data.tasks=[];data.tasks.forEach(t=>{if(typeof t.deadline!=='string')t.deadline='';});
 let deadlineFilter='all',taskFilter='open',taskTimeFilter='all',taskSort='deadline',currentUser=null,fb=null,cloudEnabled=false,cloudUnsubscribe=null,calendarMonth=new Date(new Date().getFullYear(),new Date().getMonth(),1);
@@ -4027,7 +4057,8 @@ function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&l
 function saveLocal(){localStorage.setItem(KEY,JSON.stringify(data))}
 async function saveData(){
  saveLocal();
- if(cloudEnabled&&currentUser&&fb){try{await fb.db.collection('users').doc(currentUser.uid).set({data,updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true})}catch(e){console.warn(e)}}
+ if(cloudEnabled&&currentUser&&fb){try{await fb.db.collection('users').doc(currentUser.uid).set({data,updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true})
+   if(window.mspSetSyncStatus)window.mspSetSyncStatus('connected','Cloud: verbunden','Gerade synchronisiert');}catch(e){console.warn(e); if(window.mspSetSyncStatus)window.mspSetSyncStatus('offline','Cloud: Sync fehlgeschlagen','Wird erneut versucht');}}
 }
 function fmt(d){return new Date(d+'T12:00:00').toLocaleDateString('de-DE',{day:'2-digit',month:'short',year:'numeric'})}
 function dateBox(d){let x=new Date(d+'T12:00:00');return `<strong>${x.getDate()}</strong><span>${x.toLocaleDateString('de-DE',{month:'short'}).replace('.','').toUpperCase()}</span>`}
@@ -5078,7 +5109,7 @@ async function initCloud(){
       );
 
       const cloudLinks=Array.isArray(cloudData.uniLinks)?cloudData.uniLinks:[];
-      if(!cloudLinks.length&&localLinks.length)cloudData.uniLinks=localLinks;
+      cloudData.uniLinks=mergeById(cloudLinks,localLinks);
 
       data=cloudData;
       data.gradeModules=Array.isArray(data.gradeModules)?data.gradeModules:[];
@@ -5095,7 +5126,8 @@ async function initCloud(){
         Number.isFinite(Number(data.plantMinutes))?Number(data.plantMinutes):0,
         Number.isFinite(legacyPlant)?legacyPlant:0
       );
-      if(localLinks.length&&!data.uniLinks)data.uniLinks=localLinks;
+      data.uniLinks=Array.isArray(data.uniLinks)?data.uniLinks:[];
+      data.uniLinks=mergeById(data.uniLinks,localLinks);
       await saveData();
       renderAll();
      }
@@ -5136,6 +5168,16 @@ async function initCloud(){
         renderPlant();
        }
       }
+
+      // Uni-Webseiten are shared data too: update this device immediately when
+      // another device adds, edits, or deletes a link.
+      const remoteLinks=Array.isArray(remoteData.uniLinks)?remoteData.uniLinks:[];
+      const localLinksNow=Array.isArray(data.uniLinks)?data.uniLinks:[];
+      if(JSON.stringify(localLinksNow)!==JSON.stringify(remoteLinks)){
+       data.uniLinks=remoteLinks;
+       saveLocal();
+       if(typeof renderUniLinks==='function')renderUniLinks();
+      }
      },err=>console.warn('Cloud-Echtzeit-Sync:',err));
 
     }catch(e){console.warn('Cloud-Sync:',e)}
@@ -5153,40 +5195,20 @@ function updateCloudStatus(on,label){$('cloudStatus').innerHTML=`<span class="do
 
 function openCloud(){
  let cfg=getFirebaseConfig()||{};
- openModal('☁️ Konto & Synchronisierung',`<div class="note">My Studyplaner kann mit <b>Firebase</b> ein echtes Benutzerkonto, geräteübergreifende Synchronisierung und Cloud-Dateien nutzen. Dafür brauchst du ein kostenloses Firebase-Projekt. Die Konfiguration wird nur in deinem Browser gespeichert.</div>
- <div style="height:12px"></div>
- <div class="form-grid">
- <div class="wide"><label>E-Mail</label><button class="btn full" onclick="cloudGoogleAuth()">🔵 Mit Google anmelden</button>
-<div style="display:flex;align-items:center;gap:8px;margin:12px 0;color:var(--muted);font-size:11px">
-<span style="height:1px;background:var(--line);flex:1"></span><span>oder mit E-Mail</span><span style="height:1px;background:var(--line);flex:1"></span>
-</div>
-<input id="cEmail" type="email" placeholder="deine@email.de"></div>
- <div><label>Passwort</label><input id="cPassword" type="password" placeholder="mind. 6 Zeichen"></div>
- <div><label>Aktion</label><select id="cAction"><option value="login">Anmelden</option><option value="signup">Neues Konto erstellen</option></select></div>
- </div>
- <hr style="border:0;border-top:1px solid #3E3A2Fd5a;margin:17px 0">
- <h3>☁️ Firebase verbinden</h3><div class="muted" style="margin:4px 0 10px">Einmalig die Web-App-Konfiguration aus deinem Firebase-Projekt einfügen.</div>
- <textarea id="firebaseConfig" placeholder='{"apiKey":"...","authDomain":"...","projectId":"...","storageBucket":"...","messagingSenderId":"...","appId":"..."}' style="min-height:135px">${esc(JSON.stringify(cfg,null,2))}</textarea>
- <div style="display:flex;gap:7px;margin-top:9px"><button class="btn" onclick="saveFirebaseConfig()">☁️ Cloud aktivieren</button><button class="btn secondary" onclick="clearFirebaseConfig()">Konfiguration löschen</button></div>
- <div class="note" style="margin-top:12px">Firebase-Konsole → Authentication: E-Mail/Passwort aktivieren. Firestore Database und Storage anlegen. Für eine private Nutzung müssen die Firestore-/Storage-Regeln auf den angemeldeten Nutzer begrenzt werden.</div>
- <hr style="border:0;border-top:1px solid #3E3A2Fd5a;margin:17px 0">
- <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line)">
-<h3>📁 Google Drive</h3>
-<div class="muted" id="googleDriveStatus" style="margin:5px 0 10px">Nicht verbunden – beim ersten Upload wird einmalig nach Zugriff gefragt.</div>
-<button class="btn secondary" onclick="connectGoogleDrive()">📁 Google Drive verbinden</button>
-<div class="note" style="margin-top:8px">Dateien werden in deinem persönlichen Google Drive gespeichert und sind dadurch auf deinen Geräten verfügbar.</div>
-</div>
-<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line)">
-<h3>🤖 Gemini KI</h3>
-<div class="muted" id="geminiOAuthStatus" style="margin:5px 0 10px">Bereit – Gemini läuft über Firebase AI Logic.</div>
-<button class="btn secondary" onclick="connectGeminiGoogle()">🤖 Gemini testen</button>
-<div class="note" style="margin-top:8px">Kein Gemini-API-Schlüssel und kein separater Gemini-Login nötig. Die KI läuft über Firebase AI Logic.</div>
-</div>
-<h3>🗓️ Google Kalender</h3>
- <div class="muted" style="margin:4px 0 10px">Nur Termine mit der von dir ausgewählten Google-Kalenderfarbe werden in My Studyplaner übernommen.</div>
- <button class="btn" onclick="openGoogleCalendarSettings()">🗓️ Google Kalender einrichten</button>
+ const signed=!!(currentUser&&currentUser.email);
+ const cloudText=signed ? `Angemeldet als <b>${esc(currentUser.email)}</b>` : 'Noch nicht angemeldet';
+ openModal('☁️ Konto',`<div class="account-clean">
+   <div class="account-status ${signed?'is-on':''}"><span class="account-dot"></span><div><strong>${cloudText}</strong><div class="muted account-small">${signed?'Cloud-Synchronisierung aktiv · Daten werden automatisch gespeichert.':'Einmal anmelden, danach werden deine Studyplaner-Daten automatisch synchronisiert.'}</div></div></div>
+   ${signed ? `<div class="account-actions"><button class="btn secondary" onclick="cloudLogout();closeModal()">Abmelden</button></div>` : `<div class="account-login"><button class="btn full" onclick="cloudGoogleAuth()">🔵 Mit Google anmelden</button><div class="account-or"><span></span>oder<span></span></div><div class="account-login-grid"><input id="cEmail" type="email" placeholder="E-Mail"><input id="cPassword" type="password" placeholder="Passwort"><select id="cAction"><option value="login">Anmelden</option><option value="signup">Konto erstellen</option></select></div><button class="btn full" style="margin-top:8px" onclick="cloudEmailAuth()">☁️ Mit E-Mail anmelden</button></div>`}
+   <div class="account-services">
+     <div class="account-service"><div><b>📁 Google Drive</b><div class="muted account-small" id="googleDriveStatus">Nicht verbunden</div></div><button class="btn secondary compact" onclick="connectGoogleDrive()">Verbinden</button></div>
+     <div class="account-service"><div><b>🗓️ Google Kalender</b><div class="muted account-small" id="googleCalendarStatus">Noch nicht verbunden</div></div><button class="btn secondary compact" onclick="openGoogleCalendarSettings()">Einrichten</button></div>
+   </div>
+   <div class="account-note">Drive und Kalender brauchen jeweils nur einmal Zugriff pro Gerät. Gemini braucht keinen eigenen Login.</div>
+   <details class="account-advanced"><summary>⚙️ Erweiterte Firebase-Einstellungen</summary><div class="muted account-small" style="margin:8px 0">Nur nötig, wenn du eine eigene Firebase-Konfiguration ändern möchtest.</div><textarea id="firebaseConfig" placeholder='{"apiKey":"...","authDomain":"...","projectId":"...","storageBucket":"...","messagingSenderId":"...","appId":"..."}'>${esc(JSON.stringify(cfg,null,2))}</textarea><div style="display:flex;gap:7px;margin-top:8px"><button class="btn" onclick="saveFirebaseConfig()">Speichern</button><button class="btn secondary" onclick="clearFirebaseConfig()">Löschen</button></div></details>
  </div>`)
 }
+
 async function saveFirebaseConfig(){
  try{let cfg=JSON.parse($('firebaseConfig').value);if(!cfg.apiKey||!cfg.projectId)throw Error('apiKey und projectId fehlen.');localStorage.setItem('mystudyplaner_firebase_config',JSON.stringify(cfg));location.reload()}catch(e){alert('Ungültige Konfiguration: '+e.message)}
 }
@@ -6759,6 +6781,58 @@ function renderStudyTimer(){
       });
     });
   }
+})();
+</script>
+
+
+<script id="msp-sync-v259-js">
+(function(){
+  const statusId='mspLiveSyncStatus';
+  function el(){return document.getElementById(statusId);}
+  function setStatus(state, main, detail){
+    const e=el(); if(!e)return;
+    e.dataset.state=state;
+    const m=e.querySelector('.msp-live-sync-main');
+    const d=e.querySelector('.msp-live-sync-detail');
+    if(m)m.textContent=main;
+    if(d)d.textContent=detail||'';
+  }
+  function detect(){
+    const online=navigator.onLine!==false;
+    const user=window.currentUser;
+    const cloud=window.cloudEnabled;
+    if(!online){setStatus('offline','Cloud: offline','Wird automatisch nachgeholt');return;}
+    if(user && cloud){
+      setStatus('connected','Cloud: verbunden','Auto-Sync aktiv');
+    }else if(user){
+      setStatus('connected','Cloud: angemeldet','Auto-Sync wird vorbereitet');
+    }else{
+      setStatus('offline','Cloud: nicht verbunden','Bitte anmelden');
+    }
+  }
+  function moveIntoAccount(){
+    const s=el(); if(!s)return;
+    if(s.dataset.moved==='1')return;
+    const candidates=[
+      document.getElementById('accountModal'),
+      document.getElementById('kontoModal'),
+      document.getElementById('account'),
+      document.getElementById('konto')
+    ];
+    const target=candidates.find(x=>x);
+    if(target){
+      target.prepend(s);
+      s.dataset.moved='1';
+    }
+  }
+  window.mspSetSyncStatus=setStatus;
+  window.addEventListener('online',()=>setStatus('connected','Cloud: online','Verbindung wird geprüft…'));
+  window.addEventListener('offline',()=>setStatus('offline','Cloud: offline','Wird automatisch nachgeholt'));
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden){detect();}});
+  setInterval(detect,5000);
+  if(document.readyState==='loading'){
+    document.addEventListener('DOMContentLoaded',()=>{moveIntoAccount();detect();});
+  }else{moveIntoAccount();detect();}
 })();
 </script>
 
