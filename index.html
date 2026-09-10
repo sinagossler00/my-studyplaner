@@ -3672,12 +3672,30 @@ aside.sidebar{
 .msp-live-sync-detail{opacity:.7;margin-left:auto;}
 </style>
 
+
+<style id="msp-file-pin-v261-css">
+.msp-file-pin-btn{
+  border:0!important;background:transparent!important;padding:4px 6px!important;
+  border-radius:8px!important;cursor:pointer!important;font-size:15px!important;
+  line-height:1!important;opacity:.48;transition:.15s ease;
+}
+.msp-file-pin-btn:hover{opacity:1;transform:translateY(-1px);}
+.msp-file-pin-btn.is-pinned{opacity:1;}
+.msp-file-pinned{
+  box-shadow:0 0 0 1px rgba(201,143,156,.28),0 4px 14px rgba(80,50,55,.08)!important;
+}
+.msp-file-pinned-badge{
+  display:inline-flex;align-items:center;gap:4px;margin-left:6px;
+  font-size:11px;opacity:.7;
+}
+</style>
+
 </head>
 <body>
 
 <div id="mspLiveSyncStatus" class="msp-live-sync-status" data-state="offline">
   <span class="msp-live-sync-dot"></span>
-  <span class="msp-live-sync-main">Cloud: nicht verbunden</span>
+  <span class="msp-live-sync-main">Cloud: wird geprüft…</span>
   <span class="msp-live-sync-detail"></span>
 </div>
 
@@ -6785,54 +6803,183 @@ function renderStudyTimer(){
 </script>
 
 
-<script id="msp-sync-v259-js">
+<script id="msp-sync-v260-js">
 (function(){
   const statusId='mspLiveSyncStatus';
-  function el(){return document.getElementById(statusId);}
+
   function setStatus(state, main, detail){
-    const e=el(); if(!e)return;
+    const e=document.getElementById(statusId); if(!e)return;
     e.dataset.state=state;
     const m=e.querySelector('.msp-live-sync-main');
     const d=e.querySelector('.msp-live-sync-detail');
     if(m)m.textContent=main;
     if(d)d.textContent=detail||'';
   }
-  function detect(){
-    const online=navigator.onLine!==false;
-    const user=window.currentUser;
-    const cloud=window.cloudEnabled;
-    if(!online){setStatus('offline','Cloud: offline','Wird automatisch nachgeholt');return;}
+
+  function getAuthUser(){
+    try{
+      if(window.currentUser) return window.currentUser;
+      if(window.fb && window.fb.auth && window.fb.auth().currentUser) return window.fb.auth().currentUser;
+    }catch(e){}
+    return null;
+  }
+
+  function checkCloud(){
+    if(navigator.onLine===false){
+      setStatus('offline','Cloud: offline','Sync wird automatisch nachgeholt');
+      return false;
+    }
+    const user=getAuthUser();
+    const cloud=window.cloudEnabled!==false;
     if(user && cloud){
-      setStatus('connected','Cloud: verbunden','Auto-Sync aktiv');
-    }else if(user){
-      setStatus('connected','Cloud: angemeldet','Auto-Sync wird vorbereitet');
-    }else{
-      setStatus('offline','Cloud: nicht verbunden','Bitte anmelden');
+      setStatus('connected','Cloud: verbunden','Automatische Synchronisierung aktiv');
+      return true;
     }
-  }
-  function moveIntoAccount(){
-    const s=el(); if(!s)return;
-    if(s.dataset.moved==='1')return;
-    const candidates=[
-      document.getElementById('accountModal'),
-      document.getElementById('kontoModal'),
-      document.getElementById('account'),
-      document.getElementById('konto')
-    ];
-    const target=candidates.find(x=>x);
-    if(target){
-      target.prepend(s);
-      s.dataset.moved='1';
+    if(user){
+      setStatus('connected','Cloud: verbunden','Angemeldet · Sync aktiv');
+      return true;
     }
+    setStatus('offline','Cloud: nicht verbunden','Bitte anmelden');
+    return false;
   }
+
   window.mspSetSyncStatus=setStatus;
-  window.addEventListener('online',()=>setStatus('connected','Cloud: online','Verbindung wird geprüft…'));
-  window.addEventListener('offline',()=>setStatus('offline','Cloud: offline','Wird automatisch nachgeholt'));
-  document.addEventListener('visibilitychange',()=>{if(!document.hidden){detect();}});
-  setInterval(detect,5000);
-  if(document.readyState==='loading'){
-    document.addEventListener('DOMContentLoaded',()=>{moveIntoAccount();detect();});
-  }else{moveIntoAccount();detect();}
+  window.mspRefreshSyncStatus=checkCloud;
+
+  window.addEventListener('online',function(){
+    checkCloud();
+    // Give the app a moment to reconnect, then refresh data/save if available.
+    setTimeout(function(){
+      checkCloud();
+      try{ if(typeof saveData==='function') saveData(); }catch(e){}
+    },1200);
+  });
+  window.addEventListener('offline',function(){
+    setStatus('offline','Cloud: offline','Sync wird automatisch nachgeholt');
+  });
+  document.addEventListener('visibilitychange',function(){
+    if(!document.hidden) checkCloud();
+  });
+
+  // Firebase auth is the authoritative source for whether the user is actually signed in.
+  function bindFirebaseAuth(){
+    try{
+      if(window.fb && window.fb.auth){
+        window.fb.auth().onAuthStateChanged(function(user){
+          if(user){
+            window.currentUser=user;
+            window.cloudEnabled=true;
+            setStatus('connected','Cloud: verbunden','Automatische Synchronisierung aktiv');
+          }else{
+            setStatus('offline','Cloud: nicht verbunden','Bitte anmelden');
+          }
+        });
+        return true;
+      }
+    }catch(e){}
+    return false;
+  }
+
+  function init(){
+    bindFirebaseAuth();
+    checkCloud();
+    setInterval(checkCloud,3000);
+  }
+
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',init);
+  else init();
+})();
+</script>
+
+
+<script id="msp-file-pin-v261-js">
+(function(){
+  const KEY='msp_pinned_file_items_v1';
+
+  function getPins(){
+    try{return JSON.parse(localStorage.getItem(KEY)||'[]');}catch(e){return [];}
+  }
+  function setPins(a){localStorage.setItem(KEY,JSON.stringify([...new Set(a)]));}
+  function isPinned(id){return !!id && getPins().includes(String(id));}
+  function togglePinned(id){
+    id=String(id);
+    const pins=getPins();
+    const i=pins.indexOf(id);
+    if(i>=0)pins.splice(i,1);else pins.unshift(id);
+    setPins(pins);
+    if(typeof window.renderFiles==='function')window.renderFiles();
+    else if(typeof window.renderFileManager==='function')window.renderFileManager();
+    else if(typeof window.renderFileExplorer==='function')window.renderFileExplorer();
+    else if(typeof window.renderFilesPage==='function')window.renderFilesPage();
+  }
+  window.mspFileIsPinned=isPinned;
+  window.mspToggleFilePinned=togglePinned;
+  window.mspPinnedFileIds=getPins;
+
+  // Expose a stable sorting helper for the existing file renderer.
+  window.mspSortPinnedFiles=function(items){
+    if(!Array.isArray(items))return items;
+    const pins=getPins();
+    const rank=new Map(pins.map((id,i)=>[String(id),i]));
+    return items.slice().sort(function(a,b){
+      const aid=String(a?.id ?? a?.fileId ?? a?.uid ?? '');
+      const bid=String(b?.id ?? b?.fileId ?? b?.uid ?? '');
+      const ap=rank.has(aid), bp=rank.has(bid);
+      if(ap&&!bp)return -1;
+      if(!ap&&bp)return 1;
+      if(ap&&bp)return rank.get(aid)-rank.get(bid);
+      return 0;
+    });
+  };
+
+  window.mspCreatePinButton=function(id){
+    const b=document.createElement('button');
+    b.type='button';
+    b.className='msp-file-pin-btn'+(isPinned(id)?' is-pinned':'');
+    b.title=isPinned(id)?'Anheftung lösen':'Ganz oben anheften';
+    b.setAttribute('aria-label',b.title);
+    b.textContent=isPinned(id)?'📌':'📍';
+    b.addEventListener('click',function(e){
+      e.preventDefault();e.stopPropagation();togglePinned(id);
+    });
+    return b;
+  };
+})();
+</script>
+
+
+<script id="msp-file-pin-v261-delegate">
+(function(){
+  function findId(el){
+    return el.dataset.id || el.dataset.fileId || el.dataset.folderId ||
+           el.getAttribute('data-id') || el.getAttribute('data-file-id') ||
+           el.getAttribute('data-folder-id');
+  }
+  function addButtons(){
+    document.querySelectorAll('[data-id],[data-file-id],[data-folder-id]').forEach(function(card){
+      if(card.closest('#mspLiveSyncStatus'))return;
+      if(card.querySelector(':scope > .msp-file-pin-btn'))return;
+      const id=findId(card);
+      if(!id)return;
+      // Restrict to elements that look like file-manager entries.
+      const txt=(card.className||'')+' '+(card.id||'');
+      const looksFile=/file|folder|drive|explor/i.test(txt) ||
+        card.matches('.file-item,.folder-item,.file-card,.folder-card');
+      if(!looksFile)return;
+      const btn=window.mspCreatePinButton(id);
+      const target=card.querySelector('.file-actions,.folder-actions,.actions,.card-actions,.item-actions');
+      if(target)target.appendChild(btn);
+      else card.appendChild(btn);
+      if(window.mspFileIsPinned(id))card.classList.add('msp-file-pinned');
+    });
+  }
+  const obs=new MutationObserver(function(){addButtons();});
+  function init(){
+    addButtons();
+    obs.observe(document.body,{childList:true,subtree:true});
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);
+  else init();
 })();
 </script>
 
