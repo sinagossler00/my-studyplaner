@@ -3716,7 +3716,7 @@ aside.sidebar{
 </script>
 
 
-<style id="msp-v273-reauth-fix">
+<style id="msp-v274-reauth-fix">
 .google-reauth-overlay{
   pointer-events:auto!important;
   cursor:default!important;
@@ -5512,7 +5512,7 @@ function saveGoogleCalendarConfig(cfg){
    einer erfolgreichen Google-Initialisierung aktualisiert wird. */
 function updateGoogleCalendarStatus(count){
  const cfg=getGoogleCalendarConfig()||{};
- const connected=!!googleCalendarAccessToken;
+ const connected=!!(googleCalendarAccessToken||googleServicesAccessToken);
  const text=connected
    ? (typeof count==='number'
       ? `Verbunden · ${count} Termin${count===1?'':'e'} übernommen.`
@@ -7138,7 +7138,7 @@ function renderStudyTimer(){
 </script>
 
 
-<style id="msp-font-v273-final">
+<style id="msp-font-v274-final">
 html,body,body *{
   font-family:"DM Sans",Arial,sans-serif !important;
 }
@@ -7162,7 +7162,7 @@ body *::before,body *::after{
 </div>
 
 
-<script id="msp-v273-visibility">
+<script id="msp-v274-visibility">
 document.addEventListener('visibilitychange',()=>{
  if(!document.hidden){
   const cfg=getGoogleCalendarConfig()||{};
