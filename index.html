@@ -3672,6 +3672,49 @@ aside.sidebar{
 .msp-live-sync-detail{opacity:.7;margin-left:auto;}
 </style>
 
+
+<style id="msp-file-pin-clean-css">
+.file-pin-btn{
+  border:0!important;background:transparent!important;
+  padding:5px 7px!important;border-radius:8px!important;
+  cursor:pointer!important;font-size:15px!important;line-height:1!important;
+  opacity:.45;transition:opacity .15s ease,transform .15s ease;
+}
+.file-pin-btn:hover,.file-pin-btn.is-pinned{opacity:1;}
+.file-pin-btn:hover{transform:translateY(-1px);}
+.file-pinned-row{
+  background:rgba(201,143,156,.075)!important;
+}
+</style>
+
+
+<script id="msp-file-pin-clean-js">
+(function(){
+  function ensurePins(){
+    if(!Array.isArray(data.pinnedFileItems)) data.pinnedFileItems=[];
+    return data.pinnedFileItems;
+  }
+  function key(type,id){ return type+':'+String(id); }
+  window.isFileItemPinned=function(type,id){
+    return ensurePins().includes(key(type,id));
+  };
+  window.toggleFileItemPin=async function(type,id){
+    const k=key(type,id), pins=ensurePins(), i=pins.indexOf(k);
+    if(i>=0) pins.splice(i,1); else pins.push(k);
+    await saveData();
+    renderFiles();
+  };
+  window.sortPinnedFileItems=function(items,type){
+    const pins=ensurePins();
+    return items.slice().sort(function(a,b){
+      const ap=pins.includes(key(type,a.id)), bp=pins.includes(key(type,b.id));
+      if(ap!==bp)return ap?-1:1;
+      return 0;
+    });
+};
+})();
+</script>
+
 </head>
 <body>
 
@@ -4292,7 +4335,8 @@ function fileFolderSelect(f){
 
 function renderExplorerFolder(folder){
  const count=(data.files||[]).filter(f=>String(f.folderId)===String(folder.id)).length;
- return `<div class="file-explorer-row folder-row" role="button" tabindex="0" data-folder-id="${esc(folder.id)}"
+ const pinned=window.isFileItemPinned&&window.isFileItemPinned('folder',folder.id);
+ return `<div class="file-explorer-row folder-row${pinned?' file-pinned-row':''}" role="button" tabindex="0" data-folder-id="${esc(folder.id)}"
    ondragover="fileDragOver(event,this)"
    ondragleave="fileDragLeave(this)"
    ondrop="fileDropOnFolder(event,'${folder.id}',this)"
@@ -4301,15 +4345,20 @@ function renderExplorerFolder(folder){
    <div class="explorer-name"><span class="explorer-icon">📁</span><strong>${esc(folder.name)}</strong></div>
    <div class="explorer-type">Ordner</div>
    <div class="explorer-size">${count} Dateien</div>
-   <div class="explorer-actions">
+   <div class="explorer-actions" onclick="event.stopPropagation()">
+     <button class="file-pin-btn${pinned?' is-pinned':''}" type="button"
+       title="${pinned?'Anheftung lösen':'Ordner ganz oben anheften'}"
+       aria-label="${pinned?'Anheftung lösen':'Ordner ganz oben anheften'}"
+       onclick="toggleFileItemPin('folder','${folder.id}')">${pinned?'📌':'📍'}</button>
      <button class="icon-action danger" type="button" title="Ordner löschen"
-       onclick="event.stopPropagation();deleteFileFolder('${folder.id}')">🗑️</button>
+       onclick="deleteFileFolder('${folder.id}')">🗑️</button>
    </div>
  </div>`;
 }
 
 function renderExplorerFile(f){
- return `<div class="file-explorer-row file-row" draggable="true" data-file-id="${esc(f.id)}"
+ const pinned=window.isFileItemPinned&&window.isFileItemPinned('file',f.id);
+ return `<div class="file-explorer-row file-row${pinned?' file-pinned-row':''}" draggable="true" data-file-id="${esc(f.id)}"
    ondragstart="fileDragStart(event,'${f.id}')"
    ondragend="fileDragEnd(event)">
    <div class="explorer-name file-open-name" onclick="openFile('${f.id}')" title="Datei öffnen">
@@ -4318,6 +4367,10 @@ function renderExplorerFile(f){
    <div class="explorer-type">${esc(f.type||'Datei')}</div>
    <div class="explorer-size">${Math.max(1,Math.round((f.size||0)/1024))} KB</div>
    <div class="explorer-actions" onclick="event.stopPropagation()">
+     <button class="file-pin-btn${pinned?' is-pinned':''}" type="button"
+       title="${pinned?'Anheftung lösen':'Datei ganz oben anheften'}"
+       aria-label="${pinned?'Anheftung lösen':'Datei ganz oben anheften'}"
+       onclick="toggleFileItemPin('file','${f.id}')">${pinned?'📌':'📍'}</button>
      <button class="icon-action" type="button" title="Datei öffnen" onclick="openFile('${f.id}')">↗</button>
      <button class="icon-action danger" type="button" title="Datei löschen" onclick="deleteFile('${f.id}')">🗑️</button>
    </div>
@@ -4416,8 +4469,10 @@ function renderFiles(){
  const list=$('fileList');
  if(!list)return;
 
- const folderRows=currentFolder ? '' : folders.map(renderExplorerFolder).join('');
- const fileRows=shownFiles.map(renderExplorerFile).join('');
+ const sortedFolders=currentFolder ? [] : sortPinnedFileItems(folders,'folder');
+ const sortedFiles=sortPinnedFileItems(shownFiles,'file');
+ const folderRows=currentFolder ? '' : sortedFolders.map(renderExplorerFolder).join('');
+ const fileRows=sortedFiles.map(renderExplorerFile).join('');
  list.innerHTML=(folderRows+fileRows) || `<div class="file-explorer-empty">Dieser Ordner ist leer.<br><span>Erstelle einen Ordner oder lade eine Datei hoch.</span></div>`;
 
  if($('homeFiles')){
