@@ -3690,6 +3690,79 @@ aside.sidebar{
 }
 </style>
 
+
+<style id="msp-v262-fixes-css">
+.msp-file-pin-btn{
+  border:0!important;background:transparent!important;padding:4px 6px!important;
+  border-radius:8px!important;cursor:pointer!important;font-size:15px!important;
+  line-height:1!important;opacity:.55;transition:.15s ease;
+}
+.msp-file-pin-btn:hover,.msp-file-pin-btn.is-pinned{opacity:1;}
+.msp-file-pinned{order:-100!important;}
+.msp-cloud-auth-state{
+  display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:600;
+}
+.msp-cloud-auth-dot{width:8px;height:8px;border-radius:50%;background:#b85b5b;}
+.msp-cloud-auth-state.connected .msp-cloud-auth-dot{background:#4b9b69;}
+</style>
+
+
+<script id="msp-v262-core">
+(function(){
+  const KEY='mspPinnedItems';
+  function pins(){
+    if(!window.data) return {};
+    if(!data.mspPinnedItems || typeof data.mspPinnedItems!=='object') data.mspPinnedItems={};
+    return data.mspPinnedItems;
+  }
+  function pinKey(item){
+    if(!item)return '';
+    return String(item.id || item.fileId || item.folderId || item.driveId || item.name || '');
+  }
+  window.mspPinKey=pinKey;
+  window.mspIsPinned=function(item){
+    const k=pinKey(item); return !!(k && pins()[k]);
+  };
+  window.mspTogglePin=function(item){
+    const k=pinKey(item); if(!k)return;
+    const p=pins();
+    if(p[k]) delete p[k]; else p[k]=Date.now();
+    try{localStorage.setItem(KEY,JSON.stringify(p));}catch(e){}
+    try{ if(typeof saveData==='function') saveData(); }catch(e){}
+    // Re-render using whichever file page renderer exists.
+    ['renderFiles','renderFileManager','renderFileExplorer','renderFilesPage','showFiles'].some(function(fn){
+      if(typeof window[fn]==='function'){ try{window[fn]();}catch(e){} return true; }
+      return false;
+    });
+    // Fallback: reload the current file list without reloading the whole app.
+    setTimeout(function(){window.mspApplyPinnedOrder&&window.mspApplyPinnedOrder();},30);
+  };
+  window.mspApplyPinnedOrder=function(){
+    const p=pins();
+    const containers=document.querySelectorAll(
+      '.file-list,.files-list,.file-grid,.files-grid,.folder-list,.items-list,[data-files-container]'
+    );
+    containers.forEach(function(container){
+      const children=Array.from(container.children);
+      children.sort(function(a,b){
+        const ak=a.dataset.fileId||a.dataset.folderId||a.dataset.id||'';
+        const bk=b.dataset.fileId||b.dataset.folderId||b.dataset.id||'';
+        const ap=!!p[ak], bp=!!p[bk];
+        return ap===bp ? (ap ? Number(p[ak])-Number(p[bk]) : 0) : (ap?-1:1);
+      });
+      children.forEach(c=>container.appendChild(c));
+    });
+  };
+})();
+</script>
+
+
+<style id="msp-v263-google-css">
+.msp-google-persist-note{
+  font-size:11px;opacity:.65;margin-top:5px;line-height:1.35;
+}
+</style>
+
 </head>
 <body>
 
@@ -6892,92 +6965,176 @@ function renderStudyTimer(){
 </script>
 
 
-<script id="msp-file-pin-v261-js">
+
+<script id="msp-v262-auth">
 (function(){
-  const KEY='msp_pinned_file_items_v1';
-
-  function getPins(){
-    try{return JSON.parse(localStorage.getItem(KEY)||'[]');}catch(e){return [];}
-  }
-  function setPins(a){localStorage.setItem(KEY,JSON.stringify([...new Set(a)]));}
-  function isPinned(id){return !!id && getPins().includes(String(id));}
-  function togglePinned(id){
-    id=String(id);
-    const pins=getPins();
-    const i=pins.indexOf(id);
-    if(i>=0)pins.splice(i,1);else pins.unshift(id);
-    setPins(pins);
-    if(typeof window.renderFiles==='function')window.renderFiles();
-    else if(typeof window.renderFileManager==='function')window.renderFileManager();
-    else if(typeof window.renderFileExplorer==='function')window.renderFileExplorer();
-    else if(typeof window.renderFilesPage==='function')window.renderFilesPage();
-  }
-  window.mspFileIsPinned=isPinned;
-  window.mspToggleFilePinned=togglePinned;
-  window.mspPinnedFileIds=getPins;
-
-  // Expose a stable sorting helper for the existing file renderer.
-  window.mspSortPinnedFiles=function(items){
-    if(!Array.isArray(items))return items;
-    const pins=getPins();
-    const rank=new Map(pins.map((id,i)=>[String(id),i]));
-    return items.slice().sort(function(a,b){
-      const aid=String(a?.id ?? a?.fileId ?? a?.uid ?? '');
-      const bid=String(b?.id ?? b?.fileId ?? b?.uid ?? '');
-      const ap=rank.has(aid), bp=rank.has(bid);
-      if(ap&&!bp)return -1;
-      if(!ap&&bp)return 1;
-      if(ap&&bp)return rank.get(aid)-rank.get(bid);
-      return 0;
+  function update(user){
+    const connected=!!user;
+    const text=connected ? 'Cloud: verbunden' : 'Cloud: nicht verbunden';
+    document.querySelectorAll(
+      '#mspLiveSyncStatus .msp-live-sync-main,'+
+      '#cloudStatus,#cloudConnectionStatus,#firebaseStatus,#accountCloudStatus'
+    ).forEach(function(e){e.textContent=text;});
+    document.querySelectorAll('.msp-cloud-auth-state').forEach(function(e){
+      e.classList.toggle('connected',connected);
+      const t=e.querySelector('.msp-cloud-auth-text');
+      if(t)t.textContent=text;
     });
-  };
-
-  window.mspCreatePinButton=function(id){
-    const b=document.createElement('button');
-    b.type='button';
-    b.className='msp-file-pin-btn'+(isPinned(id)?' is-pinned':'');
-    b.title=isPinned(id)?'Anheftung lösen':'Ganz oben anheften';
-    b.setAttribute('aria-label',b.title);
-    b.textContent=isPinned(id)?'📌':'📍';
-    b.addEventListener('click',function(e){
-      e.preventDefault();e.stopPropagation();togglePinned(id);
-    });
-    return b;
-  };
+  }
+  function bind(){
+    try{
+      if(window.fb && window.fb.auth){
+        window.fb.auth().onAuthStateChanged(function(user){
+          window.currentUser=user||null;
+          window.cloudEnabled=!!user;
+          update(user);
+        });
+        update(window.fb.auth().currentUser);
+        return true;
+      }
+    }catch(e){}
+    return false;
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',bind);
+  else bind();
+  setInterval(function(){
+    try{
+      const u=window.fb&&window.fb.auth ? window.fb.auth().currentUser : window.currentUser;
+      update(u);
+    }catch(e){}
+  },2000);
 })();
 </script>
 
 
-<script id="msp-file-pin-v261-delegate">
+<script id="msp-v262-pin-ui">
 (function(){
-  function findId(el){
-    return el.dataset.id || el.dataset.fileId || el.dataset.folderId ||
-           el.getAttribute('data-id') || el.getAttribute('data-file-id') ||
-           el.getAttribute('data-folder-id');
-  }
-  function addButtons(){
-    document.querySelectorAll('[data-id],[data-file-id],[data-folder-id]').forEach(function(card){
-      if(card.closest('#mspLiveSyncStatus'))return;
-      if(card.querySelector(':scope > .msp-file-pin-btn'))return;
-      const id=findId(card);
+  function decorate(){
+    document.querySelectorAll('[data-file-id],[data-folder-id]').forEach(function(card){
+      if(card.querySelector('.msp-file-pin-btn'))return;
+      const id=card.dataset.fileId||card.dataset.folderId;
       if(!id)return;
-      // Restrict to elements that look like file-manager entries.
-      const txt=(card.className||'')+' '+(card.id||'');
-      const looksFile=/file|folder|drive|explor/i.test(txt) ||
-        card.matches('.file-item,.folder-item,.file-card,.folder-card');
-      if(!looksFile)return;
-      const btn=window.mspCreatePinButton(id);
-      const target=card.querySelector('.file-actions,.folder-actions,.actions,.card-actions,.item-actions');
-      if(target)target.appendChild(btn);
-      else card.appendChild(btn);
-      if(window.mspFileIsPinned(id))card.classList.add('msp-file-pinned');
+      const isFolder=!!card.dataset.folderId;
+      const item={id:id,fileId:isFolder?'':id,folderId:isFolder?id:''};
+      const btn=document.createElement('button');
+      btn.type='button';
+      btn.className='msp-file-pin-btn'+(window.mspIsPinned&&mspIsPinned(item)?' is-pinned':'');
+      btn.textContent=(window.mspIsPinned&&mspIsPinned(item))?'📌':'📍';
+      btn.title=(window.mspIsPinned&&mspIsPinned(item))?'Anheftung lösen':'Ganz oben anheften';
+      btn.setAttribute('aria-label',btn.title);
+      btn.addEventListener('click',function(e){
+        e.preventDefault();e.stopPropagation();
+        window.mspTogglePin&&mspTogglePin(item);
+      });
+      const actions=card.querySelector('.file-actions,.folder-actions,.actions,.card-actions,.item-actions');
+      (actions||card).appendChild(btn);
+      if(window.mspIsPinned&&mspIsPinned(item))card.classList.add('msp-file-pinned');
     });
+    window.mspApplyPinnedOrder&&window.mspApplyPinnedOrder();
   }
-  const obs=new MutationObserver(function(){addButtons();});
+  const obs=new MutationObserver(decorate);
+  function init(){decorate();obs.observe(document.body,{childList:true,subtree:true});}
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);
+  else init();
+})();
+</script>
+
+
+<script id="msp-v263-google-persist">
+(function(){
+  const DRIVE_KEY='msp_google_drive_config_v2';
+  const CAL_KEY='mystudyplaner_google_calendar_v2';
+
+  function safeSet(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
+  function safeGet(k){
+    try{return JSON.parse(localStorage.getItem(k)||'null');}catch(e){return null;}
+  }
+
+  // Keep the user's chosen Drive/Calendar setup in local storage and mirror
+  // non-secret configuration into the cloud data object when available.
+  window.mspPersistGoogleSetup=function(){
+    try{
+      if(window.data){
+        data.googleIntegrations=data.googleIntegrations||{};
+        data.googleIntegrations.drive=data.googleIntegrations.drive||{};
+        data.googleIntegrations.calendar=data.googleIntegrations.calendar||{};
+        if(typeof getGoogleDriveConfig==='function'){
+          const c=getGoogleDriveConfig()||{};
+          data.googleIntegrations.drive.clientId=c.clientId||'';
+        }
+        if(typeof getGoogleCalendarConfig==='function'){
+          const c=getGoogleCalendarConfig()||{};
+          data.googleIntegrations.calendar.clientId=c.clientId||'';
+        }
+      }
+      if(typeof saveData==='function') saveData();
+    }catch(e){}
+  };
+
+  // Restore config immediately after app initialization and after auth.
+  window.mspRestoreGoogleSetup=function(){
+    try{
+      const cd=window.data&&data.googleIntegrations;
+      if(cd&&cd.drive&&cd.drive.clientId && typeof setGoogleDriveConfig==='function'){
+        const current=typeof getGoogleDriveConfig==='function'?(getGoogleDriveConfig()||{}):{};
+        if(!current.clientId) setGoogleDriveConfig({clientId:cd.drive.clientId});
+      }
+      if(cd&&cd.calendar&&cd.calendar.clientId && typeof setGoogleCalendarConfig==='function'){
+        const current=typeof getGoogleCalendarConfig==='function'?(getGoogleCalendarConfig()||{}):{};
+        if(!current.clientId) setGoogleCalendarConfig({clientId:cd.calendar.clientId});
+      }
+    }catch(e){}
+  };
+
+  // Calendar: after the first successful OAuth grant, immediately import events
+  // and colors in one flow, instead of requiring a second manual setup action.
+  window.mspCalendarFirstLogin=function(){
+    try{
+      if(!window.googleCalendarAccessToken)return;
+      if(typeof updateGoogleCalendarStatus==='function') updateGoogleCalendarStatus();
+      if(typeof syncGoogleCalendar==='function'){
+        const r=syncGoogleCalendar();
+        if(r&&typeof r.then==='function')r.catch(()=>{});
+      }else if(typeof loadGoogleCalendarEvents==='function'){
+        const r=loadGoogleCalendarEvents();
+        if(r&&typeof r.then==='function')r.catch(()=>{});
+      }
+    }catch(e){}
+  };
+
+  // Drive: once connected, keep the configured client ID and automatically refresh
+  // the UI/config; do not wipe it when the OAuth token expires.
+  window.mspDriveConnected=function(){
+    try{
+      if(typeof getGoogleDriveConfig==='function'){
+        const c=getGoogleDriveConfig()||{};
+        if(c.clientId) safeSet(DRIVE_KEY,c);
+      }
+      window.mspPersistGoogleSetup();
+    }catch(e){}
+  };
+
+  // Observe Firebase auth becoming available; restore integration setup then.
+  function bindAuth(){
+    try{
+      if(window.fb&&window.fb.auth){
+        window.fb.auth().onAuthStateChanged(function(user){
+          if(user){
+            setTimeout(window.mspRestoreGoogleSetup,300);
+            setTimeout(window.mspRestoreGoogleSetup,1200);
+          }
+        });
+      }
+    }catch(e){}
+  }
+
   function init(){
-    addButtons();
-    obs.observe(document.body,{childList:true,subtree:true});
+    window.mspRestoreGoogleSetup();
+    bindAuth();
+    // Small delayed passes handle app code that initializes config after DOM ready.
+    [500,1500,3000].forEach(t=>setTimeout(window.mspRestoreGoogleSetup,t));
   }
+
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);
   else init();
 })();
