@@ -3716,7 +3716,7 @@ aside.sidebar{
 </script>
 
 
-<style id="msp-v275-no-auto-popup">
+<style id="msp-v274-reauth-fix">
 .google-reauth-overlay{
   pointer-events:auto!important;
   cursor:default!important;
@@ -5008,7 +5008,27 @@ let googleDriveAccessToken='';
 let googleServicesTokenClient=null;
 let googleServicesAccessToken='';
 let googleServicesAuthPromise=null;
-const GOOGLE_ACCESS_TOKEN_CACHE_KEY='mystudyplaner_google_access_token_v275';
+const GOOGLE_TOKEN_CACHE_KEY='mystudyplaner_google_token_cache_v1';
+
+function saveGoogleTokenCache(token,expiresIn){
+ try{
+  const sec=Math.max(60,Number(expiresIn)||3600);
+  localStorage.setItem(GOOGLE_TOKEN_CACHE_KEY,JSON.stringify({accessToken:token,expiresAt:Date.now()+sec*1000}));
+ }catch(e){console.warn('Google Token Cache:',e)}
+}
+function clearGoogleTokenCache(){try{localStorage.removeItem(GOOGLE_TOKEN_CACHE_KEY)}catch(e){}}
+function restoreGoogleTokenCache(){
+ try{
+  const x=JSON.parse(localStorage.getItem(GOOGLE_TOKEN_CACHE_KEY)||'null');
+  if(!x?.accessToken||!Number.isFinite(Number(x.expiresAt)))return false;
+  // Keep a small safety margin so an almost-expired token is never treated as valid.
+  if(Number(x.expiresAt)<=Date.now()+120000){clearGoogleTokenCache();return false;}
+  googleServicesAccessToken=String(x.accessToken);
+  googleDriveAccessToken=googleServicesAccessToken;
+  googleCalendarAccessToken=googleServicesAccessToken;
+  return true;
+ }catch(e){clearGoogleTokenCache();return false}
+}
 
 function googleDriveClientId(){
  const cfg=getGoogleCalendarConfig()||{};
@@ -5028,44 +5048,12 @@ function initGoogleServicesTokenClient(){
   callback:()=>{},
   error_callback:e=>{
     console.warn('Google-Dienste OAuth',e);
-    // Never open a Google window/modal automatically from a background/silent request.
-    // Re-authentication is only triggered after an explicit user action or a real API 401.
-    console.warn('Google-Zugriff muss ggf. manuell neu verbunden werden.');
+    if(googleServicesAuthPromise===null)showGoogleReauth();
   }
  });
  googleDriveTokenClient=googleServicesTokenClient;
  googleCalendarTokenClient=googleServicesTokenClient;
  return googleServicesTokenClient;
-}
-
-
-function saveGoogleTokenCache(token,expiresIn){
- try{
-  const sec=Math.max(300,Number(expiresIn)||3600);
-  localStorage.setItem(GOOGLE_ACCESS_TOKEN_CACHE_KEY,JSON.stringify({
-   token:String(token||''),
-   expiresAt:Date.now()+Math.max(60,sec-60)*1000
-  }));
- }catch(e){console.warn('Google Token konnte nicht lokal gespeichert werden:',e)}
-}
-function clearGoogleTokenCache(){try{localStorage.removeItem(GOOGLE_ACCESS_TOKEN_CACHE_KEY)}catch(e){}}
-function restoreGoogleTokenCache(){
- try{
-  const raw=localStorage.getItem(GOOGLE_ACCESS_TOKEN_CACHE_KEY);
-  if(!raw)return false;
-  const x=JSON.parse(raw||'null');
-  if(!x?.token||!x?.expiresAt||Date.now()>=Number(x.expiresAt)){
-   clearGoogleTokenCache();
-   return false;
-  }
-  googleServicesAccessToken=String(x.token);
-  googleDriveAccessToken=googleServicesAccessToken;
-  googleCalendarAccessToken=googleServicesAccessToken;
-  updateDriveStatus();
-  updateGoogleCalendarStatus();
-  scheduleGoogleTokenRefresh(Number(x.expiresAt)-Date.now());
-  return true;
- }catch(e){clearGoogleTokenCache();return false}
 }
 
 
@@ -5120,36 +5108,30 @@ async function reauthorizeGoogleServices(){
  }
 }
 
-function scheduleGoogleTokenRefresh(delayMs){
+function scheduleGoogleTokenRefresh(){
  clearTimeout(googleReauthTimer);
- const delay=Math.max(30000,Number(delayMs)||50*60*1000);
- googleReauthTimer=setTimeout(()=>{
-  if(document.hidden){scheduleGoogleTokenRefresh(60000);return}
-  // Static GitHub Pages cannot obtain a durable refresh token. Do not open a
-  // popup automatically when the short-lived token expires; ask the user.
+ googleReauthTimer=setTimeout(async()=>{
+  if(document.hidden){scheduleGoogleTokenRefresh();return}
   googleServicesAccessToken='';
-  googleDriveAccessToken='';
-  googleCalendarAccessToken='';
-  clearGoogleTokenCache();
-  updateDriveStatus();
-  updateGoogleCalendarStatus();
-  showGoogleReauth();
- },delay);
+  const ok=await googleServicesAuth('none');
+  if(!ok)showGoogleReauth();
+  else scheduleGoogleTokenRefresh();
+ },50*60*1000);
 }
 
 function googleServicesAuth(prompt='none'){
+ if(!googleServicesAccessToken)restoreGoogleTokenCache();
  if(googleServicesAccessToken){
   googleDriveAccessToken=googleServicesAccessToken;
   googleCalendarAccessToken=googleServicesAccessToken;
   return Promise.resolve(true);
  }
 
- // IMPORTANT for the free/static version: a background call must NEVER open a
- // Google popup. Only an explicit user action may start the consent flow.
- if(prompt!=='consent')return Promise.resolve(false);
-
- // A real user click must never be blocked by an older consent attempt.
- googleServicesAuthPromise=null;
+ // IMPORTANT: a real user click must never be blocked by an older silent
+ // authorization attempt. A stale pending promise was the reason the buttons
+ // could appear clickable while Google never opened.
+ if(prompt==='consent')googleServicesAuthPromise=null;
+ else if(googleServicesAuthPromise)return googleServicesAuthPromise;
 
  const c=initGoogleServicesTokenClient();
  if(!c){
@@ -5254,7 +5236,8 @@ async function driveFetch(url,opt={}){
   googleServicesAccessToken='';
   googleDriveAccessToken='';
   googleCalendarAccessToken='';
-  if(!await googleServicesAuth('none')){showGoogleReauth();throw new Error('Google-Zugriff nicht mehr gültig.');}
+  clearGoogleTokenCache();
+  if(!await googleServicesAuth('none'))throw new Error('Google-Zugriff nicht mehr gültig.');
   r=await make();
  }
  return r;
@@ -5494,7 +5477,7 @@ function openCloud(){
      <div class="account-service"><div><b>🗓️ Google Kalender</b><div class="muted account-small" id="googleCalendarStatus">Nicht verbunden</div></div></div>
      <button class="btn secondary full" style="margin-top:4px" onclick="connectGoogleServices()">🔵 Google für Drive & Kalender verbinden</button>
    </div>
-   <div class="account-note">Einmal Google freigeben → Drive und Kalender verwenden denselben Zugriff. Danach versucht My Studyplaner automatisch, den Zugriff im Hintergrund zu erneuern.</div>
+   <div class="account-note">Einmal Google freigeben → Drive und Kalender verwenden denselben Zugriff. Ein noch gültiger Zugriff wird beim Reload direkt wiederverwendet; wenn er abgelaufen ist, versucht My Studyplaner ihn still zu erneuern.</div>
    <details class="account-advanced"><summary>⚙️ Erweiterte Firebase-Einstellungen</summary><div class="muted account-small" style="margin:8px 0">Nur nötig, wenn du eine eigene Firebase-Konfiguration ändern möchtest.</div><textarea id="firebaseConfig" placeholder='{"apiKey":"...","authDomain":"...","projectId":"...","storageBucket":"...","messagingSenderId":"...","appId":"..."}'>${esc(JSON.stringify(cfg,null,2))}</textarea><div style="display:flex;gap:7px;margin-top:8px"><button class="btn" onclick="saveFirebaseConfig()">Speichern</button><button class="btn secondary" onclick="clearFirebaseConfig()">Löschen</button></div></details>
  </div>`)
 }
@@ -5605,7 +5588,7 @@ async function googleApi(path){
   googleServicesAccessToken='';
   googleDriveAccessToken='';
   googleCalendarAccessToken='';
-  if(!await googleServicesAuth('none')){showGoogleReauth();throw new Error('Google Kalender-Zugriff nicht mehr gültig.');}
+  if(!await googleServicesAuth('none'))throw new Error('Google Kalender-Zugriff nicht mehr gültig.');
   res=await make();
  }
  const json=await res.json().catch(()=>({}));
@@ -5614,11 +5597,19 @@ async function googleApi(path){
 }
 
 function trySilentGoogleCalendarSync(){
- // No background OAuth popup on reload. If a cached token exists, sync with it.
- if(!restoreGoogleTokenCache())return;
- const cfg=getGoogleCalendarConfig()||{};
- if(!cfg.clientId||!cfg.calendarId||!cfg.colorId)return;
- syncGoogleCalendarAfterAuth(true).catch(e=>console.warn('Google Kalender Hintergrund-Sync:',e));
+ try{
+  const cfg=getGoogleCalendarConfig()||{};
+  if(!cfg.clientId||!window.google?.accounts?.oauth2)return;
+  if(!cfg.calendarId||!cfg.colorId)return;
+  if(googleServicesAccessToken)return;
+  googleServicesAuth('none').then(async ok=>{
+   if(!ok)return;
+   try{
+    await loadGoogleCalendarsAndColors();
+    await syncGoogleCalendarAfterAuth(true);
+   }catch(e){console.warn('Google Kalender Hintergrund-Sync:',e)}
+  });
+ }catch(e){console.warn('Silent Google-Kalender-Sync:',e)}
 }
 
 function initGoogleTokenClient(){
@@ -5837,7 +5828,8 @@ async function autoSyncGoogleCalendar(){
  const cfg=getGoogleCalendarConfig()||{};
  if(!cfg.clientId||!cfg.calendarId||!cfg.colorId)return;
  if(!googleServicesAccessToken){
-  return;
+  const ok=await googleServicesAuth('none');
+  if(!ok)return;
  }
  googleCalendarAutoSyncBusy=true;
  try{
@@ -5849,13 +5841,22 @@ setInterval(autoSyncGoogleCalendar,60000);
 
 async function tryInitGoogleFromSavedConfig(){
  const cfg=getGoogleCalendarConfig();
- if(!cfg?.clientId)return;
- if(window.google?.accounts?.oauth2)initGoogleServicesTokenClient();
- if(restoreGoogleTokenCache()){
-  setTimeout(()=>autoSyncGoogleCalendar(),900);
+ if(cfg?.clientId && window.google?.accounts?.oauth2){
+  initGoogleServicesTokenClient();
+  // First restore the still-valid token from this browser. This prevents a
+  // Google popup/consent request on every reload.
+  if(restoreGoogleTokenCache()){
+   updateDriveStatus();
+   updateGoogleCalendarStatus();
+   setTimeout(()=>autoSyncGoogleCalendar(),900);
+   return;
+  }
+  // No valid cached token: try Google's silent authorization once. Do not show
+  // a popup if that silent attempt fails.
+  setTimeout(()=>googleServicesAuth('none'),900);
  }
 }
-window.addEventListener('load',()=>setTimeout(tryInitGoogleFromSavedConfig,900));
+window.addEventListener('load',tryInitGoogleFromSavedConfig);
 
 initCloud();renderAll();
 </script>
@@ -5899,6 +5900,7 @@ initCloud();renderAll();
   // If the existing app stores deadlines in a recognizable array, ensure old deadlines
   // get a default priority. New deadlines can use the chooser's selected value.
   
+window.addEventListener('load',()=>setTimeout(trySilentGoogleCalendarSync,900));
 
 document.addEventListener('DOMContentLoaded', ()=>{
     const d=load();
@@ -7173,7 +7175,11 @@ function renderStudyTimer(){
 </script>
 
 
-<style id="msp-font-v275-final">
+<style id="msp-v275-google-cache">
+.account-service .account-small{min-height:18px}
+</style>
+
+<style id="msp-font-v274-final">
 html,body,body *{
   font-family:"DM Sans",Arial,sans-serif !important;
 }
@@ -7199,8 +7205,11 @@ body *::before,body *::after{
 
 <script id="msp-v275-visibility">
 document.addEventListener('visibilitychange',()=>{
- if(!document.hidden && googleServicesAccessToken && typeof autoSyncGoogleCalendar==='function'){
-  autoSyncGoogleCalendar();
+ if(!document.hidden){
+  // Never wipe the cached Google token just because the app became visible.
+  // Reuse it immediately; if it has expired, the normal API request will
+  // attempt one silent renewal and only then require manual authorization.
+  if(typeof autoSyncGoogleCalendar==='function')autoSyncGoogleCalendar();
  }
 });
 </script>
