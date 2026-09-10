@@ -94,7 +94,6 @@ h1{margin:0;font-size:29px;font-weight:850}h2{margin:0;font-size:19px;font-weigh
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
 
 <style id="mystudyplaner-v10-uni-links-style">
 #uni-links .section-head {
@@ -3874,7 +3873,7 @@ aside.sidebar{
     <div class="files-explorer-head">
       <div>
         <h2>📁 Dateien</h2>
-        <div class="muted">Deine Lernmaterialien übersichtlich wie auf dem PC.</div>
+        <div class="muted">Deine Lernmaterialien übersichtlich wie auf dem PC. ☁️ Dateien werden kostenlos über Firebase Cloud Firestore synchronisiert.</div>
       </div>
       <div class="files-toolbar">
         <button class="btn secondary" type="button" onclick="createFileFolder()">＋ Neuer Ordner</button>
@@ -4225,27 +4224,19 @@ function fileIcon(f){
 async function openFile(id){
  const f=data.files.find(x=>String(x.id)===String(id));
  if(!f)return;
+ if(f.cloudFile&&typeof openFirestoreFile==='function'){await openFirestoreFile(f);return;}
  if(f.url){
    const win=window.open(f.url,'_blank','noopener');
    if(!win) alert('Der Browser hat das Öffnen blockiert. Bitte Popups für My Studyplaner erlauben.');
    return;
  }
- if(f.storagePath&&cloudEnabled&&fb){
-   try{
-    const url=await fb.storage.ref(f.storagePath).getDownloadURL();
-    f.url=url;
-    await saveData();
-    window.open(url,'_blank','noopener');
-    return;
-   }catch(e){console.warn(e)}
- }
- alert('Diese Datei wurde früher nur lokal gespeichert und der alte Dateilink ist nach dem Neuladen nicht mehr gültig. Bitte die PDF einmal neu hochladen, während du unter ☁️ Konto angemeldet bist. Danach lässt sie sich dauerhaft öffnen.');
+ alert('Diese Datei ist noch nicht dauerhaft in der Cloud gespeichert. Bitte lade sie erneut hoch, während du im Konto angemeldet bist.');
 }
 function renderFileCard(f,home=false){
  return `<div class="file file-clickable" onclick="openFile('${f.id}')" title="Klicken zum Öffnen">
    <div class="file-icon">${fileIcon(f)}</div>
    <div class="file-name">${esc(f.name)}</div>
-   <div class="file-meta">${esc(f.type||'Datei')} · ${Math.max(1,Math.round((f.size||0)/1024))} KB${f.uploadStatus==='pending'?' · ⏳ Upload…':f.uploadStatus==='error'?' · ⚠️ nicht in Drive':f.driveFileId?' · ☁️ Drive':''}</div>
+   <div class="file-meta">${esc(f.type||'Datei')} · ${Math.max(1,Math.round((f.size||0)/1024))} KB${f.uploadStatus==='pending'?' · ⏳ Cloud-Upload…':f.uploadStatus==='error'?' · ⚠️ Cloud-Upload fehlgeschlagen':f.cloudFile?' · ☁️ Cloud':''}</div>
    <div class="file-actions">
      ${!home?`<button class="trash" onclick="event.stopPropagation();deleteFile('${f.id}')">×</button>`:''}
    </div>
@@ -5000,309 +4991,130 @@ async function handleFiles(files){for(const f of [...files])await addFile(f,null
 async function uploadModule(id){let f=$('moduleInput_'+id);f.value='';f.click()}
 async function handleModuleFiles(id,files){for(const f of [...files])await addFile(f,id);await saveData();renderAll()}
 
-const GOOGLE_DRIVE_SCOPE='https://www.googleapis.com/auth/drive.file';
-const GOOGLE_CALENDAR_SCOPE='https://www.googleapis.com/auth/calendar.readonly';
-const GOOGLE_SERVICES_SCOPE=GOOGLE_DRIVE_SCOPE+' '+GOOGLE_CALENDAR_SCOPE;
-let googleDriveTokenClient=null;
-let googleDriveAccessToken='';
-let googleServicesTokenClient=null;
-let googleServicesAccessToken='';
-let googleServicesAuthPromise=null;
-const GOOGLE_TOKEN_CACHE_KEY='mystudyplaner_google_token_cache_v1';
+/* ---------- Dateien: kostenloser Firebase-Cloudspeicher über Firestore ----------
+   Kein Google Drive und kein Firebase Storage nötig. Dateien werden in kleinen
+   Chunks unter users/{uid}/files/{fileId}/chunks gespeichert. Das umgeht die
+   Firestore-Dokumentgrenze von 1 MiB und funktioniert auf allen Geräten mit
+   demselben Firebase-Konto. */
+const FIRESTORE_FILE_CHUNK_SIZE=600*1024;
+const FIRESTORE_FILE_MAX_SIZE=25*1024*1024;
 
-function saveGoogleTokenCache(token,expiresIn){
+function fileCloudRoot(fileId){
+ if(!fb||!currentUser)return null;
+ return fb.db.collection('users').doc(currentUser.uid).collection('files').doc(String(fileId));
+}
+function bytesToBase64(bytes){
+ let out='';
+ const step=0x8000;
+ for(let i=0;i<bytes.length;i+=step){
+  out+=String.fromCharCode.apply(null,bytes.subarray(i,Math.min(i+step,bytes.length)));
+ }
+ return btoa(out);
+}
+function base64ToBytes(base64){
+ const bin=atob(base64);
+ const bytes=new Uint8Array(bin.length);
+ for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);
+ return bytes;
+}
+function cloudFilesReady(){return !!(cloudEnabled&&currentUser&&fb&&fb.db);}
+async function deleteFirestoreFileChunks(fileId){
+ const root=fileCloudRoot(fileId); if(!root)return;
+ const snap=await root.collection('chunks').get();
+ let batch=fb.db.batch(),count=0;
+ for(const doc of snap.docs){
+  batch.delete(doc.ref); count++;
+  if(count===400){await batch.commit();batch=fb.db.batch();count=0;}
+ }
+ if(count)await batch.commit();
+ try{await root.delete()}catch(e){console.warn('Datei-Metadaten löschen:',e)}
+}
+async function uploadFileToFirestore(file,item){
+ if(!cloudFilesReady())throw new Error('Bitte zuerst im My Studyplaner-Konto anmelden.');
+ if(file.size>FIRESTORE_FILE_MAX_SIZE)throw new Error('Die Datei ist zu groß. Maximal 25 MB pro Datei.');
+ const root=fileCloudRoot(item.id);
+ const chunks=Math.ceil(file.size/FIRESTORE_FILE_CHUNK_SIZE)||1;
+ await root.set({name:item.name,type:item.type||'application/octet-stream',size:file.size,chunks,updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});
+ const buffer=new Uint8Array(await file.arrayBuffer());
+ for(let index=0;index<chunks;index++){
+  const part=buffer.subarray(index*FIRESTORE_FILE_CHUNK_SIZE,Math.min((index+1)*FIRESTORE_FILE_CHUNK_SIZE,buffer.length));
+  await root.collection('chunks').doc(String(index).padStart(6,'0')).set({index,data:bytesToBase64(part)},{merge:false});
+ }
+ item.cloudFile=true;
+ item.cloudFileSize=file.size;
+ item.cloudFileChunks=chunks;
+ item.uploadStatus='synced';
+ item.url='';
+ item.storagePath='';
+ item.driveFileId='';
+ await saveData();
+}
+async function readFirestoreFile(file){
+ if(!cloudFilesReady())throw new Error('Bitte zuerst anmelden.');
+ const root=fileCloudRoot(file.id);
+ const meta=await root.get();
+ if(!meta.exists)throw new Error('Die Datei wurde in der Cloud nicht gefunden.');
+ const count=Number(meta.data().chunks||file.cloudFileChunks||0);
+ if(!count)throw new Error('Die Cloud-Datei enthält keine Daten.');
+ const snap=await root.collection('chunks').orderBy('index').get();
+ if(snap.size<count)throw new Error('Die Cloud-Datei ist unvollständig.');
+ const parts=snap.docs.map(d=>base64ToBytes(d.data().data||''));
+ const total=parts.reduce((n,a)=>n+a.length,0);
+ const out=new Uint8Array(total);let pos=0;
+ for(const part of parts){out.set(part,pos);pos+=part.length;}
+ return new Blob([out],{type:meta.data().type||file.type||'application/octet-stream'});
+}
+async function openFirestoreFile(file){
  try{
-  const sec=Math.max(60,Number(expiresIn)||3600);
-  localStorage.setItem(GOOGLE_TOKEN_CACHE_KEY,JSON.stringify({accessToken:token,expiresAt:Date.now()+sec*1000}));
- }catch(e){console.warn('Google Token Cache:',e)}
-}
-function clearGoogleTokenCache(){try{localStorage.removeItem(GOOGLE_TOKEN_CACHE_KEY)}catch(e){}}
-function restoreGoogleTokenCache(){
- try{
-  const x=JSON.parse(localStorage.getItem(GOOGLE_TOKEN_CACHE_KEY)||'null');
-  if(!x?.accessToken||!Number.isFinite(Number(x.expiresAt)))return false;
-  // Keep a small safety margin so an almost-expired token is never treated as valid.
-  if(Number(x.expiresAt)<=Date.now()+120000){clearGoogleTokenCache();return false;}
-  googleServicesAccessToken=String(x.accessToken);
-  googleDriveAccessToken=googleServicesAccessToken;
-  googleCalendarAccessToken=googleServicesAccessToken;
-  return true;
- }catch(e){clearGoogleTokenCache();return false}
-}
-
-function googleDriveClientId(){
- const cfg=getGoogleCalendarConfig()||{};
- return cfg.clientId||GOOGLE_CALENDAR_DEFAULT_CLIENT_ID||'';
-}
-
-/* Google Drive + Google Kalender use one shared Google OAuth grant.
-   After the first approval, GIS can normally refresh the short-lived token
-   silently on later page loads without showing another consent screen. */
-function initGoogleServicesTokenClient(){
- const id=googleDriveClientId();
- if(!id||!window.google?.accounts?.oauth2)return null;
- if(googleServicesTokenClient)return googleServicesTokenClient;
- googleServicesTokenClient=google.accounts.oauth2.initTokenClient({
-  client_id:id,
-  scope:GOOGLE_SERVICES_SCOPE,
-  callback:()=>{},
-  error_callback:e=>{
-    console.warn('Google-Dienste OAuth',e);
-    if(googleServicesAuthPromise===null)showGoogleReauth();
-  }
- });
- googleDriveTokenClient=googleServicesTokenClient;
- googleCalendarTokenClient=googleServicesTokenClient;
- return googleServicesTokenClient;
-}
-
-
-let googleReauthShown=false;
-let googleReauthTimer=null;
-
-function showGoogleReauth(){
- const el=$('googleReauthModal');
- if(!el)return;
- googleReauthShown=true;
- el.style.display='flex';
- el.style.visibility='visible';
- el.style.opacity='1';
- el.style.pointerEvents='auto';
-}
-function closeGoogleReauth(){
- const el=$('googleReauthModal');
- if(el){
-  el.style.display='none';
-  el.style.pointerEvents='none';
- }
- googleReauthShown=false;
-}
-async function reauthorizeGoogleServices(){
- const btn=document.querySelector('#googleReauthModal button[onclick*="reauthorizeGoogleServices"]');
- if(btn){btn.disabled=true;btn.textContent='🔄 Google wird geöffnet…';}
- try{
-  googleServicesAuthPromise=null;
-  googleServicesAccessToken='';
-  googleDriveAccessToken='';
-  googleCalendarAccessToken='';
-  clearGoogleTokenCache();
-  const ok=await googleServicesAuth('consent');
-  if(ok){
-   closeGoogleReauth();
-   scheduleGoogleTokenRefresh();
-   try{
-    await loadGoogleCalendarsAndColors();
-    updateDriveStatus();
-    updateGoogleCalendarStatus();
-   }catch(e){console.warn('Google nach Re-Login:',e)}
-  }else{
-   alert('Google-Anmeldung wurde nicht abgeschlossen. Bitte erneut versuchen.');
-   showGoogleReauth();
-  }
- }catch(e){
-  console.warn('Google Re-Login:',e);
-  alert('Google-Anmeldung konnte nicht gestartet werden: '+(e.message||e));
-  showGoogleReauth();
- }finally{
-  if(btn){btn.disabled=false;btn.textContent='🔵 Mit Google verbinden';}
- }
-}
-
-function scheduleGoogleTokenRefresh(){
- clearTimeout(googleReauthTimer);
- googleReauthTimer=setTimeout(async()=>{
-  if(document.hidden){scheduleGoogleTokenRefresh();return}
-  googleServicesAccessToken='';
-  const ok=await googleServicesAuth('none');
-  if(!ok)showGoogleReauth();
-  else scheduleGoogleTokenRefresh();
- },50*60*1000);
-}
-
-function googleServicesAuth(prompt='none'){
- if(!googleServicesAccessToken)restoreGoogleTokenCache();
- if(googleServicesAccessToken){
-  googleDriveAccessToken=googleServicesAccessToken;
-  googleCalendarAccessToken=googleServicesAccessToken;
-  return Promise.resolve(true);
- }
-
- // IMPORTANT: a real user click must never be blocked by an older silent
- // authorization attempt. A stale pending promise was the reason the buttons
- // could appear clickable while Google never opened.
- if(prompt==='consent')googleServicesAuthPromise=null;
- else if(googleServicesAuthPromise)return googleServicesAuthPromise;
-
- const c=initGoogleServicesTokenClient();
- if(!c){
-  if(prompt==='consent')alert('Google ist noch nicht bereit. Bitte kurz warten und erneut versuchen.');
-  return Promise.resolve(false);
- }
-
- googleServicesAuthPromise=new Promise(resolve=>{
-  let finished=false;
-  const finish=value=>{
-   if(finished)return;
-   finished=true;
-   googleServicesAuthPromise=null;
-   resolve(value);
-  };
-
-  c.callback=r=>{
-   if(r&&r.access_token){
-    googleServicesAccessToken=r.access_token;
-    googleDriveAccessToken=r.access_token;
-    googleCalendarAccessToken=r.access_token;
-    saveGoogleTokenCache(r.access_token,r.expires_in);
-    updateDriveStatus();
-    updateGoogleCalendarStatus();
-    if(typeof scheduleGoogleTokenRefresh==='function')scheduleGoogleTokenRefresh();
-    finish(true);
-   }else finish(false);
-  };
-
-  c.error_callback=e=>{
-   console.warn('Google-Dienste OAuth',e);
-   finish(false);
-  };
-
-  try{
-   // Google's documented pattern is "consent" for the first/manual grant
-   // and an empty prompt for an already-authorized session.
-   c.requestAccessToken({prompt:prompt==='consent'?'consent':''});
-  }catch(e){
-   console.warn('Google OAuth Start:',e);
-   finish(false);
-  }
-
-  // Silent GIS requests do not always call a callback when no silent grant is
-  // possible. Release the lock quickly so a later manual click always works.
-  if(prompt!=='consent')setTimeout(()=>finish(false),2500);
- });
- return googleServicesAuthPromise;
-}
-
-function googleDriveAuth(){
- return googleServicesAuth('consent');
-}
-
-async function connectGoogleDrive(){
- const ok=await googleServicesAuth('consent');
- if(ok){
-  updateDriveStatus();
-  updateGoogleCalendarStatus();
-  alert('Google Drive & Google Kalender sind verbunden. Du musst dich für beide nicht mehr separat anmelden.');
- }else{
-  alert('Google Drive / Kalender konnten nicht verbunden werden.');
- }
-}
-
-async function connectGoogleServices(){
- try{
-  googleServicesAuthPromise=null;
-  googleServicesAccessToken='';
-  googleDriveAccessToken='';
-  googleCalendarAccessToken='';
-  clearGoogleTokenCache();
-  const ok=await googleServicesAuth('consent');
-  if(!ok){
-   alert('Google-Anmeldung wurde nicht abgeschlossen. Bitte erneut versuchen.');
-   return false;
-  }
-  await loadGoogleCalendarsAndColors();
-  const cfg=getGoogleCalendarConfig()||{};
-  if(cfg.calendarId&&cfg.colorId)await syncGoogleCalendarAfterAuth(true);
-  updateDriveStatus();
-  updateGoogleCalendarStatus();
-  return true;
- }catch(e){
-  console.warn('Google-Dienste nach Verbindung:',e);
-  alert('Google Drive / Kalender konnten nicht verbunden werden: '+(e.message||e));
-  return false;
- }
-}
-
-function updateDriveStatus(){
- const e=$('googleDriveStatus');
- if(e)e.textContent=googleServicesAccessToken
-   ? 'Verbunden · gemeinsamer Google-Zugriff aktiv.'
-   : 'Nicht verbunden';
-}
-
-async function driveFetch(url,opt={}){
- const make=()=>fetch(url,{...opt,headers:{...(opt.headers||{}),Authorization:'Bearer '+googleDriveAccessToken}});
- let r=await make();
- if(r.status===401){
-  googleServicesAccessToken='';
-  googleDriveAccessToken='';
-  googleCalendarAccessToken='';
-  clearGoogleTokenCache();
-  if(!await googleServicesAuth('none'))throw new Error('Google-Zugriff nicht mehr gültig.');
-  r=await make();
- }
- return r;
-}
-async function googleDriveUpload(file){
- const b='msp_'+Date.now();
- const body=new Blob([
-  '--'+b+'\r\n','Content-Type: application/json; charset=UTF-8\r\n\r\n',
-  JSON.stringify({name:file.name,mimeType:file.type||'application/octet-stream'}),
-  '\r\n--'+b+'\r\n','Content-Type: '+(file.type||'application/octet-stream')+'\r\n\r\n',
-  file,'\r\n--'+b+'--'
- ]);
- const r=await driveFetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,mimeType,size,webViewLink',{
-  method:'POST',headers:{'Content-Type':'multipart/related; boundary='+b},body
- });
- if(!r.ok)throw new Error('Google Drive ('+r.status+'): '+await r.text());
- return r.json();
-}
-async function googleDriveDelete(id){
- const r=await driveFetch('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(id),{method:'DELETE'});
- if(!r.ok&&r.status!==404)throw new Error('Google Drive ('+r.status+'): '+await r.text());
+  const blob=await readFirestoreFile(file);
+  const url=URL.createObjectURL(blob);
+  const win=window.open(url,'_blank','noopener');
+  if(!win){alert('Der Browser hat das Öffnen blockiert. Bitte Popups für My Studyplaner erlauben.');URL.revokeObjectURL(url);return;}
+  setTimeout(()=>URL.revokeObjectURL(url),120000);
+ }catch(e){console.error('Cloud-Datei öffnen:',e);alert('Datei konnte nicht aus der Cloud geladen werden:\n'+(e.message||e));}
 }
 async function addFile(f,moduleId,folderId=null){
  data.files=Array.isArray(data.files)?data.files:[];
+ if(!cloudFilesReady()){
+  alert('Bitte zuerst oben rechts unter ☁️ Konto anmelden. Dann werden die Dateien automatisch auf allen Geräten verfügbar.');
+  return;
+ }
+ if(f.size>FIRESTORE_FILE_MAX_SIZE){alert('Die Datei ist zu groß. Maximal 25 MB pro Datei.');return;}
  const item={
   id:String(Date.now())+Math.random().toString(16).slice(2),
   name:f.name,size:f.size,type:f.type||'application/octet-stream',
   kind:f.type&&f.type.startsWith('image/')?'image':f.type==='application/pdf'?'pdf':'file',
-  moduleId:moduleId||null,folderId:folderId||null,url:'',storagePath:'',driveFileId:'',uploadStatus:'pending'
+  moduleId:moduleId||null,folderId:folderId||null,url:'',storagePath:'',driveFileId:'',
+  cloudFile:true,cloudFileSize:f.size,cloudFileChunks:Math.ceil(f.size/FIRESTORE_FILE_CHUNK_SIZE)||1,
+  uploadStatus:'pending'
  };
- // Show it immediately in the planner.
- data.files.push(item);
- saveLocal();
- renderFiles();
+ data.files.push(item);saveLocal();renderFiles();
  try{
-  const ok=await googleDriveAuth();
-  if(!ok)throw new Error('Google Drive-Zugriff wurde nicht erteilt.');
-  const u=await googleDriveUpload(f);
-  item.driveFileId=u.id;
-  item.url=u.webViewLink||('https://drive.google.com/file/d/'+u.id+'/view');
-  item.uploadStatus='synced';
-  await saveData();
+  await uploadFileToFirestore(f,item);
   renderFiles();
  }catch(e){
-  console.error('Datei-Upload:',e);
+  console.error('Datei-Upload in Firebase:',e);
   item.uploadStatus='error';
-  saveLocal();
-  renderFiles();
-  alert('Datei wurde angezeigt, aber nicht in Google Drive gespeichert.\n\n'+(e.message||e));
+  saveLocal();renderFiles();
+  try{await deleteFirestoreFileChunks(item.id)}catch(_e){}
+  alert('Datei konnte nicht in der kostenlosen Cloud gespeichert werden:\n\n'+(e.message||e));
  }
 }
 async function openFile(id){
  const f=(data.files||[]).find(x=>String(x.id)===String(id));if(!f)return;
- if(f.driveFileId){window.open(f.url||('https://drive.google.com/file/d/'+f.driveFileId+'/view'),'_blank');return;}
- if(f.storagePath&&cloudEnabled&&fb){try{const u=await fb.storage.ref(f.storagePath).getDownloadURL();f.url=u;await saveData();window.open(u,'_blank');return;}catch(e){console.warn(e)}}
- if(f.url){window.open(f.url,'_blank');return;}
+ if(f.cloudFile){await openFirestoreFile(f);return;}
+ if(f.url){window.open(f.url,'_blank','noopener');return;}
+ if(f.driveFileId){window.open('https://drive.google.com/file/d/'+encodeURIComponent(f.driveFileId)+'/view','_blank','noopener');return;}
  alert('Diese Datei kann nicht geöffnet werden. Bitte lade sie erneut hoch.');
 }
 async function deleteFile(id){
  const f=(data.files||[]).find(x=>String(x.id)===String(id));if(!f)return;
- if(!confirm('Datei aus My Studyplaner und Google Drive löschen?'))return;
+ if(!confirm('Datei aus My Studyplaner und der Cloud löschen?'))return;
  try{
-  if(f.driveFileId){if(!await googleDriveAuth())return;await googleDriveDelete(f.driveFileId);}
-  data.files=data.files.filter(x=>String(x.id)!==String(id));await saveData();renderAll();
- }catch(e){console.error(e);alert('Löschen fehlgeschlagen:\n'+(e.message||e));}
+  if(f.cloudFile&&cloudFilesReady())await deleteFirestoreFileChunks(f.id);
+  data.files=data.files.filter(x=>String(x.id)!==String(id));
+  await saveData();renderAll();
+ }catch(e){console.error('Datei löschen:',e);alert('Löschen fehlgeschlagen:\n'+(e.message||e));}
 }
 
 function openModule(){openModal('Neues Modul',`<form onsubmit="addModule(event)"><div class="form-grid"><div class="wide"><label>Modulname</label><input id="mName" required></div><div class="wide"><label>Notiz / Information</label><textarea id="mInfo" placeholder="Prüfung, Inhalte, Besonderheiten..."></textarea></div></div><br><button class="btn" type="submit">Modul speichern</button></form>`)}
@@ -5473,11 +5285,11 @@ function openCloud(){
    <div class="account-status ${signed?'is-on':''}"><span class="account-dot"></span><div><strong>${cloudText}</strong><div class="muted account-small">${signed?'Cloud-Synchronisierung aktiv · Daten werden automatisch gespeichert.':'Einmal anmelden, danach werden deine Studyplaner-Daten automatisch synchronisiert.'}</div></div></div>
    ${signed ? `<div class="account-actions"><button class="btn secondary" onclick="cloudLogout();closeModal()">Abmelden</button></div>` : `<div class="account-login"><button class="btn full" onclick="cloudGoogleAuth()">🔵 Mit Google anmelden</button><div class="account-or"><span></span>oder<span></span></div><div class="account-login-grid"><input id="cEmail" type="email" placeholder="E-Mail"><input id="cPassword" type="password" placeholder="Passwort"><select id="cAction"><option value="login">Anmelden</option><option value="signup">Konto erstellen</option></select></div><button class="btn full" style="margin-top:8px" onclick="cloudEmailAuth()">☁️ Mit E-Mail anmelden</button></div>`}
    <div class="account-services">
-     <div class="account-service"><div><b>📁 Google Drive</b><div class="muted account-small" id="googleDriveStatus">Nicht verbunden</div></div></div>
+     <div class="account-service"><div><b>📁 Dateien</b><div class="muted account-small">Kostenloser Firebase-Cloudspeicher · kein Google Drive</div></div></div>
      <div class="account-service"><div><b>🗓️ Google Kalender</b><div class="muted account-small" id="googleCalendarStatus">Nicht verbunden</div></div></div>
-     <button class="btn secondary full" style="margin-top:4px" onclick="connectGoogleServices()">🔵 Google für Drive & Kalender verbinden</button>
+     <button class="btn secondary full" style="margin-top:4px" onclick="connectGoogleCalendar()">🔵 Google Kalender verbinden</button>
    </div>
-   <div class="account-note">Einmal Google freigeben → Drive und Kalender verwenden denselben Zugriff. Ein noch gültiger Zugriff wird beim Reload direkt wiederverwendet; wenn er abgelaufen ist, versucht My Studyplaner ihn still zu erneuern.</div>
+   <div class="account-note">Deine Studyplaner-Daten und hochgeladenen Dateien werden über Firebase synchronisiert. Google wird nur für den Kalender benötigt. Beim normalen Neuladen öffnet My Studyplaner <b>kein</b> Google-Anmeldefenster automatisch.</div>
    <details class="account-advanced"><summary>⚙️ Erweiterte Firebase-Einstellungen</summary><div class="muted account-small" style="margin:8px 0">Nur nötig, wenn du eine eigene Firebase-Konfiguration ändern möchtest.</div><textarea id="firebaseConfig" placeholder='{"apiKey":"...","authDomain":"...","projectId":"...","storageBucket":"...","messagingSenderId":"...","appId":"..."}'>${esc(JSON.stringify(cfg,null,2))}</textarea><div style="display:flex;gap:7px;margin-top:8px"><button class="btn" onclick="saveFirebaseConfig()">Speichern</button><button class="btn secondary" onclick="clearFirebaseConfig()">Löschen</button></div></details>
  </div>`)
 }
@@ -5521,682 +5333,98 @@ let googleCalendarTokenClient=null;
 let googleCalendarAccessToken='';
 let googleCalendarCalendars=[];
 let googleCalendarColors={};
+let googleCalendarTokenExpiry=0;
 
 function getGoogleCalendarConfig(){
- try{
-  const saved=JSON.parse(localStorage.getItem(GOOGLE_CONFIG_KEY)||'null');
-  if(saved&&saved.clientId)return saved;
-  return {clientId:GOOGLE_CALENDAR_DEFAULT_CLIENT_ID};
- }catch{return {clientId:GOOGLE_CALENDAR_DEFAULT_CLIENT_ID}}
+ try{const saved=JSON.parse(localStorage.getItem(GOOGLE_CONFIG_KEY)||'null');if(saved&&saved.clientId)return saved;return {clientId:GOOGLE_CALENDAR_DEFAULT_CLIENT_ID};}
+ catch{return {clientId:GOOGLE_CALENDAR_DEFAULT_CLIENT_ID}}
 }
-function saveGoogleCalendarConfig(cfg){
- localStorage.setItem(GOOGLE_CONFIG_KEY,JSON.stringify(cfg));
-}
-
-/* Google-Kalender-Status: sichere Fallback-Funktion.
-   Verhindert einen Fehler auf der Kalenderseite, falls der Status vor
-   einer erfolgreichen Google-Initialisierung aktualisiert wird. */
+function saveGoogleCalendarConfig(cfg){localStorage.setItem(GOOGLE_CONFIG_KEY,JSON.stringify(cfg));}
 function updateGoogleCalendarStatus(count){
  const cfg=getGoogleCalendarConfig()||{};
- const connected=!!(googleCalendarAccessToken||googleServicesAccessToken);
- const text=connected
-   ? (typeof count==='number'
-      ? `Verbunden · ${count} Termin${count===1?'':'e'} übernommen.`
-      : 'Verbunden · bereit zur Synchronisierung.')
-   : (cfg.clientId
-      ? 'Bereit – Google Kalender kann synchronisiert werden.'
-      : 'Noch nicht verbunden.');
- ['googleCalendarStatus','googleCalendarStatusDeadlines'].forEach(id=>{
-   const el=document.getElementById(id);
-   if(el)el.textContent=text;
+ const connected=!!googleCalendarAccessToken;
+ const text=connected?(typeof count==='number'?`Verbunden · ${count} Termin${count===1?'':'e'} übernommen.`:'Verbunden · bereit zur Synchronisierung.'):(cfg.clientId?'Bereit – Google Kalender kann synchronisiert werden.':'Noch nicht verbunden.');
+ ['googleCalendarStatus','googleCalendarStatusDeadlines'].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent=text;});
+}
+function clearGoogleImportedEvents(){data.events=(data.events||[]).filter(e=>!e.googleImported);}
+function googleSafeColor(v){const s=String(v||'').trim();return /^#[0-9a-fA-F]{6}$/.test(s)?s:'#777777';}
+function googleCalendarStartValue(e){const start=e.start||{};if(start.date)return {date:start.date,time:''};const dt=start.dateTime||'';if(!dt)return {date:'',time:''};const d=new Date(dt);if(Number.isNaN(d.getTime()))return {date:dt.slice(0,10),time:''};return {date:d.toLocaleDateString('en-CA'),time:d.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit',hour12:false})};}
+function googleCalendarEventDescription(e){const parts=[];if(e.location)parts.push('Ort: '+e.location);if(e.description)parts.push(e.description);if(e.htmlLink)parts.push('Google Kalender: '+e.htmlLink);return parts.join('\n\n');}
+function initGoogleTokenClient(){
+ const cfg=getGoogleCalendarConfig()||{};const id=cfg.clientId;
+ if(!id||!window.google?.accounts?.oauth2)return null;
+ if(googleCalendarTokenClient)return googleCalendarTokenClient;
+ googleCalendarTokenClient=google.accounts.oauth2.initTokenClient({
+  client_id:id,scope:'https://www.googleapis.com/auth/calendar.readonly',callback:()=>{},
+  error_callback:e=>console.warn('Google Kalender OAuth',e)
+ });
+ return googleCalendarTokenClient;
+}
+function googleCalendarAuth(prompt='none'){
+ if(googleCalendarAccessToken && (!googleCalendarTokenExpiry||Date.now()<googleCalendarTokenExpiry-60000))return Promise.resolve(true);
+ const c=initGoogleTokenClient();if(!c)return Promise.resolve(false);
+ return new Promise(resolve=>{
+  let done=false;const finish=v=>{if(done)return;done=true;resolve(v)};
+  c.callback=r=>{
+   if(r&&r.access_token){googleCalendarAccessToken=r.access_token;googleCalendarTokenExpiry=Date.now()+((Number(r.expires_in)||3600)*1000);updateGoogleCalendarStatus();finish(true);}
+   else finish(false);
+  };
+  c.error_callback=e=>{console.warn('Google Kalender OAuth',e);finish(false)};
+  try{c.requestAccessToken({prompt:prompt==='consent'?'consent':''});}catch(e){console.warn(e);finish(false)}
+  if(prompt!=='consent')setTimeout(()=>finish(false),2500);
  });
 }
-
-function clearGoogleImportedEvents(){
- data.events=(data.events||[]).filter(e=>!e.googleImported);
-}
-function googleSafeColor(v){
- const s=String(v||'').trim();
- return /^#[0-9a-fA-F]{6}$/.test(s)?s:'#777777';
-}
-function googleCalendarStartValue(e){
- const start=e.start||{};
- if(start.date)return {date:start.date,time:''};
- const dt=start.dateTime||'';
- if(!dt)return {date:'',time:''};
- const d=new Date(dt);
- if(Number.isNaN(d.getTime()))return {date:dt.slice(0,10),time:''};
- return {
-  date:d.toLocaleDateString('en-CA'),
-  time:d.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit',hour12:false})
- };
-}
-function googleCalendarEventDescription(e){
- const parts=[];
- if(e.location)parts.push('Ort: '+e.location);
- if(e.description)parts.push(e.description);
- if(e.htmlLink)parts.push('Google Kalender: '+e.htmlLink);
- return parts.join('\n\n');
-}
-async function googleApi(path){
- if(!googleCalendarAccessToken){
-  if(!await googleServicesAuth('none'))throw new Error('Google Kalender ist noch nicht autorisiert.');
- }
- const make=()=>fetch('https://www.googleapis.com/calendar/v3/'+path+(path.includes('?')?'&':'?')+'access_token='+encodeURIComponent(googleCalendarAccessToken));
- let res=await make();
- if(res.status===401){
-  googleServicesAccessToken='';
-  googleDriveAccessToken='';
-  googleCalendarAccessToken='';
-  if(!await googleServicesAuth('none'))throw new Error('Google Kalender-Zugriff nicht mehr gültig.');
-  res=await make();
- }
- const json=await res.json().catch(()=>({}));
- if(!res.ok)throw new Error(json.error?.message||'Google Kalender API Fehler');
- return json;
-}
-
 function trySilentGoogleCalendarSync(){
- try{
-  const cfg=getGoogleCalendarConfig()||{};
-  if(!cfg.clientId||!window.google?.accounts?.oauth2)return;
-  if(!cfg.calendarId||!cfg.colorId)return;
-  if(googleServicesAccessToken)return;
-  googleServicesAuth('none').then(async ok=>{
-   if(!ok)return;
-   try{
-    await loadGoogleCalendarsAndColors();
-    await syncGoogleCalendarAfterAuth(true);
-   }catch(e){console.warn('Google Kalender Hintergrund-Sync:',e)}
-  });
- }catch(e){console.warn('Silent Google-Kalender-Sync:',e)}
-}
-
-function initGoogleTokenClient(){
- return initGoogleServicesTokenClient();
+ // IMPORTANT: never open a Google popup on page load. Only use a token that is
+ // already alive in this browser tab. A user action is required to authorize.
+ updateGoogleCalendarStatus();
 }
 async function connectGoogleCalendar(){
- const cfg=getGoogleCalendarConfig();
- if(!cfg?.clientId){openGoogleCalendarSettings(true);return}
- if(!window.google?.accounts?.oauth2){
-  alert('Die Google-Bibliothek ist noch nicht geladen. Bitte kurz warten und erneut versuchen.');
-  return;
- }
- const ok=await googleServicesAuth('consent');
- if(!ok)return;
- try{
-  await loadGoogleCalendarsAndColors();
-  if(getGoogleCalendarConfig()?.calendarId&&getGoogleCalendarConfig()?.colorId){
-   await syncGoogleCalendarAfterAuth(true);
-  }
- }catch(e){alert('Google Kalender konnte nicht geladen werden: '+e.message)}
+ const cfg=getGoogleCalendarConfig()||{};
+ if(!cfg.clientId){openGoogleCalendarSettings(true);return;}
+ if(!window.google?.accounts?.oauth2){alert('Die Google-Bibliothek ist noch nicht geladen. Bitte kurz warten und erneut versuchen.');return;}
+ const ok=await googleCalendarAuth('consent');if(!ok){alert('Google Kalender konnte nicht autorisiert werden. Bitte erneut versuchen.');return;}
+ try{await loadGoogleCalendarsAndColors();if(getGoogleCalendarConfig()?.calendarId&&getGoogleCalendarConfig()?.colorId)await syncGoogleCalendarAfterAuth(true);}catch(e){alert('Google Kalender konnte nicht geladen werden: '+e.message)}
 }
-
 async function loadGoogleCalendarsAndColors(){
- const [calendars,colors]=await Promise.all([
-  googleApi('users/me/calendarList?maxResults=250'),
-  googleApi('colors')
- ]);
- googleCalendarCalendars=(calendars.items||[]).filter(c=>c.accessRole!=='none');
- googleCalendarColors=colors.event||{};
- const cfg=getGoogleCalendarConfig()||{};
- if(!cfg.calendarId && googleCalendarCalendars[0])cfg.calendarId=googleCalendarCalendars[0].id;
- if(!cfg.colorId)cfg.colorId=Object.keys(googleCalendarColors)[0]||'1';
- saveGoogleCalendarConfig(cfg);
- updateGoogleCalendarStatus();
+ const [calendars,colors]=await Promise.all([googleApi('users/me/calendarList?maxResults=250'),googleApi('colors')]);
+ googleCalendarCalendars=(calendars.items||[]).filter(c=>c.accessRole!=='none');googleCalendarColors=colors.event||{};
+ const cfg=getGoogleCalendarConfig()||{};if(!cfg.calendarId&&googleCalendarCalendars[0])cfg.calendarId=googleCalendarCalendars[0].id;if(!cfg.colorId)cfg.colorId=Object.keys(googleCalendarColors)[0]||'1';saveGoogleCalendarConfig(cfg);updateGoogleCalendarStatus();
 }
-function googleColorOptions(selected){
- const ids=Object.keys(googleCalendarColors);
- if(!ids.length){
-  return '<div class="muted">Keine Farbliste von Google verfügbar.</div>';
- }
- const names={1:'Lavendel',2:'Salbei',3:'Traube',4:'Flamingo',5:'Banane',6:'Mandarine',7:'Pfau',8:'Graphit',9:'Heidelbeere',10:'Basilikum',11:'Tomate'};
- return `<div class="google-color-grid">${ids.map(id=>{
-   const c=googleCalendarColors[id]||{};
-   const bg=googleSafeColor(c.background);
-   const name=names[id]||('Farbe '+id);
-   return `<button type="button" class="google-color-choice ${String(id)===String(selected)?'selected':''}" data-google-color="${esc(id)}" onclick="selectGoogleColor('${esc(id)}')"><span class="google-color-swatch" style="background:${esc(bg)}"></span><span>${esc(name)}</span></button>`;
- }).join('')}</div><input type="hidden" id="googleColorId" value="${esc(selected||'')}">`;
+async function googleApi(path){
+ if(!googleCalendarAccessToken){if(!await googleCalendarAuth('none'))throw new Error('Google Kalender ist noch nicht autorisiert.');}
+ const make=()=>fetch('https://www.googleapis.com/calendar/v3/'+path+(path.includes('?')?'&':'?')+'access_token='+encodeURIComponent(googleCalendarAccessToken));
+ let res=await make();
+ if(res.status===401){googleCalendarAccessToken='';googleCalendarTokenExpiry=0;if(!await googleCalendarAuth('none'))throw new Error('Google Kalender-Zugriff ist abgelaufen. Bitte „Google Kalender verbinden“ drücken.');res=await make();}
+ const json=await res.json().catch(()=>({}));if(!res.ok)throw new Error(json.error?.message||'Google Kalender API Fehler');return json;
 }
-function googleCalendarOptions(selected){
- return googleCalendarCalendars.map(c=>{
-  const label=c.summaryOverride||c.summary||c.id;
-  return `<option value="${esc(c.id)}" ${String(c.id)===String(selected)?'selected':''}>${esc(label)}</option>`;
- }).join('');
-}
-function selectGoogleColor(id){
- const hidden=document.getElementById('googleColorId');
- if(hidden)hidden.value=id;
- document.querySelectorAll('.google-color-choice').forEach(btn=>btn.classList.toggle('selected',btn.dataset.googleColor===String(id)));
-}
+function googleColorOptions(selected){const ids=Object.keys(googleCalendarColors);if(!ids.length)return '<div class="muted">Keine Farbliste von Google verfügbar.</div>';const names={1:'Lavendel',2:'Salbei',3:'Traube',4:'Flamingo',5:'Banane',6:'Mandarine',7:'Pfau',8:'Graphit',9:'Heidelbeere',10:'Basilikum',11:'Tomate'};return `<div class="google-color-grid">${ids.map(id=>{const c=googleCalendarColors[id]||{};const bg=googleSafeColor(c.background);const name=names[id]||('Farbe '+id);return `<button type="button" class="google-color-choice ${String(id)===String(selected)?'selected':''}" data-google-color="${esc(id)}" onclick="selectGoogleColor('${esc(id)}')"><span class="google-color-swatch" style="background:${esc(bg)}"></span><span>${esc(name)}</span></button>`}).join('')}</div><input type="hidden" id="googleColorId" value="${esc(selected||'')}">`}
+function googleCalendarOptions(selected){return googleCalendarCalendars.map(c=>{const label=c.summaryOverride||c.summary||c.id;return `<option value="${esc(c.id)}" ${String(c.id)===String(selected)?'selected':''}>${esc(label)}</option>`}).join('');}
+function selectGoogleColor(id){const hidden=document.getElementById('googleColorId');if(hidden)hidden.value=id;document.querySelectorAll('.google-color-choice').forEach(btn=>btn.classList.toggle('selected',btn.dataset.googleColor===String(id)));}
 function openGoogleCalendarSettings(autoOpen=false){
- const cfg=getGoogleCalendarConfig()||{};
- const hasClient=!!cfg.clientId;
- if(!hasClient){
-  openModal('🗓️ Google Kalender verbinden',`
-   <div class="note"><b>Google Kalender ist vorbereitet.</b> Wähle hier deinen Kalender und die Farbe aus, die My Studyplaner übernehmen soll.</div>
-   <ol class="google-setup-list">
-    <li>Google Cloud-Projekt erstellen oder auswählen.</li>
-    <li><b>Google Calendar API</b> aktivieren.</li>
-    <li>Unter <b>Google Auth Platform → Clients</b> eine <b>Webanwendung</b> anlegen.</li>
-    <li>Bei „Autorisierte JavaScript-Quellen“ die Adresse eintragen, unter der du My Studyplaner öffnest, z. B. <b>http://localhost:8000</b> oder deine HTTPS-Webseite.</li>
-    <li>Die <b>Client-ID</b> hier eintragen.</li>
-   </ol>
-   <div style="margin-top:13px"><label>Google OAuth Client-ID</label><input id="googleClientId" placeholder="1234567890-abc...apps.googleusercontent.com"></div>
-   <div class="note" style="margin-top:12px">Die App benötigt nur <b>calendar.readonly</b>: Sie kann deinen Kalender lesen, aber keine Termine verändern.</div>
-   <div style="display:flex;gap:7px;margin-top:11px;flex-wrap:wrap">
-    <button class="btn" onclick="saveGoogleClientId()">💾 Client-ID speichern</button>
-    <button class="btn secondary" onclick="connectGoogleCalendar()">🔵 Google für Drive & Kalender verbinden</button>
-   </div>
-  <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line)">
-<h3>🤖 Gemini KI</h3>
-<div class="muted" id="geminiOAuthStatus" style="margin:5px 0 9px">Bereit – Gemini läuft über Firebase AI Logic.</div>
-<button class="btn secondary" onclick="connectGeminiGoogle()">🤖 Gemini testen</button>
-<div class="note" style="margin-top:8px">Kein Gemini-API-Schlüssel nötig. Der KI-Podcast nutzt Firebase AI Logic.</div>
-</div>`);
-  return;
- }
- openModal('🗓️ Google Kalender – Einstellungen',`
-  <div class="note">Es werden <b>nur Termine mit der ausgewählten Google-Farbe</b> importiert. Andere Farben bleiben vollständig draußen.</div>
-  <div style="height:10px"></div>
-  <div class="form-grid">
-   <div class="wide"><label>Google-Kalender</label><select id="googleCalendarId">${googleCalendarCalendars.length?googleCalendarOptions(cfg.calendarId):'<option value="">Nach dem Verbinden laden</option>'}</select></div>
-   <div class="wide"><label>Zu übernehmende Farbe</label>${Object.keys(googleCalendarColors).length?googleColorOptions(cfg.colorId):'<div class="muted">Nach dem Verbinden laden</div><input type="hidden" id="googleColorId" value="${esc(cfg.colorId||"")}">'} </div>
-  </div>
-  <div class="note" style="margin-top:12px">🔒 Nur-Lesen: My Studyplaner schreibt nichts in Google Kalender. Drive und Kalender nutzen denselben Google-Zugriff. Beim Synchronisieren werden die bisherigen Google-Termine in My Studyplaner durch die aktuell passende Farbauswahl ersetzt.</div>
-  <div style="display:flex;gap:7px;margin-top:11px;flex-wrap:wrap">
-   <button class="btn" onclick="saveGoogleCalendarSettings()">💾 Auswahl speichern & synchronisieren</button>
-   <button class="btn secondary" onclick="connectGoogleCalendar()">🔄 Google-Zugriff neu autorisieren</button>
-   <button class="btn danger" onclick="disconnectGoogleCalendar()">× Verbindung entfernen</button>
-  </div>
-  <div style="margin-top:10px;font-size:11px;color:#555">Client-ID: ${esc(cfg.clientId)}</div>
- `);
- if(!googleCalendarCalendars.length||!Object.keys(googleCalendarColors).length){
-   setTimeout(async()=>{
-    try{
-     if(googleCalendarAccessToken){await loadGoogleCalendarsAndColors();openGoogleCalendarSettings(false)}
-    }catch(e){console.warn(e)}
-   },50);
- }
+ const cfg=getGoogleCalendarConfig()||{};const hasClient=!!cfg.clientId;
+ if(!hasClient){openModal('🗓️ Google Kalender verbinden',`<div class="note"><b>Google Kalender ist vorbereitet.</b> Wähle hier deinen Kalender und die Farbe aus, die My Studyplaner übernehmen soll.</div><ol class="google-setup-list"><li>Google Cloud-Projekt erstellen oder auswählen.</li><li><b>Google Calendar API</b> aktivieren.</li><li>Unter <b>Google Auth Platform → Clients</b> eine <b>Webanwendung</b> anlegen.</li><li>Bei „Autorisierte JavaScript-Quellen“ die Adresse eintragen, unter der du My Studyplaner öffnest.</li><li>Die <b>Client-ID</b> hier eintragen.</li></ol><div style="margin-top:13px"><label>Google OAuth Client-ID</label><input id="googleClientId" placeholder="1234567890-abc...apps.googleusercontent.com"></div><div class="note" style="margin-top:12px">Die App benötigt nur <b>calendar.readonly</b>: Sie kann deinen Kalender lesen, aber keine Termine verändern.</div><div style="display:flex;gap:7px;margin-top:11px;flex-wrap:wrap"><button class="btn" onclick="saveGoogleClientId()">💾 Client-ID speichern</button><button class="btn secondary" onclick="connectGoogleCalendar()">🔵 Google Kalender verbinden</button></div>`);return;}
+ openModal('🗓️ Google Kalender – Einstellungen',`<div class="note">Es werden <b>nur Termine mit der ausgewählten Google-Farbe</b> importiert. Andere Farben bleiben vollständig draußen.</div><div style="height:10px"></div><div class="form-grid"><div class="wide"><label>Google-Kalender</label><select id="googleCalendarId">${googleCalendarCalendars.length?googleCalendarOptions(cfg.calendarId):'<option value="">Nach dem Verbinden laden</option>'}</select></div><div class="wide"><label>Zu übernehmende Farbe</label>${Object.keys(googleCalendarColors).length?googleColorOptions(cfg.colorId):'<div class="muted">Nach dem Verbinden laden</div><input type="hidden" id="googleColorId" value="'+esc(cfg.colorId||'')+'">'}</div></div><div class="note" style="margin-top:12px">🔒 Nur-Lesen: My Studyplaner schreibt nichts in Google Kalender. Die Dateien werden <b>nicht</b> in Google Drive gespeichert.</div><div style="display:flex;gap:7px;margin-top:11px;flex-wrap:wrap"><button class="btn" onclick="saveGoogleCalendarSettings()">💾 Auswahl speichern & synchronisieren</button><button class="btn secondary" onclick="connectGoogleCalendar()">🔄 Google-Zugriff neu autorisieren</button><button class="btn danger" onclick="disconnectGoogleCalendar()">× Verbindung entfernen</button></div><div style="margin-top:10px;font-size:11px;color:#555">Client-ID: ${esc(cfg.clientId)}</div>`);
+ if(!googleCalendarCalendars.length||!Object.keys(googleCalendarColors).length)setTimeout(async()=>{try{if(googleCalendarAccessToken){await loadGoogleCalendarsAndColors();openGoogleCalendarSettings(false)}}catch(e){console.warn(e)}},50);
 }
-function saveGoogleClientId(){
- const id=String($('googleClientId')?.value||'').trim();
- if(!id||!id.endsWith('.apps.googleusercontent.com')){
-  alert('Bitte eine gültige Google OAuth Client-ID eintragen.');
-  return;
- }
- saveGoogleCalendarConfig({clientId:id});
- closeModal();
- alert('Client-ID gespeichert. Klicke jetzt auf „☁️ Verbinden / synchronisieren“.');
- updateGoogleCalendarStatus();
-}
-async function saveGoogleCalendarSettings(){
- const cfg=getGoogleCalendarConfig()||{};
- cfg.calendarId=$('googleCalendarId')?.value||cfg.calendarId||'primary';
- cfg.colorId=$('googleColorId')?.value||cfg.colorId||'1';
- saveGoogleCalendarConfig(cfg);
- closeModal();
- await connectGoogleCalendar();
-}
+function saveGoogleClientId(){const id=String($('googleClientId')?.value||'').trim();if(!id||!id.endsWith('.apps.googleusercontent.com')){alert('Bitte eine gültige Google OAuth Client-ID eintragen.');return;}saveGoogleCalendarConfig({clientId:id});closeModal();alert('Client-ID gespeichert. Klicke jetzt auf „Google Kalender verbinden“.');updateGoogleCalendarStatus();}
+async function saveGoogleCalendarSettings(){const cfg=getGoogleCalendarConfig()||{};cfg.calendarId=$('googleCalendarId')?.value||cfg.calendarId||'primary';cfg.colorId=$('googleColorId')?.value||cfg.colorId||'1';saveGoogleCalendarConfig(cfg);closeModal();await connectGoogleCalendar();}
 async function syncGoogleCalendarAfterAuth(silent=false){
- const cfg=getGoogleCalendarConfig()||{};
- if(!cfg.calendarId||!cfg.colorId){
-  if(!silent)openGoogleCalendarSettings(false);
-  return;
- }
- const now=new Date();
- const from=new Date(now);from.setDate(from.getDate()-90);
- const to=new Date(now);to.setFullYear(to.getFullYear()+1);
- const params=new URLSearchParams({
-  timeMin:from.toISOString(),
-  timeMax:to.toISOString(),
-  singleEvents:'true',
-  orderBy:'startTime',
-  maxResults:'2500',
-  showDeleted:'false'
- });
- let items=[],pageToken='';
- do{
-  const suffix=pageToken?`&pageToken=${encodeURIComponent(pageToken)}`:'';
-  const res=await googleApi(`calendars/${encodeURIComponent(cfg.calendarId)}/events?${params.toString()}${suffix}`);
-  items=items.concat(res.items||[]);
-  pageToken=res.nextPageToken||'';
- }while(pageToken);
-
- const selectedColor=String(cfg.colorId);
- const colorMeta=googleCalendarColors[selectedColor]||{};
- const colorHex=googleSafeColor(colorMeta.background);
- const matching=items.filter(e=>String(e.colorId||'')===selectedColor && e.status!=='cancelled');
-
- clearGoogleImportedEvents();
- let nextId=Date.now();
- for(const e of matching){
-  const start=googleCalendarStartValue(e);
-  if(!start.date)continue;
-  data.events.push({
-   id:nextId++,
-   title:e.summary||'(Ohne Titel)',
-   date:start.date,
-   time:start.time,
-   description:googleCalendarEventDescription(e),
-   googleImported:true,
-   googleEventId:e.id,
-   googleCalendarId:cfg.calendarId,
-   googleColorId:selectedColor,
-   googleColor:colorHex
-  });
- }
- await saveData();
- renderAll();
- updateGoogleCalendarStatus(matching.length);
- if(!silent){closeModal();alert(`${matching.length} Google-Termin${matching.length===1?'':'e'} mit der gewählten Farbe übernommen.`);}
+ const cfg=getGoogleCalendarConfig()||{};if(!cfg.calendarId||!cfg.colorId){if(!silent)openGoogleCalendarSettings(false);return;}
+ const now=new Date();const from=new Date(now);from.setDate(from.getDate()-90);const to=new Date(now);to.setFullYear(to.getFullYear()+1);
+ const params=new URLSearchParams({timeMin:from.toISOString(),timeMax:to.toISOString(),singleEvents:'true',orderBy:'startTime',maxResults:'2500',showDeleted:'false'});
+ let items=[],pageToken='';do{const suffix=pageToken?`&pageToken=${encodeURIComponent(pageToken)}`:'';const res=await googleApi(`calendars/${encodeURIComponent(cfg.calendarId)}/events?${params.toString()}${suffix}`);items=items.concat(res.items||[]);pageToken=res.nextPageToken||'';}while(pageToken);
+ const selectedColor=String(cfg.colorId);const colorMeta=googleCalendarColors[selectedColor]||{};const colorHex=googleSafeColor(colorMeta.background);const matching=items.filter(e=>String(e.colorId||'')===selectedColor&&e.status!=='cancelled');
+ clearGoogleImportedEvents();let nextId=Date.now();for(const e of matching){const st=googleCalendarStartValue(e);if(!st.date)continue;data.events.push({id:nextId++,title:e.summary||'(Ohne Titel)',date:st.date,time:st.time,description:googleCalendarEventDescription(e),googleImported:true,googleEventId:e.id,googleCalendarId:cfg.calendarId,googleColorId:selectedColor,googleColor:colorHex});}
+ await saveData();renderAll();updateGoogleCalendarStatus(matching.length);if(!silent){closeModal();alert(`${matching.length} Google-Termin${matching.length===1?'':'e'} mit der gewählten Farbe übernommen.`);}
 }
-async function syncGoogleCalendar(){
- if(!getGoogleCalendarConfig()?.clientId){openGoogleCalendarSettings(true);return}
- try{
-  const ok=await googleServicesAuth('consent');
-  if(!ok)return;
-  await loadGoogleCalendarsAndColors();
-  await syncGoogleCalendarAfterAuth(false);
- }catch(e){alert('Synchronisierung fehlgeschlagen: '+e.message)}
-}
-function disconnectGoogleCalendar(){
- const token=googleServicesAccessToken||googleCalendarAccessToken||googleDriveAccessToken;
- if(token&&window.google?.accounts?.oauth2){
-  try{google.accounts.oauth2.revoke(token,()=>{})}catch(e){}
- }
- googleServicesAccessToken='';
- googleDriveAccessToken='';
- googleCalendarAccessToken='';
- clearGoogleTokenCache();
- googleServicesTokenClient=null;
- googleDriveTokenClient=null;
- googleCalendarTokenClient=null;
- localStorage.removeItem(GOOGLE_CONFIG_KEY);
- clearGoogleImportedEvents();
- saveData();
- renderAll();
- closeModal();
- updateDriveStatus();
- updateGoogleCalendarStatus();
-}
-
-
+async function syncGoogleCalendar(){if(!getGoogleCalendarConfig()?.clientId){openGoogleCalendarSettings(true);return}try{const ok=await googleCalendarAuth('consent');if(!ok)return;await loadGoogleCalendarsAndColors();await syncGoogleCalendarAfterAuth(false);}catch(e){alert('Synchronisierung fehlgeschlagen: '+e.message)}}
+function disconnectGoogleCalendar(){if(googleCalendarAccessToken&&window.google?.accounts?.oauth2){try{google.accounts.oauth2.revoke(googleCalendarAccessToken,()=>{})}catch(e){}}googleCalendarAccessToken='';googleCalendarTokenExpiry=0;googleCalendarTokenClient=null;localStorage.removeItem(GOOGLE_CONFIG_KEY);clearGoogleImportedEvents();saveData();renderAll();closeModal();updateGoogleCalendarStatus();}
 let googleCalendarAutoSyncBusy=false;
-async function autoSyncGoogleCalendar(){
- if(googleCalendarAutoSyncBusy||document.hidden)return;
- const cfg=getGoogleCalendarConfig()||{};
- if(!cfg.clientId||!cfg.calendarId||!cfg.colorId)return;
- if(!googleServicesAccessToken){
-  const ok=await googleServicesAuth('none');
-  if(!ok)return;
- }
- googleCalendarAutoSyncBusy=true;
- try{
-  await syncGoogleCalendarAfterAuth(true);
- }catch(e){console.warn('Google Kalender Auto-Sync:',e)}
- finally{googleCalendarAutoSyncBusy=false}
-}
+async function autoSyncGoogleCalendar(){if(googleCalendarAutoSyncBusy||document.hidden||!googleCalendarAccessToken)return;const cfg=getGoogleCalendarConfig()||{};if(!cfg.clientId||!cfg.calendarId||!cfg.colorId)return;googleCalendarAutoSyncBusy=true;try{await syncGoogleCalendarAfterAuth(true)}catch(e){console.warn('Google Kalender Auto-Sync:',e)}finally{googleCalendarAutoSyncBusy=false}}
 setInterval(autoSyncGoogleCalendar,60000);
-
-async function tryInitGoogleFromSavedConfig(){
- const cfg=getGoogleCalendarConfig();
- if(cfg?.clientId && window.google?.accounts?.oauth2){
-  initGoogleServicesTokenClient();
-  // First restore the still-valid token from this browser. This prevents a
-  // Google popup/consent request on every reload.
-  if(restoreGoogleTokenCache()){
-   updateDriveStatus();
-   updateGoogleCalendarStatus();
-   setTimeout(()=>autoSyncGoogleCalendar(),900);
-   return;
-  }
-  // No valid cached token: try Google's silent authorization once. Do not show
-  // a popup if that silent attempt fails.
-  setTimeout(()=>googleServicesAuth('none'),900);
- }
-}
-window.addEventListener('load',tryInitGoogleFromSavedConfig);
-
-initCloud();renderAll();
-</script>
-
-
-
-
-
-
-<script id="mystudyplaner-v13-priority">
-(function(){
-  const PRIORITIES = {
-    leicht:{label:'Leicht',emoji:'🟢',cls:'priority-leicht'},
-    mittel:{label:'Mittel',emoji:'🟡',cls:'priority-mittel'},
-    hoch:{label:'Hoch',emoji:'🔴',cls:'priority-hoch'}
-  };
-  function normalizePriority(v){return PRIORITIES[v]?v:'mittel';}
-  function getSelectedPriority(){
-    const el=document.getElementById('deadlinePriority');
-    return normalizePriority(el&&el.value);
-  }
-  window.mystudyplanerDeadlinePriority={get:getSelectedPriority,meta:PRIORITIES};
-})();
-</script>
-
-
-<script id="mystudyplaner-v13-priority-data">
-(function(){
-  const STORE='mystudyplaner_v2';
-  const PRIORITIES=['leicht','mittel','hoch'];
-
-  function normalize(v){ return PRIORITIES.includes(v) ? v : 'mittel'; }
-
-  function load(){
-    try { return JSON.parse(localStorage.getItem(STORE)||'null'); } catch(e){ return null; }
-  }
-  function save(d){
-    try { localStorage.setItem(STORE, JSON.stringify(d)); } catch(e){}
-  }
-
-  // If the existing app stores deadlines in a recognizable array, ensure old deadlines
-  // get a default priority. New deadlines can use the chooser's selected value.
-  
 window.addEventListener('load',()=>setTimeout(trySilentGoogleCalendarSync,900));
 
-document.addEventListener('DOMContentLoaded', ()=>{
-    const d=load();
-    if(!d) return;
-    let changed=false;
-    ['deadlines','deadline','termine'].forEach(key=>{
-      if(Array.isArray(d[key])){
-        d[key].forEach(x=>{
-          if(x && !x.priority){ x.priority='mittel'; changed=true; }
-          else if(x) x.priority=normalize(x.priority);
-        });
-      }
-    });
-    if(changed) save(d);
-  });
-})();
-</script>
-
-
-<script id="priority-traffic-light-js">
-(function(){
-  function colorPriorities(){
-    document.querySelectorAll(
-      '.badge, .tag, .pill, [class*="priority"], [data-priority]'
-    ).forEach(function(el){
-      var t=(el.textContent||'').trim().toLowerCase();
-      var p=(el.getAttribute('data-priority')||'').toLowerCase();
-      var v=t+' '+p;
-      if(v.includes('leicht') || v.includes('low') || v.includes('grün')){
-        el.classList.add('priority-light');
-      } else if(v.includes('mittel') || v.includes('medium') || v.includes('gelb')){
-        el.classList.add('priority-medium');
-      } else if(v.includes('hoch') || v.includes('high') || v.includes('rot')){
-        el.classList.add('priority-high');
-      }
-    });
-  }
-  document.addEventListener('DOMContentLoaded', colorPriorities);
-  new MutationObserver(colorPriorities).observe(document.documentElement,{subtree:true,childList:true});
-})();
-</script>
-
-
-
-
-
-
-
-
-<script id="priority-minimal-dots-js">
-(function(){
-  function apply(){
-    document.querySelectorAll('.badge,.tag,.pill,[class*="priority"],[data-priority]').forEach(function(el){
-      if(el.closest('select,option')) return;
-      var txt=(el.textContent||'').trim().toLowerCase();
-      var attr=(el.getAttribute('data-priority')||'').trim().toLowerCase();
-      var kind = (txt.includes('hoch')||txt.includes('high')||attr==='hoch'||attr==='high') ? 'high' :
-                 (txt.includes('mittel')||txt.includes('medium')||attr==='mittel'||attr==='medium') ? 'medium' :
-                 (txt.includes('leicht')||txt.includes('low')||attr==='leicht'||attr==='low') ? 'light' : null;
-      if(!kind) return;
-
-      el.style.setProperty('background','#FFFFFF','important');
-      el.style.setProperty('background-color','#FFFFFF','important');
-      el.style.setProperty('color','#111111','important');
-      el.style.setProperty('border','0','important');
-      el.style.setProperty('box-shadow','none','important');
-
-      if(!el.querySelector('.priority-dot')){
-        var dot=document.createElement('span');
-        dot.className='priority-dot '+kind;
-        el.insertBefore(dot,el.firstChild);
-      }
-    });
-  }
-  document.addEventListener('DOMContentLoaded',apply);
-  new MutationObserver(apply).observe(document.documentElement,{subtree:true,childList:true});
-})();
-</script>
-<script id="deadline-priority-migration">
-(function(){
-  try{
-    var raw=localStorage.getItem('studyflow_v2');
-    if(!raw) return;
-    var data=JSON.parse(raw);
-    var changed=false;
-    function fix(arr){
-      if(!Array.isArray(arr)) return;
-      arr.forEach(function(x){
-        if(x && typeof x==='object' && !x.priority){
-          x.priority='mittel'; changed=true;
-        }
-      });
-    }
-    fix(data.deadlines);
-    if(changed) localStorage.setItem('studyflow_v2',JSON.stringify(data));
-  }catch(e){}
-})();
-</script>
-
-<script id="deadline-sort-working">
-(function(){
-  function sync(mode){
-    ['deadlineSort','homeDeadlineSort'].forEach(function(id){
-      var el=document.getElementById(id);
-      if(el) el.value=mode;
-    });
-  }
-  function init(){
-    var mode=localStorage.getItem('studyflow_deadline_sort_v1')||'date';
-    sync(mode);
-    ['deadlineSort','homeDeadlineSort'].forEach(function(id){
-      var el=document.getElementById(id);
-      if(!el) return;
-      el.addEventListener('change',function(){
-        localStorage.setItem('studyflow_deadline_sort_v1',this.value);
-        sync(this.value);
-        if(typeof renderDeadlines==='function'){
-          renderDeadlines('home');
-          renderDeadlines('calendar');
-        }
-      });
-    });
-  }
-  document.addEventListener('DOMContentLoaded',init);
-})();
-</script>
-
-
-<script id="mystudyplaner-v48-uni-links">
-(function(){
-  const STORE='studyflow_uni_links_v1';
-
-  function getLocalUniLinks(){
-    try{
-      const raw=localStorage.getItem(STORE);
-      const arr=raw?JSON.parse(raw):[];
-      return Array.isArray(arr)?arr:[];
-    }catch(e){return [];}
-  }
-
-  function getLinks(){
-    try{
-      if(typeof data!=='undefined' && data && Array.isArray(data.uniLinks)) return data.uniLinks;
-    }catch(e){}
-    return getLocalUniLinks();
-  }
-
-  async function saveLinks(arr){
-    const safe=Array.isArray(arr)?arr:[];
-    try{
-      if(typeof data!=='undefined' && data) data.uniLinks=safe;
-    }catch(e){}
-    localStorage.setItem(STORE,JSON.stringify(safe));
-    if(typeof saveData==='function') await saveData();
-  }
-
-  function escHtml(v){
-    return String(v??'').replace(/[&<>"']/g,function(c){
-      return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c];
-    });
-  }
-
-  function normalizeUrl(v){
-    let url=String(v||'').trim();
-    if(!/^https?:\/\//i.test(url)) url='https://'+url;
-    return url;
-  }
-
-  function renderUniLinks(){
-    const list=document.getElementById('uniLinksList');
-    const empty=document.getElementById('uniLinksEmpty');
-    if(!list||!empty)return;
-    const links=getLinks();
-
-    if(!links.length){
-      list.innerHTML='';
-      empty.style.display='block';
-      return;
-    }
-
-    empty.style.display='none';
-    list.innerHTML=links.map(function(x){
-      return '<article class="uni-link-card">'+
-        '<div class="uni-link-title">'+escHtml(x.title)+'</div>'+
-        (x.description?'<p class="uni-link-description">'+escHtml(x.description)+'</p>':'')+
-        '<span class="uni-link-url">'+escHtml(x.url)+'</span>'+
-        '<div class="uni-link-actions">'+
-          '<button type="button" data-open-uni="'+escHtml(x.id)+'">🌐 Öffnen</button>'+
-          '<button type="button" data-edit-uni="'+escHtml(x.id)+'">✏️ Bearbeiten</button>'+
-          '<button type="button" data-delete-uni="'+escHtml(x.id)+'">× Löschen</button>'+
-        '</div>'+
-      '</article>';
-    }).join('');
-  }
-
-  function openForm(link){
-    const form=document.getElementById('uniLinkForm');
-    if(!form)return;
-    form.classList.add('open');
-    form.style.display='block';
-    form.dataset.editId=link?String(link.id):'';
-    document.getElementById('uniLinkTitle').value=link?link.title:'';
-    document.getElementById('uniLinkUrl').value=link?link.url:'';
-    document.getElementById('uniLinkDescription').value=link?link.description||'':'';
-    const heading=form.querySelector('h3');
-    if(heading)heading.textContent=link?'✏️ Webseite bearbeiten':'➕ Neue Webseite';
-    document.getElementById('uniLinkTitle').focus();
-  }
-
-  function closeForm(){
-    const form=document.getElementById('uniLinkForm');
-    if(!form)return;
-    form.classList.remove('open');
-    form.style.display='none';
-    form.dataset.editId='';
-    document.getElementById('uniLinkTitle').value='';
-    document.getElementById('uniLinkUrl').value='';
-    document.getElementById('uniLinkDescription').value='';
-  }
-
-  function init(){
-    const add=document.getElementById('addUniLinkBtn');
-    const save=document.getElementById('saveUniLinkBtn');
-    const cancel=document.getElementById('cancelUniLinkBtn');
-    const list=document.getElementById('uniLinksList');
-
-    if(add)add.addEventListener('click',function(e){
-      e.preventDefault(); e.stopPropagation(); openForm();
-    });
-    if(cancel)cancel.addEventListener('click',function(e){
-      e.preventDefault(); closeForm();
-    });
-
-    if(save)save.addEventListener('click',async function(e){
-      e.preventDefault();
-      const title=document.getElementById('uniLinkTitle').value.trim();
-      const rawUrl=document.getElementById('uniLinkUrl').value.trim();
-      const description=document.getElementById('uniLinkDescription').value.trim();
-      if(!title){alert('Bitte eine Überschrift eingeben.');return;}
-      if(!rawUrl){alert('Bitte einen Link eingeben.');return;}
-      const url=normalizeUrl(rawUrl);
-      try{new URL(url);}catch(err){alert('Bitte einen gültigen Link eingeben.');return;}
-
-      const links=getLinks().map(x=>({...x}));
-      const form=document.getElementById('uniLinkForm');
-      const editId=form.dataset.editId;
-      if(editId){
-        const item=links.find(x=>String(x.id)===String(editId));
-        if(item){item.title=title;item.url=url;item.description=description;}
-      }else{
-        links.push({id:Date.now(),title:title,url:url,description:description});
-      }
-      await saveLinks(links);
-      closeForm();
-      renderUniLinks();
-    });
-
-    if(list)list.addEventListener('click',async function(e){
-      const openBtn=e.target.closest('[data-open-uni]');
-      const editBtn=e.target.closest('[data-edit-uni]');
-      const deleteBtn=e.target.closest('[data-delete-uni]');
-      if(openBtn){
-        const link=getLinks().find(x=>String(x.id)===String(openBtn.dataset.openUni));
-        if(link)window.open(link.url,'_blank','noopener,noreferrer');
-        return;
-      }
-      if(editBtn){
-        const link=getLinks().find(x=>String(x.id)===String(editBtn.dataset.editUni));
-        if(link)openForm(link);
-        return;
-      }
-      if(deleteBtn){
-        const id=deleteBtn.dataset.deleteUni;
-        await saveLinks(getLinks().filter(x=>String(x.id)!==String(id)));
-        renderUniLinks();
-      }
-    });
-
-    renderUniLinks();
-  }
-
-  window.getLocalUniLinks=getLocalUniLinks;
-  window.renderUniLinks=renderUniLinks;
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);
-  else init();
-})();
-</script>
-
-
-
-<script id="msp-v138-gemini-ai-logic">
-/* V140: Gemini läuft über Firebase AI Logic – kein Gemini-OAuth-Token und kein API-Key im Browser nötig. */
-function updateGeminiOAuthStatus(){
- const e=$('geminiOAuthStatus');
- if(e)e.textContent='Bereit – Gemini läuft über Firebase AI Logic.';
-}
 async function connectGeminiGoogle(){
  updateGeminiOAuthStatus();
  alert('Gemini ist für My Studyplaner über Firebase AI Logic bereit. Du brauchst keinen separaten Gemini-Login oder API-Schlüssel.');
@@ -6215,7 +5443,7 @@ window.openPodcast=function(){
    <div><label>Länge</label><select id="podcastLength"><option value="kurz">kurz</option><option value="mittel" selected>mittel</option></select></div>
   </div>
   <div id="podcastStatus" class="muted" style="margin-top:9px;min-height:18px"></div>
-  <div class="muted podcast-speed-note">💡 Der Podcast ist nach der Erstellung sofort abspielbar. Die Speicherung auf Google Drive läuft im Hintergrund, damit du ihn später auch auf Handy und Tablet nutzen kannst.</div>
+  <div class="muted podcast-speed-note">💡 Der Podcast ist nach der Erstellung sofort abspielbar. Der Podcast wird kostenlos in der Firebase-Cloud gespeichert, damit du ihn später auch auf Handy und Tablet nutzen kannst.</div>
   <button id="createPodcastBtn" type="button" class="btn" style="margin-top:10px">🎙️ Podcast erstellen</button>
   <div id="podcastResult"></div>`);
   const b=document.getElementById('createPodcastBtn');
@@ -6332,184 +5560,60 @@ ${script}`);
 
 /* Podcast audio storage:
    - IndexedDB keeps the audio immediately available on this device.
-   - Google Drive is used only for cross-device persistence and is uploaded in the background.
+   - Firebase Cloud Firestore stores the audio in chunks for cross-device access.
+   - No Google Drive and no Firebase Storage are required.
 */
 const MSP_PODCAST_DB='msp_podcast_audio_v1';
 const MSP_PODCAST_STORE='audio';
-
 function mspPodcastDB(){
  return new Promise((resolve,reject)=>{
-  try{
-   const req=indexedDB.open(MSP_PODCAST_DB,1);
-   req.onupgradeneeded=()=>{const db=req.result;if(!db.objectStoreNames.contains(MSP_PODCAST_STORE))db.createObjectStore(MSP_PODCAST_STORE);};
-   req.onsuccess=()=>resolve(req.result);
-   req.onerror=()=>reject(req.error||new Error('Lokaler Podcast-Speicher konnte nicht geöffnet werden.'));
-  }catch(e){reject(e);}
+  try{const req=indexedDB.open(MSP_PODCAST_DB,1);req.onupgradeneeded=()=>{const db=req.result;if(!db.objectStoreNames.contains(MSP_PODCAST_STORE))db.createObjectStore(MSP_PODCAST_STORE);};req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error||new Error('Lokaler Podcast-Speicher konnte nicht geöffnet werden.'));}catch(e){reject(e);}
  });
 }
 async function cachePodcastAudio(id,audio){
- const db=await mspPodcastDB();
- return new Promise((resolve,reject)=>{
-  const tx=db.transaction(MSP_PODCAST_STORE,'readwrite');
-  tx.objectStore(MSP_PODCAST_STORE).put(audio,String(id));
-  tx.oncomplete=()=>{db.close();resolve(true);};
-  tx.onerror=()=>{db.close();reject(tx.error||new Error('Podcast konnte lokal nicht gespeichert werden.'));};
- });
+ const db=await mspPodcastDB();return new Promise((resolve,reject)=>{const tx=db.transaction(MSP_PODCAST_STORE,'readwrite');tx.objectStore(MSP_PODCAST_STORE).put(audio,String(id));tx.oncomplete=()=>{db.close();resolve(true)};tx.onerror=()=>{db.close();reject(tx.error||new Error('Podcast konnte lokal nicht gespeichert werden.'));};});
 }
 async function getPodcastAudio(id){
- const db=await mspPodcastDB();
- return new Promise((resolve,reject)=>{
-  const tx=db.transaction(MSP_PODCAST_STORE,'readonly');
-  const req=tx.objectStore(MSP_PODCAST_STORE).get(String(id));
-  req.onsuccess=()=>{const value=req.result;db.close();resolve(value||null);};
-  req.onerror=()=>{db.close();reject(req.error||new Error('Podcast konnte lokal nicht geladen werden.'));};
- });
+ const db=await mspPodcastDB();return new Promise((resolve,reject)=>{const tx=db.transaction(MSP_PODCAST_STORE,'readonly');const req=tx.objectStore(MSP_PODCAST_STORE).get(String(id));req.onsuccess=()=>{const value=req.result;db.close();resolve(value||null)};req.onerror=()=>{db.close();reject(req.error||new Error('Podcast konnte nicht geladen werden.'));};});
 }
 async function deletePodcastAudio(id){
- try{
-  const db=await mspPodcastDB();
-  return await new Promise((resolve,reject)=>{
-   const tx=db.transaction(MSP_PODCAST_STORE,'readwrite');
-   tx.objectStore(MSP_PODCAST_STORE).delete(String(id));
-   tx.oncomplete=()=>{db.close();resolve(true);};
-   tx.onerror=()=>{db.close();reject(tx.error||new Error('Lokale Podcast-Datei konnte nicht gelöscht werden.'));};
-  });
- }catch(e){console.warn('Lokales Podcast-Löschen:',e);}
+ try{const db=await mspPodcastDB();return await new Promise((resolve,reject)=>{const tx=db.transaction(MSP_PODCAST_STORE,'readwrite');tx.objectStore(MSP_PODCAST_STORE).delete(String(id));tx.oncomplete=()=>{db.close();resolve(true)};tx.onerror=()=>{db.close();reject(tx.error||new Error('Lokale Podcast-Datei konnte nicht gelöscht werden.'));};});}catch(e){console.warn('Lokales Podcast-Löschen:',e)}
 }
-
-function podcastSyncLabel(p){
- return p.driveFileId?'☁️ Gespeichert & auf allen Geräten verfügbar':'⏳ Wird im Hintergrund synchronisiert…';
-}
-
+function podcastSyncLabel(p){return p.cloudFile?'☁️ Gespeichert & auf allen Geräten verfügbar':'⏳ Wird in der kostenlosen Cloud gespeichert…';}
 async function uploadPodcastInBackground(id){
- const p=(data.podcasts||[]).find(x=>String(x.id)===String(id));
- if(!p||p.driveFileId)return;
+ const p=(data.podcasts||[]).find(x=>String(x.id)===String(id));if(!p||p.cloudFile)return;
  try{
-  const audio=await getPodcastAudio(id);
-  if(!audio)throw new Error('Lokale Audiodatei fehlt.');
-  if(!await googleDriveAuth())throw new Error('Google Drive-Zugriff nicht verfügbar.');
-  const file=new File([audio],p.fileName,{type:'audio/wav'});
-  const u=await googleDriveUpload(file);
-  p.driveFileId=u.id;
-  p.url=u.webViewLink||('https://drive.google.com/file/d/'+u.id+'/view');
-  p.syncStatus='synced';
-  await saveData();
-  renderSavedPodcasts();
- }catch(e){
-  p.syncStatus='pending';
-  console.warn('Podcast-Hintergrundspeicherung:',e);
-  renderSavedPodcasts();
- }
+  if(!cloudFilesReady())throw new Error('Cloud-Konto noch nicht angemeldet.');
+  const audio=await getPodcastAudio(id);if(!audio)throw new Error('Lokale Audiodatei fehlt.');
+  const root=fileCloudRoot('podcast_'+id);
+  const chunks=Math.ceil(audio.size/FIRESTORE_FILE_CHUNK_SIZE)||1;
+  await root.set({name:p.fileName,type:'audio/wav',size:audio.size,chunks,kind:'podcast',updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});
+  const buffer=new Uint8Array(await audio.arrayBuffer());
+  for(let index=0;index<chunks;index++){
+   const part=buffer.subarray(index*FIRESTORE_FILE_CHUNK_SIZE,Math.min((index+1)*FIRESTORE_FILE_CHUNK_SIZE,buffer.length));
+   await root.collection('chunks').doc(String(index).padStart(6,'0')).set({index,data:bytesToBase64(part)},{merge:false});
+  }
+  p.cloudFile=true;p.syncStatus='synced';await saveData();renderSavedPodcasts();
+ }catch(e){p.syncStatus='pending';console.warn('Podcast-Cloud-Speicherung:',e);renderSavedPodcasts();}
 }
-
 function renderSavedPodcasts(){
- const el=$('savedPodcastList');
- if(!el)return;
- const list=Array.isArray(data.podcasts)?data.podcasts:[];
- if(!list.length){
-   el.innerHTML='<div class="podcast-empty">Noch keine Podcasts gespeichert. Deine nächsten fertigen Podcasts erscheinen hier automatisch.</div>';
-   return;
- }
+ const el=$('savedPodcastList');if(!el)return;const list=Array.isArray(data.podcasts)?data.podcasts:[];
+ if(!list.length){el.innerHTML='<div class="podcast-empty">Noch keine Podcasts gespeichert. Deine nächsten fertigen Podcasts erscheinen hier automatisch.</div>';return;}
  el.innerHTML=list.slice().sort((a,b)=>Number(b.createdAt||0)-Number(a.createdAt||0)).map(p=>{
-   const date=p.createdAt?new Date(p.createdAt).toLocaleString('de-DE',{dateStyle:'medium',timeStyle:'short'}):'';
-   const meta=[date,p.styleLabel,p.lengthLabel].filter(Boolean).join(' · ');
-   const sync=p.driveFileId?'☁️ Auf allen Geräten verfügbar':'⏳ Speicherung läuft im Hintergrund';
-   const retry=!p.driveFileId?`<button class="btn secondary small" type="button" onclick="syncSavedPodcast('${esc(p.id)}',this)">☁️ Synchronisieren</button>`:'';
-   return `<article class="saved-podcast">
-     <div class="saved-podcast-top">
-       <div><div class="saved-podcast-title">🎧 ${esc(p.title||'Lern-Podcast')}</div><div class="saved-podcast-meta">${esc(meta)}</div></div>
-       <button class="trash" type="button" onclick="deleteSavedPodcast('${esc(p.id)}')" title="Podcast löschen">×</button>
-     </div>
-     <div class="saved-podcast-sync">${sync}</div>
-     <div class="saved-podcast-actions">
-       <button class="btn small" type="button" onclick="playSavedPodcast('${esc(p.id)}',this)">▶️ Abspielen</button>
-       <button class="btn secondary small" type="button" onclick="showSavedPodcastScript('${esc(p.id)}')">📝 Skript</button>
-       <button class="btn secondary small" type="button" onclick="renameSavedPodcast('${esc(p.id)}')">✏️ Titel ändern</button>
-       ${retry}
-     </div>
-     <div id="savedPodcastPlayer_${esc(p.id)}"></div>
-   </article>`;
+  const date=p.createdAt?new Date(p.createdAt).toLocaleString('de-DE',{dateStyle:'medium',timeStyle:'short'}):'';const meta=[date,p.styleLabel,p.lengthLabel].filter(Boolean).join(' · ');const sync=p.cloudFile?'☁️ Auf allen Geräten verfügbar':'⏳ Cloud-Speicherung läuft';const retry=!p.cloudFile?`<button class="btn secondary small" type="button" onclick="syncSavedPodcast('${esc(p.id)}',this)">☁️ Synchronisieren</button>`:'';
+  return `<article class="saved-podcast"><div class="saved-podcast-top"><div><div class="saved-podcast-title">🎧 ${esc(p.title||'Lern-Podcast')}</div><div class="saved-podcast-meta">${esc(meta)}</div></div><button class="trash" type="button" onclick="deleteSavedPodcast('${esc(p.id)}')" title="Podcast löschen">×</button></div><div class="saved-podcast-sync">${sync}</div><div class="saved-podcast-actions"><button class="btn small" type="button" onclick="playSavedPodcast('${esc(p.id)}',this)">▶️ Abspielen</button><button class="btn secondary small" type="button" onclick="showSavedPodcastScript('${esc(p.id)}')">📝 Skript</button><button class="btn secondary small" type="button" onclick="renameSavedPodcast('${esc(p.id)}')">✏️ Titel ändern</button>${retry}</div><div id="savedPodcastPlayer_${esc(p.id)}"></div></article>`;
  }).join('');
 }
-
-window.syncSavedPodcast=async function(id,btn){
- const old=btn?.textContent;
- if(btn){btn.disabled=true;btn.textContent='⏳ Synchronisiere…';}
- try{
-  await uploadPodcastInBackground(id);
-  const p=(data.podcasts||[]).find(x=>String(x.id)===String(id));
-  if(!p?.driveFileId)alert('Die Synchronisierung konnte noch nicht abgeschlossen werden. Der Podcast bleibt aber lokal gespeichert.');
- }finally{
-  if(btn){btn.disabled=false;btn.textContent=old||'☁️ Synchronisieren';}
-  renderSavedPodcasts();
- }
-};
-
+window.syncSavedPodcast=async function(id,btn){const old=btn?.textContent;if(btn){btn.disabled=true;btn.textContent='⏳ Synchronisiere…';}try{await uploadPodcastInBackground(id);const p=(data.podcasts||[]).find(x=>String(x.id)===String(id));if(!p?.cloudFile)alert('Die Cloud-Speicherung konnte noch nicht abgeschlossen werden. Der Podcast bleibt aber lokal gespeichert.');}finally{if(btn){btn.disabled=false;btn.textContent=old||'☁️ Synchronisieren';}renderSavedPodcasts();}};
 async function playSavedPodcast(id,btn){
- const p=(data.podcasts||[]).find(x=>String(x.id)===String(id));
- if(!p)return;
- const holder=$('savedPodcastPlayer_'+id);
- if(!holder)return;
- try{
-   btn.disabled=true;btn.textContent='⏳ Laden…';
-   let blob=await getPodcastAudio(id);
-   if(!blob&&p.driveFileId){
-     if(!await googleDriveAuth())throw new Error('Google Drive-Zugriff wurde nicht erteilt.');
-     const r=await driveFetch('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(p.driveFileId)+'?alt=media');
-     if(!r.ok)throw new Error('Google Drive ('+r.status+'): '+await r.text());
-     blob=await r.blob();
-     await cachePodcastAudio(id,blob);
-   }
-   if(!blob)throw new Error('Für diesen Podcast ist keine Audiodatei vorhanden.');
-   if(p._objectUrl)URL.revokeObjectURL(p._objectUrl);
-   p._objectUrl=URL.createObjectURL(blob);
-   holder.innerHTML=`<audio controls autoplay src="${p._objectUrl}"></audio>`;
- }catch(e){
-   console.error(e);alert('Podcast konnte nicht geladen werden:\n'+(e.message||e));
- }finally{
-   btn.disabled=false;btn.textContent='▶️ Abspielen';
- }
+ const p=(data.podcasts||[]).find(x=>String(x.id)===String(id));if(!p)return;const holder=$('savedPodcastPlayer_'+id);if(!holder)return;
+ try{btn.disabled=true;btn.textContent='⏳ Laden…';let blob=await getPodcastAudio(id);if(!blob&&p.cloudFile){blob=await readFirestoreFile({id:'podcast_'+id,type:'audio/wav',cloudFile:true,cloudFileChunks:p.cloudFileChunks||0});await cachePodcastAudio(id,blob);}if(!blob)throw new Error('Für diesen Podcast ist keine Audiodatei vorhanden.');if(p._objectUrl)URL.revokeObjectURL(p._objectUrl);p._objectUrl=URL.createObjectURL(blob);holder.innerHTML=`<audio controls autoplay src="${p._objectUrl}"></audio>`;}catch(e){console.error(e);alert('Podcast konnte nicht geladen werden:\n'+(e.message||e));}finally{btn.disabled=false;btn.textContent='▶️ Abspielen';}
 }
-
-function showSavedPodcastScript(id){
- const p=(data.podcasts||[]).find(x=>String(x.id)===String(id));
- if(!p)return;
- openModal('📝 Podcast-Skript',`<div class="podcast-intro">${esc(p.title||'Lern-Podcast')}</div>
- <div style="white-space:pre-wrap;font-size:12px;line-height:1.55">${esc(p.script||'Kein Skript gespeichert.')}</div>`);
-}
-
-async function renameSavedPodcast(id){
- const p=(data.podcasts||[]).find(x=>String(x.id)===String(id));
- if(!p)return;
- const current=String(p.title||'Lern-Podcast');
- const next=prompt('Neuer Podcast-Titel:',current);
- if(next===null)return;
- const title=next.trim();
- if(!title){alert('Bitte einen Titel eingeben.');return;}
- p.title=title;
- p.fileName='My Studyplaner – '+title.replace(/[\\/:*?"<>|]/g,'-').slice(0,90)+'.wav';
- await saveData();
- renderSavedPodcasts();
-}
-
+function showSavedPodcastScript(id){const p=(data.podcasts||[]).find(x=>String(x.id)===String(id));if(!p)return;openModal('📝 Podcast-Skript',`<div class="podcast-intro">${esc(p.title||'Lern-Podcast')}</div><div style="white-space:pre-wrap;font-size:12px;line-height:1.55">${esc(p.script||'Kein Skript gespeichert.')}</div>`);}
+async function renameSavedPodcast(id){const p=(data.podcasts||[]).find(x=>String(x.id)===String(id));if(!p)return;const current=String(p.title||'Lern-Podcast');const next=prompt('Neuer Podcast-Titel:',current);if(next===null)return;const title=next.trim();if(!title){alert('Bitte einen Titel eingeben.');return;}p.title=title;p.fileName='My Studyplaner – '+title.replace(/[\\/:*?"<>|]/g,'-').slice(0,90)+'.wav';await saveData();renderSavedPodcasts();}
 async function deleteSavedPodcast(id){
- const p=(data.podcasts||[]).find(x=>String(x.id)===String(id));
- if(!p)return;
- if(!confirm('Diesen gespeicherten Podcast löschen?'))return;
- try{
-   if(p.driveFileId){
-     try{
-      if(await googleDriveAuth())await googleDriveDelete(p.driveFileId);
-     }catch(e){console.warn('Drive-Löschen:',e);}
-   }
-   if(p._objectUrl)URL.revokeObjectURL(p._objectUrl);
-   await deletePodcastAudio(id);
-   data.podcasts=data.podcasts.filter(x=>String(x.id)!==String(id));
-   await saveData();
-   renderSavedPodcasts();
- }catch(e){
-   console.error(e);alert('Podcast konnte nicht gelöscht werden:\n'+(e.message||e));
- }
+ const p=(data.podcasts||[]).find(x=>String(x.id)===String(id));if(!p)return;if(!confirm('Diesen gespeicherten Podcast löschen?'))return;
+ try{if(p.cloudFile&&cloudFilesReady())await deleteFirestoreFileChunks('podcast_'+id);if(p._objectUrl)URL.revokeObjectURL(p._objectUrl);await deletePodcastAudio(id);data.podcasts=data.podcasts.filter(x=>String(x.id)!==String(id));await saveData();renderSavedPodcasts();}catch(e){console.error(e);alert('Podcast konnte nicht gelöscht werden:\n'+(e.message||e));}
 }
 
 window.createAIPodcast=async function(){
@@ -6545,7 +5649,7 @@ ${source.slice(0,45000)}`);
     length:$('podcastLength').value,
     lengthLabel:isShort?'kurz':'mittel',
     fileName:'My Studyplaner – '+title.replace(/[\\/:*?"<>|]/g,'-').slice(0,90)+'.wav',
-    driveFileId:'',url:'',syncStatus:'pending'
+    cloudFile:false,url:'',syncStatus:'pending'
   };
   await cachePodcastAudio(item.id,audio);
   data.podcasts=data.podcasts||[];
@@ -6556,10 +5660,10 @@ ${source.slice(0,45000)}`);
   result.innerHTML=`<div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--line)">
     <b>🎧 Dein Lern-Podcast ist fertig</b>
     <audio controls style="width:100%;margin-top:10px" src="${url}"></audio>
-    <div class="muted" style="margin-top:7px">Du kannst ihn sofort anhören. Die Speicherung auf Google Drive läuft jetzt im Hintergrund, damit er danach auch auf Handy und Tablet verfügbar ist.</div>
+    <div class="muted" style="margin-top:7px">Du kannst ihn sofort anhören. Die kostenlose Cloud-Speicherung läuft jetzt im Hintergrund, damit er danach auch auf Handy und Tablet verfügbar ist.</div>
     <details style="margin-top:9px"><summary>📝 Skript</summary><div style="white-space:pre-wrap;font-size:12px;line-height:1.5;margin-top:7px">${esc(script)}</div></details>
   </div>`;
-  status.textContent='✓ Podcast erstellt – Speicherung läuft im Hintergrund.';
+  status.textContent='✓ Podcast erstellt – Cloud-Speicherung läuft im Hintergrund.';
   renderSavedPodcasts();
 
   /* Nicht awaiten: der Upload blockiert weder Audio noch Oberfläche. */
@@ -6577,7 +5681,7 @@ ${source.slice(0,45000)}`);
 async function retryPendingPodcastUploads(){
  const list=Array.isArray(data.podcasts)?data.podcasts:[];
  for(const p of list){
-  if(p&&p.id&&!p.driveFileId){
+  if(p&&p.id&&!p.cloudFile){
    try{await uploadPodcastInBackground(p.id);}catch(e){console.warn(e);}
   }
  }
@@ -7175,11 +6279,7 @@ function renderStudyTimer(){
 </script>
 
 
-<style id="msp-v275-google-cache">
-.account-service .account-small{min-height:18px}
-</style>
-
-<style id="msp-font-v274-final">
+<style id="msp-font-v275-final">
 html,body,body *{
   font-family:"DM Sans",Arial,sans-serif !important;
 }
@@ -7189,30 +6289,6 @@ body *::before,body *::after{
 </style>
 
 
-<div id="googleReauthModal" class="google-reauth-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:9999;align-items:center;justify-content:center;padding:18px">
-  <div style="width:min(420px,100%);background:var(--card,#fff);border:1px solid var(--line,#ddd);border-radius:16px;padding:20px;box-shadow:0 18px 60px rgba(0,0,0,.18)">
-    <div style="font-size:18px;font-weight:850;margin-bottom:8px">🔐 Google-Verbindung erforderlich</div>
-    <div style="font-size:13px;line-height:1.5;color:var(--muted,#666);margin-bottom:16px">
-      Die Google-Verbindung konnte nicht automatisch erneuert werden. Bitte verbinde Google einmal neu, damit Drive und Kalender weiter funktionieren.
-    </div>
-    <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
-      <button class="btn secondary" onclick="closeGoogleReauth()">Später</button>
-      <button class="btn" onclick="reauthorizeGoogleServices()">🔵 Mit Google verbinden</button>
-    </div>
-  </div>
-</div>
-
-
-<script id="msp-v275-visibility">
-document.addEventListener('visibilitychange',()=>{
- if(!document.hidden){
-  // Never wipe the cached Google token just because the app became visible.
-  // Reuse it immediately; if it has expired, the normal API request will
-  // attempt one silent renewal and only then require manual authorization.
-  if(typeof autoSyncGoogleCalendar==='function')autoSyncGoogleCalendar();
- }
-});
-</script>
 </body>
 </html>
 

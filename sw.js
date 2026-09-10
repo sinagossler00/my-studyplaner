@@ -1,4 +1,4 @@
-const CACHE = 'my-studyplaner-pwa-v265-font-clean-files-clean-clean';
+const CACHE = 'my-studyplaner-pwa-v275-firestore-cloud';
 const APP_SHELL = [
   './',
   './index.html',
