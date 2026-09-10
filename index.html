@@ -49,7 +49,7 @@ h1{margin:0;font-size:29px;font-weight:850}h2{margin:0;font-size:19px;font-weigh
 .modal{position:fixed;inset:0;background:#FFFFFF !important;display:none;align-items:center;justify-content:center;padding:16px;z-index:30}.modal.show{display:flex}.modal-box{width:min(620px,100%);max-height:90vh;overflow:auto;background:#FFFFFF !important;border:1px solid #5a625f;border-radius:17px;padding:19px;box-shadow:0 18px 60px rgba(0,0,0,.3)}.modal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:15px}.close{border:0;background:transparent;color:var(--muted);font-size:24px}
 .module{background:var(--surface2);border:1px solid #515956;border-radius:13px;padding:13px;margin:9px 0}.module-head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}.module-files{margin-top:11px;padding-top:10px;border-top:1px solid #515956}.module-file{display:flex;align-items:center;gap:8px;padding:6px 0;font-size:12px}.module-file a{color:var(--sage-pale);text-decoration:none;flex:1}.module-file a:hover{text-decoration:underline}
 .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}.stat{background:var(--surface2);border:1px solid #515956;border-radius:12px;padding:13px}.stat strong{display:block;font-size:24px;margin-top:3px}
-.cloud-status{display:flex;align-items:center;gap:7px;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:8px 10px;font-size:11px;font-weight:750}.dot{width:8px;height:8px;border-radius:50%;background:#FFFFFF !important;}.dot.on{background:var(--sage-strong)}
+.cloud-status{display:flex;align-items:center;gap:7px;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:8px 10px;font-size:11px;font-weight:750}.dot{width:8px;height:8px;border-radius:50%;background:#b85b5b !important;}.dot.on{background:#4b9b69 !important}
 
 /* Deadlines-Seite: Liste links, Kalender als eigene Karte weit rechts */
 .deadlines-page-layout{
@@ -4109,7 +4109,6 @@ data.semester=Math.max(1,Math.min(6,Number(data.semester)||1));
 data.gradeModules=Array.isArray(data.gradeModules)?data.gradeModules:[];
 data.fileFolders=Array.isArray(data.fileFolders)?data.fileFolders:[];
 data.files=Array.isArray(data.files)?data.files:[];
-if(typeof data.googleDriveFolderId!=='string')data.googleDriveFolderId='';
 data.grades=Array.isArray(data.grades)?data.grades:[];
 data.uniLinks=Array.isArray(data.uniLinks)?data.uniLinks:[];
 if(!Array.isArray(data.podcasts))data.podcasts=[];
@@ -5002,8 +5001,6 @@ async function uploadModule(id){let f=$('moduleInput_'+id);f.value='';f.click()}
 async function handleModuleFiles(id,files){for(const f of [...files])await addFile(f,id);await saveData();renderAll()}
 
 const GOOGLE_DRIVE_SCOPE='https://www.googleapis.com/auth/drive.file';
-const GOOGLE_DRIVE_FOLDER_NAME='My Studyplaner';
-let googleDriveFolderId='';
 const GOOGLE_CALENDAR_SCOPE='https://www.googleapis.com/auth/calendar.readonly';
 const GOOGLE_SERVICES_SCOPE=GOOGLE_DRIVE_SCOPE+' '+GOOGLE_CALENDAR_SCOPE;
 let googleDriveTokenClient=null;
@@ -5030,7 +5027,7 @@ function initGoogleServicesTokenClient(){
   callback:()=>{},
   error_callback:e=>{
     console.warn('Google-Dienste OAuth',e);
-    if(googleServicesAuthPromise===null)showGoogleReauth();
+    if(googleManualAuthInProgress)showGoogleReauth();
   }
  });
  googleDriveTokenClient=googleServicesTokenClient;
@@ -5041,6 +5038,7 @@ function initGoogleServicesTokenClient(){
 
 let googleReauthShown=false;
 let googleReauthTimer=null;
+let googleManualAuthInProgress=false;
 
 function showGoogleReauth(){
  const el=$('googleReauthModal');
@@ -5072,8 +5070,6 @@ async function reauthorizeGoogleServices(){
    closeGoogleReauth();
    scheduleGoogleTokenRefresh();
    try{
-    await ensureGoogleDriveFolder();
-    await organizeExistingDriveFiles();
     await loadGoogleCalendarsAndColors();
     updateDriveStatus();
     updateGoogleCalendarStatus();
@@ -5103,7 +5099,9 @@ function scheduleGoogleTokenRefresh(){
 }
 
 function googleServicesAuth(prompt='none'){
+ googleManualAuthInProgress=(prompt==='consent');
  if(googleServicesAccessToken){
+  googleManualAuthInProgress=false;
   googleDriveAccessToken=googleServicesAccessToken;
   googleCalendarAccessToken=googleServicesAccessToken;
   return Promise.resolve(true);
@@ -5135,6 +5133,7 @@ function googleServicesAuth(prompt='none'){
     googleServicesAccessToken=r.access_token;
     googleDriveAccessToken=r.access_token;
     googleCalendarAccessToken=r.access_token;
+    localStorage.setItem('msp_google_services_authorized','1');
     updateDriveStatus();
     updateGoogleCalendarStatus();
     if(typeof scheduleGoogleTokenRefresh==='function')scheduleGoogleTokenRefresh();
@@ -5163,10 +5162,7 @@ function googleServicesAuth(prompt='none'){
  return googleServicesAuthPromise;
 }
 
-async function googleDriveAuth(){
- if(googleServicesAccessToken||googleDriveAccessToken)return true;
- const silent=await googleServicesAuth('none');
- if(silent)return true;
+function googleDriveAuth(){
  return googleServicesAuth('consent');
 }
 
@@ -5192,8 +5188,6 @@ async function connectGoogleServices(){
    alert('Google-Anmeldung wurde nicht abgeschlossen. Bitte erneut versuchen.');
    return false;
   }
-  await ensureGoogleDriveFolder();
-  await organizeExistingDriveFiles();
   await loadGoogleCalendarsAndColors();
   const cfg=getGoogleCalendarConfig()||{};
   if(cfg.calendarId&&cfg.colorId)await syncGoogleCalendarAfterAuth(true);
@@ -5210,14 +5204,8 @@ async function connectGoogleServices(){
 function updateDriveStatus(){
  const e=$('googleDriveStatus');
  if(e)e.textContent=googleServicesAccessToken
-   ? ('Verbunden · Ordner „'+GOOGLE_DRIVE_FOLDER_NAME+'“ aktiv.')
-   : 'Nicht verbunden';
-}
-function openGoogleDriveFolder(){
- const id=String(data.googleDriveFolderId||googleDriveFolderId||'');
- if(!id){alert('Der My Studyplaner-Ordner wurde noch nicht eingerichtet. Bitte zuerst Google für Drive & Kalender verbinden.');return;}
- const win=window.open('https://drive.google.com/drive/u/0/folders/'+encodeURIComponent(id),'_blank','noopener');
- if(!win)alert('Der Browser hat das Öffnen blockiert. Bitte Popups für My Studyplaner erlauben.');
+   ? 'Verbunden · gemeinsamer Google-Zugriff aktiv.'
+   : (localStorage.getItem('msp_google_services_authorized')==='1' ? 'Verbindung gespeichert · wird still geprüft.' : 'Nicht verbunden');
 }
 
 async function driveFetch(url,opt={}){
@@ -5232,77 +5220,11 @@ async function driveFetch(url,opt={}){
  }
  return r;
 }
-async function googleDriveJson(url,opt={}){
- const r=await driveFetch(url,{...opt,headers:{'Content-Type':'application/json',...(opt.headers||{})}});
- const json=await r.json().catch(()=>({}));
- if(!r.ok)throw new Error('Google Drive ('+r.status+'): '+(json.error?.message||'API-Fehler'));
- return json;
-}
-
-async function ensureGoogleDriveFolder(){
- if(!googleServicesAccessToken&&!googleDriveAccessToken){
-  if(!await googleServicesAuth('none'))return '';
- }
- const saved=String(data.googleDriveFolderId||googleDriveFolderId||'');
- if(saved){
-  try{
-   const check=await googleDriveJson('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(saved)+'?fields=id,name,mimeType,trashed');
-   if(check.id&&check.mimeType==='application/vnd.google-apps.folder'&&!check.trashed){
-    googleDriveFolderId=check.id;
-    data.googleDriveFolderId=check.id;
-    return check.id;
-   }
-  }catch(e){console.warn('Gespeicherten Drive-Ordner prüfen:',e);}
- }
- const q="name='"+GOOGLE_DRIVE_FOLDER_NAME.replace(/'/g,"\\'")+"' and mimeType='application/vnd.google-apps.folder' and trashed=false";
- const found=await googleDriveJson('https://www.googleapis.com/drive/v3/files?q='+encodeURIComponent(q)+'&pageSize=10&fields=files(id,name,mimeType,trashed)');
- const existing=(found.files||[]).find(x=>x.mimeType==='application/vnd.google-apps.folder'&&!x.trashed);
- if(existing){
-  googleDriveFolderId=existing.id;
-  data.googleDriveFolderId=existing.id;
-  await saveData();
-  return existing.id;
- }
- const created=await googleDriveJson('https://www.googleapis.com/drive/v3/files?fields=id,name,mimeType', {
-  method:'POST',
-  body:JSON.stringify({name:GOOGLE_DRIVE_FOLDER_NAME,mimeType:'application/vnd.google-apps.folder'})
- });
- googleDriveFolderId=created.id||'';
- data.googleDriveFolderId=googleDriveFolderId;
- await saveData();
- return googleDriveFolderId;
-}
-
-async function moveGoogleDriveFileToFolder(fileId,folderId){
- if(!fileId||!folderId)return;
- try{
-  const meta=await googleDriveJson('https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(fileId)+'?fields=id,parents');
-  const parents=Array.isArray(meta.parents)?meta.parents:[];
-  if(parents.includes(folderId))return;
-  const remove=parents.join(',');
-  let url='https://www.googleapis.com/drive/v3/files/'+encodeURIComponent(fileId)+'?addParents='+encodeURIComponent(folderId)+'&fields=id,parents';
-  if(remove)url+='&removeParents='+encodeURIComponent(remove);
-  await googleDriveJson(url,{method:'PATCH'});
- }catch(e){console.warn('Drive-Datei in Ordner verschieben:',fileId,e);}
-}
-
-async function organizeExistingDriveFiles(){
- try{
-  const folderId=await ensureGoogleDriveFolder();
-  if(!folderId)return;
-  for(const f of (data.files||[])){if(f.driveFileId)await moveGoogleDriveFileToFolder(f.driveFileId,folderId);}
-  for(const p of (data.podcasts||[])){if(p.driveFileId)await moveGoogleDriveFileToFolder(p.driveFileId,folderId);}
-  await saveData();
- }catch(e){console.warn('Drive-Ordner einrichten:',e);}
-}
-
 async function googleDriveUpload(file){
- const folderId=await ensureGoogleDriveFolder();
- if(!folderId)throw new Error('Der Google-Drive-Ordner konnte nicht eingerichtet werden.');
  const b='msp_'+Date.now();
  const body=new Blob([
   '--'+b+'\r\n','Content-Type: application/json; charset=UTF-8\r\n\r\n',
-  JSON.stringify({name:file.name,mimeType:file.type||'application/octet-stream',parents:[folderId]}),
+  JSON.stringify({name:file.name,mimeType:file.type||'application/octet-stream'}),
   '\r\n--'+b+'\r\n','Content-Type: '+(file.type||'application/octet-stream')+'\r\n\r\n',
   file,'\r\n--'+b+'--'
  ]);
@@ -5393,12 +5315,14 @@ async function initCloud(){
   fb={auth:firebase.auth(),db:firebase.firestore()};
   fb.auth.onAuthStateChanged(async user=>{
    currentUser=user;
+   if(window.mspRefreshSyncStatus)window.mspRefreshSyncStatus();
 
    if(cloudUnsubscribe){cloudUnsubscribe();cloudUnsubscribe=null;}
 
    if(user){
     cloudEnabled=true;
     updateCloudStatus(true,user.email||'Angemeldet');
+    if(window.mspRefreshSyncStatus)window.mspRefreshSyncStatus();
 
     try{
      const localBeforeCloud=structuredClone(data||{});
@@ -5512,6 +5436,7 @@ async function initCloud(){
    }else{
     cloudEnabled=false;
     updateCloudStatus(false);
+    if(window.mspRefreshSyncStatus)window.mspRefreshSyncStatus();
    }
   });
  }catch(e){
@@ -5529,11 +5454,11 @@ function openCloud(){
    <div class="account-status ${signed?'is-on':''}"><span class="account-dot"></span><div><strong>${cloudText}</strong><div class="muted account-small">${signed?'Cloud-Synchronisierung aktiv · Daten werden automatisch gespeichert.':'Einmal anmelden, danach werden deine Studyplaner-Daten automatisch synchronisiert.'}</div></div></div>
    ${signed ? `<div class="account-actions"><button class="btn secondary" onclick="cloudLogout();closeModal()">Abmelden</button></div>` : `<div class="account-login"><button class="btn full" onclick="cloudGoogleAuth()">🔵 Mit Google anmelden</button><div class="account-or"><span></span>oder<span></span></div><div class="account-login-grid"><input id="cEmail" type="email" placeholder="E-Mail"><input id="cPassword" type="password" placeholder="Passwort"><select id="cAction"><option value="login">Anmelden</option><option value="signup">Konto erstellen</option></select></div><button class="btn full" style="margin-top:8px" onclick="cloudEmailAuth()">☁️ Mit E-Mail anmelden</button></div>`}
    <div class="account-services">
-     <div class="account-service"><div><b>📁 Google Drive</b><div class="muted account-small" id="googleDriveStatus">Nicht verbunden</div><div class="muted account-small">Ordner: My Studyplaner</div></div><button class="btn secondary small" type="button" onclick="openGoogleDriveFolder()">📂 Öffnen</button></div>
+     <div class="account-service"><div><b>📁 Google Drive</b><div class="muted account-small" id="googleDriveStatus">Nicht verbunden</div></div></div>
      <div class="account-service"><div><b>🗓️ Google Kalender</b><div class="muted account-small" id="googleCalendarStatus">Nicht verbunden</div></div></div>
      <button class="btn secondary full" style="margin-top:4px" onclick="connectGoogleServices()">🔵 Google für Drive & Kalender verbinden</button>
    </div>
-   <div class="account-note">Einmal Google verbinden → Drive und Kalender nutzen denselben Zugriff. Deine Dateien werden im Drive-Ordner „My Studyplaner“ gespeichert und sind dort auf allen Geräten erreichbar. Beim normalen Reload öffnet sich kein Google-Popup automatisch.</div>
+   <div class="account-note">Einmal Google freigeben → Drive und Kalender verwenden denselben Zugriff. Beim Neuladen wird kein Google-Fenster automatisch geöffnet. Wenn Google eine neue Freigabe verlangt, kannst du sie hier bewusst starten.</div>
    <details class="account-advanced"><summary>⚙️ Erweiterte Firebase-Einstellungen</summary><div class="muted account-small" style="margin:8px 0">Nur nötig, wenn du eine eigene Firebase-Konfiguration ändern möchtest.</div><textarea id="firebaseConfig" placeholder='{"apiKey":"...","authDomain":"...","projectId":"...","storageBucket":"...","messagingSenderId":"...","appId":"..."}'>${esc(JSON.stringify(cfg,null,2))}</textarea><div style="display:flex;gap:7px;margin-top:8px"><button class="btn" onclick="saveFirebaseConfig()">Speichern</button><button class="btn secondary" onclick="clearFirebaseConfig()">Löschen</button></div></details>
  </div>`)
 }
@@ -5653,15 +5578,19 @@ async function googleApi(path){
 }
 
 function trySilentGoogleCalendarSync(){
- // Kein automatisches Google-Popup beim Laden der Seite.
- // Wenn für diese Browser-Sitzung bereits ein gültiger Token vorhanden ist,
- // darf der Kalender im Hintergrund synchronisieren.
  try{
   const cfg=getGoogleCalendarConfig()||{};
-  if(!cfg.clientId||!cfg.calendarId||!cfg.colorId)return;
-  if(!googleServicesAccessToken)return;
-  autoSyncGoogleCalendar();
- }catch(e){console.warn('Google Kalender Hintergrund-Sync:',e)}
+  if(!cfg.clientId||!window.google?.accounts?.oauth2)return;
+  if(!cfg.calendarId||!cfg.colorId)return;
+  if(googleServicesAccessToken)return;
+  googleServicesAuth('none').then(async ok=>{
+   if(!ok)return;
+   try{
+    await loadGoogleCalendarsAndColors();
+    await syncGoogleCalendarAfterAuth(true);
+   }catch(e){console.warn('Google Kalender Hintergrund-Sync:',e)}
+  });
+ }catch(e){console.warn('Silent Google-Kalender-Sync:',e)}
 }
 
 function initGoogleTokenClient(){
@@ -5878,7 +5807,10 @@ async function autoSyncGoogleCalendar(){
  if(googleCalendarAutoSyncBusy||document.hidden)return;
  const cfg=getGoogleCalendarConfig()||{};
  if(!cfg.clientId||!cfg.calendarId||!cfg.colorId)return;
- if(!googleServicesAccessToken)return;
+ if(!googleServicesAccessToken){
+  const ok=await googleServicesAuth('none');
+  if(!ok)return;
+ }
  googleCalendarAutoSyncBusy=true;
  try{
   await syncGoogleCalendarAfterAuth(true);
@@ -5891,9 +5823,7 @@ async function tryInitGoogleFromSavedConfig(){
  const cfg=getGoogleCalendarConfig();
  if(cfg?.clientId && window.google?.accounts?.oauth2){
   initGoogleServicesTokenClient();
-  // Nur den OAuth-Client vorbereiten. Kein Login/Popup beim Reload.
-  updateDriveStatus();
-  updateGoogleCalendarStatus();
+  setTimeout(()=>googleServicesAuth('none'),900);
  }
 }
 window.addEventListener('load',tryInitGoogleFromSavedConfig);
@@ -7141,7 +7071,7 @@ function renderStudyTimer(){
 
   function getAuthUser(){
     try{
-      if(window.currentUser) return window.currentUser;
+      if(typeof currentUser!=='undefined' && currentUser) return currentUser;
       if(window.fb && window.fb.auth && window.fb.auth().currentUser) return window.fb.auth().currentUser;
     }catch(e){}
     return null;
@@ -7153,7 +7083,7 @@ function renderStudyTimer(){
       return false;
     }
     const user=getAuthUser();
-    const cloud=window.cloudEnabled!==false;
+    const cloud=(typeof cloudEnabled!=='undefined') ? cloudEnabled : (window.cloudEnabled!==false);
     if(user && cloud){
       setStatus('connected','Cloud: verbunden','Automatische Synchronisierung aktiv');
       return true;
@@ -7215,7 +7145,7 @@ function renderStudyTimer(){
 </script>
 
 
-<style id="msp-font-v275-final">
+<style id="msp-font-v274-final">
 html,body,body *{
   font-family:"DM Sans",Arial,sans-serif !important;
 }
@@ -7239,11 +7169,16 @@ body *::before,body *::after{
 </div>
 
 
-<script id="msp-v275-visibility">
+<script id="msp-v274-visibility">
 document.addEventListener('visibilitychange',()=>{
  if(!document.hidden){
-  // Beim Zurückkehren in die App kein Google-Popup starten.
-  if(googleServicesAccessToken&&typeof autoSyncGoogleCalendar==='function')autoSyncGoogleCalendar();
+  const cfg=getGoogleCalendarConfig()||{};
+  if(cfg.clientId){
+   googleServicesAccessToken='';
+   googleServicesAuth('none').then(ok=>{
+    if(ok&&typeof autoSyncGoogleCalendar==='function')autoSyncGoogleCalendar();
+   });
+  }
  }
 });
 </script>
