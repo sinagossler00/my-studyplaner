@@ -5007,7 +5007,9 @@ let googleDriveTokenClient=null;
 let googleDriveAccessToken='';
 let googleServicesTokenClient=null;
 let googleServicesAccessToken='';
+let googleServicesTokenExpiresAt=0;
 let googleServicesAuthPromise=null;
+const GOOGLE_TOKEN_STORE_KEY='mystudyplaner_google_token_v276';
 
 function googleDriveClientId(){
  const cfg=getGoogleCalendarConfig()||{};
@@ -5015,8 +5017,44 @@ function googleDriveClientId(){
 }
 
 /* Google Drive + Google Kalender use one shared Google OAuth grant.
-   After the first approval, GIS can normally refresh the short-lived token
-   silently on later page loads without showing another consent screen. */
+   IMPORTANT in V276: never start OAuth automatically on page load. Google’s
+   browser token model is an interactive dialog flow, so automatic requests
+   could reopen a popup after every reload. We keep a still-valid token locally
+   for the current browser and only ask for Google again after the token is
+   actually gone/expired and the user chooses to reconnect. */
+function saveGoogleTokenLocally(){
+ try{
+  if(!googleServicesAccessToken||!googleServicesTokenExpiresAt)return;
+  localStorage.setItem(GOOGLE_TOKEN_STORE_KEY,JSON.stringify({
+   token:googleServicesAccessToken,
+   expiresAt:googleServicesTokenExpiresAt
+  }));
+ }catch(e){console.warn('Google-Token konnte nicht lokal gespeichert werden:',e)}
+}
+function clearStoredGoogleToken(){
+ try{localStorage.removeItem(GOOGLE_TOKEN_STORE_KEY)}catch(e){}
+ googleServicesTokenExpiresAt=0;
+}
+function restoreGoogleTokenLocally(){
+ try{
+  const saved=JSON.parse(localStorage.getItem(GOOGLE_TOKEN_STORE_KEY)||'null');
+  if(!saved?.token||!saved?.expiresAt)return false;
+  if(Number(saved.expiresAt)<=Date.now()+5000){
+   clearStoredGoogleToken();
+   return false;
+  }
+  googleServicesAccessToken=String(saved.token);
+  googleDriveAccessToken=googleServicesAccessToken;
+  googleCalendarAccessToken=googleServicesAccessToken;
+  googleServicesTokenExpiresAt=Number(saved.expiresAt);
+  scheduleGoogleTokenRefresh();
+  return true;
+ }catch(e){
+  console.warn('Gespeicherten Google-Token konnte nicht geladen werden:',e);
+  clearStoredGoogleToken();
+  return false;
+ }
+}
 function initGoogleServicesTokenClient(){
  const id=googleDriveClientId();
  if(!id||!window.google?.accounts?.oauth2)return null;
@@ -5026,10 +5064,7 @@ function initGoogleServicesTokenClient(){
   scope:GOOGLE_SERVICES_SCOPE,
   callback:()=>{},
   error_callback:e=>{
-    // Silent OAuth failures must NEVER open the re-auth dialog by themselves.
-    // The dialog is shown only after a real Google API request failed with 401
-    // and a silent renewal also failed.
-    console.warn('Google-Dienste OAuth (silent/manual):',e);
+    console.warn('Google-Dienste OAuth',e);
   }
  });
  googleDriveTokenClient=googleServicesTokenClient;
@@ -5066,6 +5101,7 @@ async function reauthorizeGoogleServices(){
   googleServicesAccessToken='';
   googleDriveAccessToken='';
   googleCalendarAccessToken='';
+  clearStoredGoogleToken();
   const ok=await googleServicesAuth('consent');
   if(ok){
    closeGoogleReauth();
@@ -5090,30 +5126,33 @@ async function reauthorizeGoogleServices(){
 
 function scheduleGoogleTokenRefresh(){
  clearTimeout(googleReauthTimer);
- // Do not force a new Google popup after a fixed time. Google can issue a
- // fresh browser token silently when the existing grant is still available.
- // The actual API call below is the source of truth if a token has expired.
- if(googleServicesAccessToken){
-  googleReauthTimer=setTimeout(async()=>{
-   if(document.hidden){scheduleGoogleTokenRefresh();return}
-   const ok=await googleServicesAuth('none');
-   if(ok) scheduleGoogleTokenRefresh();
-  },45*60*1000);
- }
+ if(!googleServicesTokenExpiresAt)return;
+ const wait=Math.max(1000,googleServicesTokenExpiresAt-Date.now()+250);
+ googleReauthTimer=setTimeout(()=>{
+  googleServicesAccessToken='';
+  googleDriveAccessToken='';
+  googleCalendarAccessToken='';
+  clearStoredGoogleToken();
+  updateDriveStatus();
+  updateGoogleCalendarStatus();
+  showGoogleReauth();
+ },wait);
 }
 
-function googleServicesAuth(prompt='none'){
- if(googleServicesAccessToken){
+function googleServicesAuth(prompt='consent'){
+ if(googleServicesAccessToken && (!googleServicesTokenExpiresAt || googleServicesTokenExpiresAt>Date.now()+5000)){
   googleDriveAccessToken=googleServicesAccessToken;
   googleCalendarAccessToken=googleServicesAccessToken;
   return Promise.resolve(true);
  }
-
- // IMPORTANT: a real user click must never be blocked by an older silent
- // authorization attempt. A stale pending promise was the reason the buttons
- // could appear clickable while Google never opened.
- if(prompt==='consent')googleServicesAuthPromise=null;
- else if(googleServicesAuthPromise)return googleServicesAuthPromise;
+ if(prompt!=='consent'){
+  // V276 deliberately never starts the Google dialog from a background call.
+  // This is what prevents a popup on every reload/mobile page load.
+  if(!googleServicesAccessToken)restoreGoogleTokenLocally();
+  if(googleServicesAccessToken)return Promise.resolve(true);
+  return Promise.resolve(false);
+ }
+ googleServicesAuthPromise=null;
 
  const c=initGoogleServicesTokenClient();
  if(!c){
@@ -5135,6 +5174,8 @@ function googleServicesAuth(prompt='none'){
     googleServicesAccessToken=r.access_token;
     googleDriveAccessToken=r.access_token;
     googleCalendarAccessToken=r.access_token;
+    googleServicesTokenExpiresAt=Date.now()+Math.max(60,Number(r.expires_in||3600)-30)*1000;
+    saveGoogleTokenLocally();
     updateDriveStatus();
     updateGoogleCalendarStatus();
     if(typeof scheduleGoogleTokenRefresh==='function')scheduleGoogleTokenRefresh();
@@ -5157,15 +5198,14 @@ function googleServicesAuth(prompt='none'){
   }
 
   // Silent GIS requests do not always call a callback when no silent grant is
-  // possible. Release the lock after a short grace period, but NEVER open the
-  // re-auth dialog here. A later real API 401 decides whether re-auth is needed.
-  if(prompt!=='consent')setTimeout(()=>finish(false),7000);
+  // possible. Release the lock quickly so a later manual click always works.
+  if(prompt!=='consent')setTimeout(()=>finish(false),2500);
  });
  return googleServicesAuthPromise;
 }
 
 function googleDriveAuth(){
- return googleServicesAuth('consent');
+ return googleServicesAuth('none');
 }
 
 async function connectGoogleDrive(){
@@ -5185,6 +5225,7 @@ async function connectGoogleServices(){
   googleServicesAccessToken='';
   googleDriveAccessToken='';
   googleCalendarAccessToken='';
+  clearStoredGoogleToken();
   const ok=await googleServicesAuth('consent');
   if(!ok){
    alert('Google-Anmeldung wurde nicht abgeschlossen. Bitte erneut versuchen.');
@@ -5217,13 +5258,11 @@ async function driveFetch(url,opt={}){
   googleServicesAccessToken='';
   googleDriveAccessToken='';
   googleCalendarAccessToken='';
-  const renewed=await googleServicesAuth('none');
-  if(!renewed){
-   showGoogleReauth();
-   throw new Error('Google-Zugriff nicht mehr gültig.');
-  }
-  r=await make();
-  if(r.status===401){showGoogleReauth();throw new Error('Google-Zugriff nicht mehr gültig.');}
+  clearStoredGoogleToken();
+  updateDriveStatus();
+  updateGoogleCalendarStatus();
+  showGoogleReauth();
+  throw new Error('Google-Zugriff nicht mehr gültig. Bitte „Mit Google verbinden“ wählen.');
  }
  return r;
 }
@@ -5462,7 +5501,7 @@ function openCloud(){
      <div class="account-service"><div><b>🗓️ Google Kalender</b><div class="muted account-small" id="googleCalendarStatus">Nicht verbunden</div></div></div>
      <button class="btn secondary full" style="margin-top:4px" onclick="connectGoogleServices()">🔵 Google für Drive & Kalender verbinden</button>
    </div>
-   <div class="account-note">Einmal Google freigeben → Drive und Kalender verwenden denselben Zugriff. Danach versucht My Studyplaner den Zugriff bei Bedarf im Hintergrund still zu erneuern. Ein neues Google-Fenster erscheint erst, wenn eine echte Verbindung abgelaufen ist und die stille Erneuerung nicht mehr möglich ist.</div>
+   <div class="account-note">Einmal Google freigeben → Drive und Kalender verwenden denselben Zugriff. Beim Laden öffnet sich kein Google-Fenster. Wenn der Google-Zugriff abläuft, kannst du ihn bewusst über „Mit Google verbinden“ neu freigeben.</div>
    <details class="account-advanced"><summary>⚙️ Erweiterte Firebase-Einstellungen</summary><div class="muted account-small" style="margin:8px 0">Nur nötig, wenn du eine eigene Firebase-Konfiguration ändern möchtest.</div><textarea id="firebaseConfig" placeholder='{"apiKey":"...","authDomain":"...","projectId":"...","storageBucket":"...","messagingSenderId":"...","appId":"..."}'>${esc(JSON.stringify(cfg,null,2))}</textarea><div style="display:flex;gap:7px;margin-top:8px"><button class="btn" onclick="saveFirebaseConfig()">Speichern</button><button class="btn secondary" onclick="clearFirebaseConfig()">Löschen</button></div></details>
  </div>`)
 }
@@ -5565,7 +5604,8 @@ function googleCalendarEventDescription(e){
 }
 async function googleApi(path){
  if(!googleCalendarAccessToken){
-  if(!await googleServicesAuth('none'))throw new Error('Google Kalender ist noch nicht autorisiert.');
+  showGoogleReauth();
+  throw new Error('Google Kalender ist noch nicht autorisiert. Bitte „Mit Google verbinden“ wählen.');
  }
  const make=()=>fetch('https://www.googleapis.com/calendar/v3/'+path+(path.includes('?')?'&':'?')+'access_token='+encodeURIComponent(googleCalendarAccessToken));
  let res=await make();
@@ -5573,13 +5613,11 @@ async function googleApi(path){
   googleServicesAccessToken='';
   googleDriveAccessToken='';
   googleCalendarAccessToken='';
-  const renewed=await googleServicesAuth('none');
-  if(!renewed){
-   showGoogleReauth();
-   throw new Error('Google Kalender-Zugriff nicht mehr gültig.');
-  }
-  res=await make();
-  if(res.status===401){showGoogleReauth();throw new Error('Google Kalender-Zugriff nicht mehr gültig.');}
+  clearStoredGoogleToken();
+  updateDriveStatus();
+  updateGoogleCalendarStatus();
+  showGoogleReauth();
+  throw new Error('Google Kalender-Zugriff nicht mehr gültig. Bitte „Mit Google verbinden“ wählen.');
  }
  const json=await res.json().catch(()=>({}));
  if(!res.ok)throw new Error(json.error?.message||'Google Kalender API Fehler');
@@ -5588,18 +5626,11 @@ async function googleApi(path){
 
 function trySilentGoogleCalendarSync(){
  try{
+  if(!restoreGoogleTokenLocally())return;
   const cfg=getGoogleCalendarConfig()||{};
-  if(!cfg.clientId||!window.google?.accounts?.oauth2)return;
   if(!cfg.calendarId||!cfg.colorId)return;
-  if(googleServicesAccessToken)return;
-  googleServicesAuth('none').then(async ok=>{
-   if(!ok)return;
-   try{
-    await loadGoogleCalendarsAndColors();
-    await syncGoogleCalendarAfterAuth(true);
-   }catch(e){console.warn('Google Kalender Hintergrund-Sync:',e)}
-  });
- }catch(e){console.warn('Silent Google-Kalender-Sync:',e)}
+  loadGoogleCalendarsAndColors().then(()=>syncGoogleCalendarAfterAuth(true)).catch(e=>console.warn('Google Kalender Hintergrund-Sync:',e));
+ }catch(e){console.warn('Google Kalender Hintergrund-Sync:',e)}
 }
 
 function initGoogleTokenClient(){
@@ -5798,6 +5829,7 @@ function disconnectGoogleCalendar(){
  googleServicesAccessToken='';
  googleDriveAccessToken='';
  googleCalendarAccessToken='';
+ clearStoredGoogleToken();
  googleServicesTokenClient=null;
  googleDriveTokenClient=null;
  googleCalendarTokenClient=null;
@@ -5817,8 +5849,7 @@ async function autoSyncGoogleCalendar(){
  const cfg=getGoogleCalendarConfig()||{};
  if(!cfg.clientId||!cfg.calendarId||!cfg.colorId)return;
  if(!googleServicesAccessToken){
-  const ok=await googleServicesAuth('none');
-  if(!ok)return;
+  if(!restoreGoogleTokenLocally())return;
  }
  googleCalendarAutoSyncBusy=true;
  try{
@@ -5828,11 +5859,13 @@ async function autoSyncGoogleCalendar(){
 }
 setInterval(autoSyncGoogleCalendar,60000);
 
-async function tryInitGoogleFromSavedConfig(){
+function tryInitGoogleFromSavedConfig(){
  const cfg=getGoogleCalendarConfig();
  if(cfg?.clientId && window.google?.accounts?.oauth2){
   initGoogleServicesTokenClient();
-  setTimeout(()=>googleServicesAuth('none'),900);
+  restoreGoogleTokenLocally();
+  updateDriveStatus();
+  updateGoogleCalendarStatus();
  }
 }
 window.addEventListener('load',tryInitGoogleFromSavedConfig);
@@ -5879,7 +5912,6 @@ initCloud();renderAll();
   // If the existing app stores deadlines in a recognizable array, ensure old deadlines
   // get a default priority. New deadlines can use the chooser's selected value.
   
-window.addEventListener('load',()=>setTimeout(trySilentGoogleCalendarSync,900));
 
 document.addEventListener('DOMContentLoaded', ()=>{
     const d=load();
@@ -7168,7 +7200,7 @@ body *::before,body *::after{
   <div style="width:min(420px,100%);background:var(--card,#fff);border:1px solid var(--line,#ddd);border-radius:16px;padding:20px;box-shadow:0 18px 60px rgba(0,0,0,.18)">
     <div style="font-size:18px;font-weight:850;margin-bottom:8px">🔐 Google-Verbindung erforderlich</div>
     <div style="font-size:13px;line-height:1.5;color:var(--muted,#666);margin-bottom:16px">
-      Die Google-Verbindung konnte nach Ablauf des bisherigen Zugriffs nicht mehr still erneuert werden. Bitte verbinde Google einmal neu, damit Drive und Kalender weiter funktionieren.
+      Der Google-Zugriff ist abgelaufen oder nicht mehr gültig. Bitte verbinde Google einmal neu. Beim normalen Neuladen öffnet sich dieses Fenster nicht automatisch.
     </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
       <button class="btn secondary" onclick="closeGoogleReauth()">Später</button>
@@ -7178,13 +7210,13 @@ body *::before,body *::after{
 </div>
 
 
-<script id="msp-v275-visibility">
+<script id="msp-v274-visibility">
 document.addEventListener('visibilitychange',()=>{
  if(!document.hidden){
-  // Returning to the app must not trigger a popup. If a token is already
-  // present, sync normally; if it is gone, the next API call may try a silent
-  // renewal and only then show re-auth if Google really requires it.
-  if(typeof autoSyncGoogleCalendar==='function')autoSyncGoogleCalendar();
+  const cfg=getGoogleCalendarConfig()||{};
+  if(cfg.clientId && restoreGoogleTokenLocally() && typeof autoSyncGoogleCalendar==='function'){
+   autoSyncGoogleCalendar();
+  }
  }
 });
 </script>
