@@ -3715,47 +3715,6 @@ aside.sidebar{
 })();
 </script>
 
-
-<style id="msp-v266-mobile-file-explorer-final">
-/* V266: mobile file explorer — compact, no clipped columns, no horizontal page scroll */
-@media screen and (max-width:700px){
-  html,body{width:100%;max-width:100%;overflow-x:hidden!important}
-  main,.page,.card,.files-explorer-card{min-width:0!important;max-width:100%!important;box-sizing:border-box!important}
-  #files .files-explorer-head{width:100%!important;box-sizing:border-box!important}
-  #files .files-toolbar{display:grid!important;grid-template-columns:1fr 1fr!important;width:100%!important;gap:7px!important}
-  #files .files-toolbar .btn{width:100%!important;min-width:0!important;box-sizing:border-box!important;padding:9px 7px!important;font-size:12px!important}
-  #files .files-breadcrumb{max-width:100%!important;overflow:hidden!important;box-sizing:border-box!important;white-space:nowrap!important;text-overflow:ellipsis!important}
-  #files .file-explorer{width:100%!important;max-width:100%!important;overflow:hidden!important;box-sizing:border-box!important}
-  #files .file-explorer-header{display:none!important}
-  #files .file-explorer-row{
-    width:100%!important;min-width:0!important;max-width:100%!important;
-    box-sizing:border-box!important;
-    grid-template-columns:minmax(0,1fr) auto!important;
-    gap:7px!important;
-    min-height:52px!important;
-    padding:7px 8px!important;
-  }
-  #files .explorer-name{min-width:0!important;width:100%!important;overflow:hidden!important;gap:7px!important}
-  #files .explorer-name span:last-child,#files .explorer-name strong{
-    min-width:0!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important;
-    font-size:11px!important;
-  }
-  #files .explorer-icon{width:24px!important;min-width:24px!important;font-size:19px!important}
-  #files .explorer-type,#files .explorer-size{display:none!important}
-  #files .explorer-actions{min-width:0!important;width:auto!important;gap:2px!important;justify-content:flex-end!important}
-  #files .file-pin-btn{font-size:14px!important;padding:4px 5px!important}
-  #files .icon-action{width:29px!important;min-width:29px!important;height:29px!important}
-  #files .file-explorer-empty{padding:30px 12px!important}
-}
-@media screen and (max-width:390px){
-  #files .files-toolbar{grid-template-columns:1fr!important}
-  #files .files-toolbar .btn{padding:8px 7px!important}
-  #files .file-explorer-row{padding:7px 6px!important;gap:5px!important}
-  #files .explorer-name span:last-child,#files .explorer-name strong{font-size:10.5px!important}
-  #files .explorer-icon{width:22px!important;min-width:22px!important}
-}
-</style>
-
 </head>
 <body>
 
@@ -5023,47 +4982,157 @@ async function uploadModule(id){let f=$('moduleInput_'+id);f.value='';f.click()}
 async function handleModuleFiles(id,files){for(const f of [...files])await addFile(f,id);await saveData();renderAll()}
 
 const GOOGLE_DRIVE_SCOPE='https://www.googleapis.com/auth/drive.file';
+const GOOGLE_CALENDAR_SCOPE='https://www.googleapis.com/auth/calendar.readonly';
+const GOOGLE_SERVICES_SCOPE=GOOGLE_DRIVE_SCOPE+' '+GOOGLE_CALENDAR_SCOPE;
 let googleDriveTokenClient=null;
 let googleDriveAccessToken='';
+let googleServicesTokenClient=null;
+let googleServicesAccessToken='';
+let googleServicesAuthPromise=null;
 
 function googleDriveClientId(){
  const cfg=getGoogleCalendarConfig()||{};
  return cfg.clientId||GOOGLE_CALENDAR_DEFAULT_CLIENT_ID||'';
 }
-function initGoogleDrive(){
+
+/* Google Drive + Google Kalender use one shared Google OAuth grant.
+   After the first approval, GIS can normally refresh the short-lived token
+   silently on later page loads without showing another consent screen. */
+function initGoogleServicesTokenClient(){
  const id=googleDriveClientId();
- if(!id||!window.google||!google.accounts||!google.accounts.oauth2)return null;
- if(googleDriveTokenClient)return googleDriveTokenClient;
- googleDriveTokenClient=google.accounts.oauth2.initTokenClient({
-  client_id:id,scope:GOOGLE_DRIVE_SCOPE,callback:()=>{},
-  error_callback:e=>console.warn('Google Drive OAuth',e)
+ if(!id||!window.google?.accounts?.oauth2)return null;
+ if(googleServicesTokenClient)return googleServicesTokenClient;
+ googleServicesTokenClient=google.accounts.oauth2.initTokenClient({
+  client_id:id,
+  scope:GOOGLE_SERVICES_SCOPE,
+  callback:()=>{},
+  error_callback:e=>console.warn('Google-Dienste OAuth',e)
  });
- return googleDriveTokenClient;
+ googleDriveTokenClient=googleServicesTokenClient;
+ googleCalendarTokenClient=googleServicesTokenClient;
+ return googleServicesTokenClient;
 }
-function googleDriveAuth(){
- if(googleDriveAccessToken)return Promise.resolve(true);
- const c=initGoogleDrive();
- if(!c){alert('Google Drive ist noch nicht bereit. Bitte die Seite neu laden und kurz warten.');return Promise.resolve(false);}
- return new Promise(resolve=>{
-  c.callback=r=>{
-   if(r&&r.access_token){googleDriveAccessToken=r.access_token;updateDriveStatus();resolve(true);}
-   else resolve(false);
+
+
+let googleReauthShown=false;
+let googleReauthTimer=null;
+
+function showGoogleReauth(){
+ if(googleReauthShown)return;
+ googleReauthShown=true;
+ const el=$('googleReauthModal');
+ if(el)el.style.display='flex';
+}
+function closeGoogleReauth(){
+ const el=$('googleReauthModal');
+ if(el)el.style.display='none';
+ googleReauthShown=false;
+}
+async function reauthorizeGoogleServices(){
+ closeGoogleReauth();
+ const ok=await googleServicesAuth('consent');
+ if(!ok)showGoogleReauth();
+}
+
+function scheduleGoogleTokenRefresh(){
+ clearTimeout(googleReauthTimer);
+ // GIS access tokens are typically short-lived (~1 hour). Ask silently
+ // before expiry so the user normally never sees anything.
+ googleReauthTimer=setTimeout(async()=>{
+   if(document.hidden){
+    scheduleGoogleTokenRefresh();
+    return;
+   }
+   const ok=await googleServicesAuth('none');
+   if(!ok)showGoogleReauth();
+   else scheduleGoogleTokenRefresh();
+ },50*60*1000);
+}
+
+function googleServicesAuth(prompt='none'){
+ if(googleServicesAccessToken){
+  googleDriveAccessToken=googleServicesAccessToken;
+  googleCalendarAccessToken=googleServicesAccessToken;
+  return Promise.resolve(true);
+ }
+ if(googleServicesAuthPromise)return googleServicesAuthPromise;
+ const c=initGoogleServicesTokenClient();
+ if(!c){
+  if(prompt==='consent')alert('Google ist noch nicht bereit. Bitte die Seite kurz laden und erneut versuchen.');
+  return Promise.resolve(false);
+ }
+ googleServicesAuthPromise=new Promise(resolve=>{
+  c.callback=async r=>{
+   googleServicesAuthPromise=null;
+   if(r&&r.access_token){
+    googleServicesAccessToken=r.access_token;
+    googleDriveAccessToken=r.access_token;
+    googleCalendarAccessToken=r.access_token;
+    updateDriveStatus();
+    updateGoogleCalendarStatus();
+    scheduleGoogleTokenRefresh();
+    resolve(true);
+   }else{
+    if(prompt==='none')showGoogleReauth();
+    resolve(false);
+   }
   };
-  try{c.requestAccessToken({prompt:'consent'});}catch(e){console.error(e);resolve(false);}
+  try{c.requestAccessToken({prompt});}
+  catch(e){
+   googleServicesAuthPromise=null;
+   console.warn(e);
+   if(prompt==='none')showGoogleReauth();
+   resolve(false);
+  }
+ });
+ return googleServicesAuthPromise;
+}
+
+function googleDriveAuth(){
+ return googleServicesAuth('consent');
+}
+
+async function connectGoogleDrive(){
+ const ok=await googleServicesAuth('consent');
+ if(ok){
+  updateDriveStatus();
+  updateGoogleCalendarStatus();
+  alert('Google Drive & Google Kalender sind verbunden. Du musst dich für beide nicht mehr separat anmelden.');
+ }else{
+  alert('Google Drive / Kalender konnten nicht verbunden werden.');
+ }
+}
+
+function connectGoogleServices(){
+ return googleServicesAuth('consent').then(async ok=>{
+  if(!ok)return false;
+  try{
+   await loadGoogleCalendarsAndColors();
+   if(getGoogleCalendarConfig()?.calendarId&&getGoogleCalendarConfig()?.colorId){
+    await syncGoogleCalendarAfterAuth(true);
+   }
+  }catch(e){console.warn('Google-Dienste nach Verbindung:',e)}
+  return true;
  });
 }
-async function connectGoogleDrive(){
- const ok=await googleDriveAuth();
- alert(ok?'Google Drive ist verbunden. Jetzt kannst du Dateien hochladen.':'Google Drive konnte nicht verbunden werden.');
-}
+
 function updateDriveStatus(){
  const e=$('googleDriveStatus');
- if(e)e.textContent=googleDriveAccessToken?'Verbunden – Dateien werden in deinem Google Drive gespeichert.':'Nicht verbunden – beim ersten Upload wird einmalig nach Zugriff gefragt.';
+ if(e)e.textContent=googleServicesAccessToken
+   ? 'Verbunden · gemeinsamer Google-Zugriff aktiv.'
+   : 'Nicht verbunden';
 }
+
 async function driveFetch(url,opt={}){
  const make=()=>fetch(url,{...opt,headers:{...(opt.headers||{}),Authorization:'Bearer '+googleDriveAccessToken}});
  let r=await make();
- if(r.status===401){googleDriveAccessToken='';if(!await googleDriveAuth())throw new Error('Google-Drive-Zugriff nicht mehr gültig.');r=await make();}
+ if(r.status===401){
+  googleServicesAccessToken='';
+  googleDriveAccessToken='';
+  googleCalendarAccessToken='';
+  if(!await googleServicesAuth('none'))throw new Error('Google-Zugriff nicht mehr gültig.');
+  r=await make();
+ }
  return r;
 }
 async function googleDriveUpload(file){
@@ -5297,10 +5366,11 @@ function openCloud(){
    <div class="account-status ${signed?'is-on':''}"><span class="account-dot"></span><div><strong>${cloudText}</strong><div class="muted account-small">${signed?'Cloud-Synchronisierung aktiv · Daten werden automatisch gespeichert.':'Einmal anmelden, danach werden deine Studyplaner-Daten automatisch synchronisiert.'}</div></div></div>
    ${signed ? `<div class="account-actions"><button class="btn secondary" onclick="cloudLogout();closeModal()">Abmelden</button></div>` : `<div class="account-login"><button class="btn full" onclick="cloudGoogleAuth()">🔵 Mit Google anmelden</button><div class="account-or"><span></span>oder<span></span></div><div class="account-login-grid"><input id="cEmail" type="email" placeholder="E-Mail"><input id="cPassword" type="password" placeholder="Passwort"><select id="cAction"><option value="login">Anmelden</option><option value="signup">Konto erstellen</option></select></div><button class="btn full" style="margin-top:8px" onclick="cloudEmailAuth()">☁️ Mit E-Mail anmelden</button></div>`}
    <div class="account-services">
-     <div class="account-service"><div><b>📁 Google Drive</b><div class="muted account-small" id="googleDriveStatus">Nicht verbunden</div></div><button class="btn secondary compact" onclick="connectGoogleDrive()">Verbinden</button></div>
-     <div class="account-service"><div><b>🗓️ Google Kalender</b><div class="muted account-small" id="googleCalendarStatus">Noch nicht verbunden</div></div><button class="btn secondary compact" onclick="openGoogleCalendarSettings()">Einrichten</button></div>
+     <div class="account-service"><div><b>📁 Google Drive</b><div class="muted account-small" id="googleDriveStatus">Nicht verbunden</div></div></div>
+     <div class="account-service"><div><b>🗓️ Google Kalender</b><div class="muted account-small" id="googleCalendarStatus">Nicht verbunden</div></div></div>
+     <button class="btn secondary full" style="margin-top:4px" onclick="connectGoogleServices()">🔵 Google für Drive & Kalender verbinden</button>
    </div>
-   <div class="account-note">Drive und Kalender brauchen jeweils nur einmal Zugriff pro Gerät. Gemini braucht keinen eigenen Login.</div>
+   <div class="account-note">Einmal Google freigeben → Drive und Kalender verwenden denselben Zugriff. Danach versucht My Studyplaner automatisch, den Zugriff im Hintergrund zu erneuern.</div>
    <details class="account-advanced"><summary>⚙️ Erweiterte Firebase-Einstellungen</summary><div class="muted account-small" style="margin:8px 0">Nur nötig, wenn du eine eigene Firebase-Konfiguration ändern möchtest.</div><textarea id="firebaseConfig" placeholder='{"apiKey":"...","authDomain":"...","projectId":"...","storageBucket":"...","messagingSenderId":"...","appId":"..."}'>${esc(JSON.stringify(cfg,null,2))}</textarea><div style="display:flex;gap:7px;margin-top:8px"><button class="btn" onclick="saveFirebaseConfig()">Speichern</button><button class="btn secondary" onclick="clearFirebaseConfig()">Löschen</button></div></details>
  </div>`)
 }
@@ -5338,7 +5408,6 @@ async function cloudAuth(){
 async function cloudLogout(){if(fb){await fb.auth.signOut();closeModal()}}
 
 /* ---------- Google Kalender ---------- */
-const GOOGLE_CALENDAR_SCOPE='https://www.googleapis.com/auth/calendar.readonly';
 const GOOGLE_CALENDAR_DEFAULT_CLIENT_ID='119642140783-mbnm7m2v2lkqpirvaj5ronou3l0bga5d.apps.googleusercontent.com';
 const GOOGLE_CONFIG_KEY='mystudyplaner_google_calendar_v1';
 let googleCalendarTokenClient=null;
@@ -5403,9 +5472,18 @@ function googleCalendarEventDescription(e){
  return parts.join('\n\n');
 }
 async function googleApi(path){
- if(!googleCalendarAccessToken)throw new Error('Google Kalender ist noch nicht autorisiert.');
- const sep=path.includes('?')?'&':'?';
- const res=await fetch('https://www.googleapis.com/calendar/v3/'+path+sep+'access_token='+encodeURIComponent(googleCalendarAccessToken));
+ if(!googleCalendarAccessToken){
+  if(!await googleServicesAuth('none'))throw new Error('Google Kalender ist noch nicht autorisiert.');
+ }
+ const make=()=>fetch('https://www.googleapis.com/calendar/v3/'+path+(path.includes('?')?'&':'?')+'access_token='+encodeURIComponent(googleCalendarAccessToken));
+ let res=await make();
+ if(res.status===401){
+  googleServicesAccessToken='';
+  googleDriveAccessToken='';
+  googleCalendarAccessToken='';
+  if(!await googleServicesAuth('none'))throw new Error('Google Kalender-Zugriff nicht mehr gültig.');
+  res=await make();
+ }
  const json=await res.json().catch(()=>({}));
  if(!res.ok)throw new Error(json.error?.message||'Google Kalender API Fehler');
  return json;
@@ -5414,56 +5492,39 @@ async function googleApi(path){
 function trySilentGoogleCalendarSync(){
  try{
   const cfg=getGoogleCalendarConfig()||{};
-  const clientId=cfg.clientId||GOOGLE_CALENDAR_DEFAULT_CLIENT_ID;
-  if(!clientId||!window.google||!google.accounts||!google.accounts.oauth2)return;
+  if(!cfg.clientId||!window.google?.accounts?.oauth2)return;
   if(!cfg.calendarId||!cfg.colorId)return;
-  if(googleCalendarAccessToken)return;
-  initGoogleTokenClient();
-  if(!googleCalendarTokenClient)return;
-  googleCalendarTokenClient.requestAccessToken({prompt:'none'});
+  if(googleServicesAccessToken)return;
+  googleServicesAuth('none').then(async ok=>{
+   if(!ok)return;
+   try{
+    await loadGoogleCalendarsAndColors();
+    await syncGoogleCalendarAfterAuth(true);
+   }catch(e){console.warn('Google Kalender Hintergrund-Sync:',e)}
+  });
  }catch(e){console.warn('Silent Google-Kalender-Sync:',e)}
 }
 
 function initGoogleTokenClient(){
- const cfg=getGoogleCalendarConfig();
- if(!cfg?.clientId)return null;
- if(!window.google?.accounts?.oauth2)return null;
- googleCalendarTokenClient=google.accounts.oauth2.initTokenClient({
-  client_id:cfg.clientId,
-  scope:GOOGLE_CALENDAR_SCOPE,
-  callback:async response=>{
-   if(response?.error){alert('Google-Freigabe fehlgeschlagen: '+(response.error_description||response.error));return}
-   googleCalendarAccessToken=response.access_token||'';
-   try{
-    await loadGoogleCalendarsAndColors();
-    await syncGoogleCalendarAfterAuth();
-   }catch(e){console.error(e);alert('Google Kalender konnte nicht geladen werden: '+e.message)}
-  },
-  error_callback:err=>{
-   // Background/silent sync must never interrupt the user with a popup-blocker alert.
-   // If the browser blocks the silent request, the manual sync button can authorize again.
-   console.warn('Google Kalender Hintergrund-Sync nicht möglich:',err);
-  }
- });
- return googleCalendarTokenClient;
+ return initGoogleServicesTokenClient();
 }
 async function connectGoogleCalendar(){
  const cfg=getGoogleCalendarConfig();
- if(!cfg?.clientId){
-   openGoogleCalendarSettings(true);
-   return;
- }
+ if(!cfg?.clientId){openGoogleCalendarSettings(true);return}
  if(!window.google?.accounts?.oauth2){
-   alert('Die Google-Bibliothek ist noch nicht geladen. Bitte kurz warten und erneut versuchen.');
-   return;
+  alert('Die Google-Bibliothek ist noch nicht geladen. Bitte kurz warten und erneut versuchen.');
+  return;
  }
- googleCalendarTokenClient=initGoogleTokenClient();
- if(!googleCalendarTokenClient){
-   alert('Google Kalender konnte nicht vorbereitet werden.');
-   return;
- }
- googleCalendarTokenClient.requestAccessToken({prompt:'consent'});
+ const ok=await googleServicesAuth('consent');
+ if(!ok)return;
+ try{
+  await loadGoogleCalendarsAndColors();
+  if(getGoogleCalendarConfig()?.calendarId&&getGoogleCalendarConfig()?.colorId){
+   await syncGoogleCalendarAfterAuth(true);
+  }
+ }catch(e){alert('Google Kalender konnte nicht geladen werden: '+e.message)}
 }
+
 async function loadGoogleCalendarsAndColors(){
  const [calendars,colors]=await Promise.all([
   googleApi('users/me/calendarList?maxResults=250'),
@@ -5518,7 +5579,7 @@ function openGoogleCalendarSettings(autoOpen=false){
    <div class="note" style="margin-top:12px">Die App benötigt nur <b>calendar.readonly</b>: Sie kann deinen Kalender lesen, aber keine Termine verändern.</div>
    <div style="display:flex;gap:7px;margin-top:11px;flex-wrap:wrap">
     <button class="btn" onclick="saveGoogleClientId()">💾 Client-ID speichern</button>
-    <button class="btn secondary" onclick="connectGoogleCalendar()">☁️ Mit Google verbinden</button>
+    <button class="btn secondary" onclick="connectGoogleCalendar()">🔵 Google für Drive & Kalender verbinden</button>
    </div>
   <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line)">
 <h3>🤖 Gemini KI</h3>
@@ -5535,10 +5596,10 @@ function openGoogleCalendarSettings(autoOpen=false){
    <div class="wide"><label>Google-Kalender</label><select id="googleCalendarId">${googleCalendarCalendars.length?googleCalendarOptions(cfg.calendarId):'<option value="">Nach dem Verbinden laden</option>'}</select></div>
    <div class="wide"><label>Zu übernehmende Farbe</label>${Object.keys(googleCalendarColors).length?googleColorOptions(cfg.colorId):'<div class="muted">Nach dem Verbinden laden</div><input type="hidden" id="googleColorId" value="${esc(cfg.colorId||"")}">'} </div>
   </div>
-  <div class="note" style="margin-top:12px">🔒 Nur-Lesen: My Studyplaner schreibt nichts in Google Kalender. Beim Synchronisieren werden die bisherigen Google-Termine in My Studyplaner durch die aktuell passende Farbauswahl ersetzt.</div>
+  <div class="note" style="margin-top:12px">🔒 Nur-Lesen: My Studyplaner schreibt nichts in Google Kalender. Drive und Kalender nutzen denselben Google-Zugriff. Beim Synchronisieren werden die bisherigen Google-Termine in My Studyplaner durch die aktuell passende Farbauswahl ersetzt.</div>
   <div style="display:flex;gap:7px;margin-top:11px;flex-wrap:wrap">
    <button class="btn" onclick="saveGoogleCalendarSettings()">💾 Auswahl speichern & synchronisieren</button>
-   <button class="btn secondary" onclick="connectGoogleCalendar()">🔄 Google neu autorisieren</button>
+   <button class="btn secondary" onclick="connectGoogleCalendar()">🔄 Google-Zugriff neu autorisieren</button>
    <button class="btn danger" onclick="disconnectGoogleCalendar()">× Verbindung entfernen</button>
   </div>
   <div style="margin-top:10px;font-size:11px;color:#555">Client-ID: ${esc(cfg.clientId)}</div>
@@ -5570,10 +5631,10 @@ async function saveGoogleCalendarSettings(){
  closeModal();
  await connectGoogleCalendar();
 }
-async function syncGoogleCalendarAfterAuth(){
+async function syncGoogleCalendarAfterAuth(silent=false){
  const cfg=getGoogleCalendarConfig()||{};
  if(!cfg.calendarId||!cfg.colorId){
-  openGoogleCalendarSettings(false);
+  if(!silent)openGoogleCalendarSettings(false);
   return;
  }
  const now=new Date();
@@ -5621,34 +5682,60 @@ async function syncGoogleCalendarAfterAuth(){
  await saveData();
  renderAll();
  updateGoogleCalendarStatus(matching.length);
- closeModal();
- alert(`${matching.length} Google-Termin${matching.length===1?'':'e'} mit der gewählten Farbe übernommen.`);
+ if(!silent){closeModal();alert(`${matching.length} Google-Termin${matching.length===1?'':'e'} mit der gewählten Farbe übernommen.`);}
 }
 async function syncGoogleCalendar(){
  if(!getGoogleCalendarConfig()?.clientId){openGoogleCalendarSettings(true);return}
- if(!googleCalendarAccessToken){connectGoogleCalendar();return}
- try{await loadGoogleCalendarsAndColors();await syncGoogleCalendarAfterAuth()}
- catch(e){alert('Synchronisierung fehlgeschlagen: '+e.message)}
+ try{
+  const ok=await googleServicesAuth('consent');
+  if(!ok)return;
+  await loadGoogleCalendarsAndColors();
+  await syncGoogleCalendarAfterAuth(false);
+ }catch(e){alert('Synchronisierung fehlgeschlagen: '+e.message)}
 }
 function disconnectGoogleCalendar(){
- const cfg=getGoogleCalendarConfig();
- if(googleCalendarAccessToken&&window.google?.accounts?.oauth2){
-  try{google.accounts.oauth2.revoke(googleCalendarAccessToken,()=>{})}catch(e){}
+ const token=googleServicesAccessToken||googleCalendarAccessToken||googleDriveAccessToken;
+ if(token&&window.google?.accounts?.oauth2){
+  try{google.accounts.oauth2.revoke(token,()=>{})}catch(e){}
  }
+ googleServicesAccessToken='';
+ googleDriveAccessToken='';
  googleCalendarAccessToken='';
+ googleServicesTokenClient=null;
+ googleDriveTokenClient=null;
  googleCalendarTokenClient=null;
  localStorage.removeItem(GOOGLE_CONFIG_KEY);
  clearGoogleImportedEvents();
  saveData();
  renderAll();
  closeModal();
+ updateDriveStatus();
  updateGoogleCalendarStatus();
 }
+
+
+let googleCalendarAutoSyncBusy=false;
+async function autoSyncGoogleCalendar(){
+ if(googleCalendarAutoSyncBusy||document.hidden)return;
+ const cfg=getGoogleCalendarConfig()||{};
+ if(!cfg.clientId||!cfg.calendarId||!cfg.colorId)return;
+ if(!googleServicesAccessToken){
+  const ok=await googleServicesAuth('none');
+  if(!ok)return;
+ }
+ googleCalendarAutoSyncBusy=true;
+ try{
+  await syncGoogleCalendarAfterAuth(true);
+ }catch(e){console.warn('Google Kalender Auto-Sync:',e)}
+ finally{googleCalendarAutoSyncBusy=false}
+}
+setInterval(autoSyncGoogleCalendar,60000);
 
 async function tryInitGoogleFromSavedConfig(){
  const cfg=getGoogleCalendarConfig();
  if(cfg?.clientId && window.google?.accounts?.oauth2){
-  initGoogleTokenClient();
+  initGoogleServicesTokenClient();
+  setTimeout(()=>googleServicesAuth('none'),900);
  }
 }
 window.addEventListener('load',tryInitGoogleFromSavedConfig);
@@ -6970,7 +7057,7 @@ function renderStudyTimer(){
 </script>
 
 
-<style id="msp-font-v265-final">
+<style id="msp-font-v268-final">
 html,body,body *{
   font-family:"DM Sans",Arial,sans-serif !important;
 }
@@ -6978,6 +7065,20 @@ body *::before,body *::after{
   font-family:"DM Sans",Arial,sans-serif !important;
 }
 </style>
+
+
+<div id="googleReauthModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:9999;align-items:center;justify-content:center;padding:18px">
+  <div style="width:min(420px,100%);background:var(--card,#fff);border:1px solid var(--line,#ddd);border-radius:16px;padding:20px;box-shadow:0 18px 60px rgba(0,0,0,.18)">
+    <div style="font-size:18px;font-weight:850;margin-bottom:8px">🔐 Google-Verbindung erforderlich</div>
+    <div style="font-size:13px;line-height:1.5;color:var(--muted,#666);margin-bottom:16px">
+      Die automatische Erneuerung der Google-Verbindung hat nicht funktioniert. Bitte verbinde Google einmal neu, damit Kalender & Drive weiter funktionieren.
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
+      <button class="btn secondary" onclick="closeGoogleReauth()">Später</button>
+      <button class="btn" onclick="reauthorizeGoogleServices()">🔵 Mit Google verbinden</button>
+    </div>
+  </div>
+</div>
 
 </body>
 </html>
