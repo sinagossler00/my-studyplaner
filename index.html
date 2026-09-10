@@ -5006,7 +5006,10 @@ function initGoogleServicesTokenClient(){
   client_id:id,
   scope:GOOGLE_SERVICES_SCOPE,
   callback:()=>{},
-  error_callback:e=>console.warn('Google-Dienste OAuth',e)
+  error_callback:e=>{
+    console.warn('Google-Dienste OAuth',e);
+    if(googleServicesAuthPromise===null)showGoogleReauth();
+  }
  });
  googleDriveTokenClient=googleServicesTokenClient;
  googleCalendarTokenClient=googleServicesTokenClient;
@@ -5031,21 +5034,17 @@ function closeGoogleReauth(){
 async function reauthorizeGoogleServices(){
  closeGoogleReauth();
  const ok=await googleServicesAuth('consent');
- if(!ok)showGoogleReauth();
+ if(ok)scheduleGoogleTokenRefresh();
+ else showGoogleReauth();
 }
-
 function scheduleGoogleTokenRefresh(){
  clearTimeout(googleReauthTimer);
- // GIS access tokens are typically short-lived (~1 hour). Ask silently
- // before expiry so the user normally never sees anything.
  googleReauthTimer=setTimeout(async()=>{
-   if(document.hidden){
-    scheduleGoogleTokenRefresh();
-    return;
-   }
-   const ok=await googleServicesAuth('none');
-   if(!ok)showGoogleReauth();
-   else scheduleGoogleTokenRefresh();
+  if(document.hidden){scheduleGoogleTokenRefresh();return}
+  googleServicesAccessToken='';
+  const ok=await googleServicesAuth('none');
+  if(!ok)showGoogleReauth();
+  else scheduleGoogleTokenRefresh();
  },50*60*1000);
 }
 
@@ -5072,18 +5071,10 @@ function googleServicesAuth(prompt='none'){
     updateGoogleCalendarStatus();
     scheduleGoogleTokenRefresh();
     resolve(true);
-   }else{
-    if(prompt==='none')showGoogleReauth();
-    resolve(false);
-   }
+   }else resolve(false);
   };
   try{c.requestAccessToken({prompt});}
-  catch(e){
-   googleServicesAuthPromise=null;
-   console.warn(e);
-   if(prompt==='none')showGoogleReauth();
-   resolve(false);
-  }
+  catch(e){googleServicesAuthPromise=null;console.warn(e);resolve(false)}
  });
  return googleServicesAuthPromise;
 }
@@ -5103,25 +5094,17 @@ async function connectGoogleDrive(){
  }
 }
 
-async function connectGoogleServices(){
- if(!window.google?.accounts?.oauth2){
-  alert('Google ist noch nicht geladen. Bitte kurz warten und erneut versuchen.');
-  return false;
- }
- try{
-  const ok=await googleServicesAuth('consent');
+function connectGoogleServices(){
+ return googleServicesAuth('consent').then(async ok=>{
   if(!ok)return false;
-  await loadGoogleCalendarsAndColors();
-  const cfg=getGoogleCalendarConfig()||{};
-  if(cfg.calendarId&&cfg.colorId)await syncGoogleCalendarAfterAuth(true);
-  updateDriveStatus();
-  updateGoogleCalendarStatus();
+  try{
+   await loadGoogleCalendarsAndColors();
+   if(getGoogleCalendarConfig()?.calendarId&&getGoogleCalendarConfig()?.colorId){
+    await syncGoogleCalendarAfterAuth(true);
+   }
+  }catch(e){console.warn('Google-Dienste nach Verbindung:',e)}
   return true;
- }catch(e){
-  console.warn('Google-Dienste nach Verbindung:',e);
-  alert('Google Drive / Kalender konnten nicht verbunden werden: '+(e.message||e));
-  return false;
- }
+ });
 }
 
 function updateDriveStatus(){
@@ -5694,10 +5677,6 @@ async function syncGoogleCalendarAfterAuth(silent=false){
 }
 async function syncGoogleCalendar(){
  if(!getGoogleCalendarConfig()?.clientId){openGoogleCalendarSettings(true);return}
- if(!window.google?.accounts?.oauth2){
-  alert('Google ist noch nicht geladen. Bitte kurz warten und erneut versuchen.');
-  return;
- }
  try{
   const ok=await googleServicesAuth('consent');
   if(!ok)return;
@@ -7069,7 +7048,7 @@ function renderStudyTimer(){
 </script>
 
 
-<style id="msp-font-v269-final">
+<style id="msp-font-v270-final">
 html,body,body *{
   font-family:"DM Sans",Arial,sans-serif !important;
 }
@@ -7083,7 +7062,7 @@ body *::before,body *::after{
   <div style="width:min(420px,100%);background:var(--card,#fff);border:1px solid var(--line,#ddd);border-radius:16px;padding:20px;box-shadow:0 18px 60px rgba(0,0,0,.18)">
     <div style="font-size:18px;font-weight:850;margin-bottom:8px">🔐 Google-Verbindung erforderlich</div>
     <div style="font-size:13px;line-height:1.5;color:var(--muted,#666);margin-bottom:16px">
-      Die automatische Erneuerung der Google-Verbindung hat nicht funktioniert. Bitte verbinde Google einmal neu, damit Kalender & Drive weiter funktionieren.
+      Die Google-Verbindung konnte nicht automatisch erneuert werden. Bitte verbinde Google einmal neu, damit Drive und Kalender weiter funktionieren.
     </div>
     <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
       <button class="btn secondary" onclick="closeGoogleReauth()">Später</button>
@@ -7092,6 +7071,21 @@ body *::before,body *::after{
   </div>
 </div>
 
+
+<script id="msp-v270-visibility">
+document.addEventListener('visibilitychange',()=>{
+ if(!document.hidden){
+  const cfg=getGoogleCalendarConfig()||{};
+  if(cfg.clientId){
+   googleServicesAccessToken='';
+   googleServicesAuth('none').then(ok=>{
+    if(ok&&typeof autoSyncGoogleCalendar==='function')autoSyncGoogleCalendar();
+    else if(!ok)showGoogleReauth();
+   });
+  }
+ }
+});
+</script>
 </body>
 </html>
 
