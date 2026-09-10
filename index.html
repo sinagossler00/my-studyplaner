@@ -3716,7 +3716,7 @@ aside.sidebar{
 </script>
 
 
-<style id="msp-v271-reauth-fix">
+<style id="msp-v272-reauth-fix">
 .google-reauth-overlay{
   pointer-events:auto!important;
   cursor:default!important;
@@ -5136,17 +5136,21 @@ async function connectGoogleDrive(){
  }
 }
 
-function connectGoogleServices(){
- return googleServicesAuth('consent').then(async ok=>{
+async function connectGoogleServices(){
+ try{
+  const ok=await googleServicesAuth('consent');
   if(!ok)return false;
-  try{
-   await loadGoogleCalendarsAndColors();
-   if(getGoogleCalendarConfig()?.calendarId&&getGoogleCalendarConfig()?.colorId){
-    await syncGoogleCalendarAfterAuth(true);
-   }
-  }catch(e){console.warn('Google-Dienste nach Verbindung:',e)}
+  await loadGoogleCalendarsAndColors();
+  const cfg=getGoogleCalendarConfig()||{};
+  if(cfg.calendarId&&cfg.colorId)await syncGoogleCalendarAfterAuth(true);
+  updateDriveStatus();
+  updateGoogleCalendarStatus();
   return true;
- });
+ }catch(e){
+  console.warn('Google-Dienste nach Verbindung:',e);
+  alert('Google Drive / Kalender konnten nicht verbunden werden: '+(e.message||e));
+  return false;
+ }
 }
 
 function updateDriveStatus(){
@@ -7090,7 +7094,7 @@ function renderStudyTimer(){
 </script>
 
 
-<style id="msp-font-v271-final">
+<style id="msp-font-v272-final">
 html,body,body *{
   font-family:"DM Sans",Arial,sans-serif !important;
 }
@@ -7114,7 +7118,7 @@ body *::before,body *::after{
 </div>
 
 
-<script id="msp-v271-visibility">
+<script id="msp-v272-visibility">
 document.addEventListener('visibilitychange',()=>{
  if(!document.hidden){
   const cfg=getGoogleCalendarConfig()||{};
