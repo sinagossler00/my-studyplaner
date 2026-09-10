@@ -5103,17 +5103,25 @@ async function connectGoogleDrive(){
  }
 }
 
-function connectGoogleServices(){
- return googleServicesAuth('consent').then(async ok=>{
+async function connectGoogleServices(){
+ if(!window.google?.accounts?.oauth2){
+  alert('Google ist noch nicht geladen. Bitte kurz warten und erneut versuchen.');
+  return false;
+ }
+ try{
+  const ok=await googleServicesAuth('consent');
   if(!ok)return false;
-  try{
-   await loadGoogleCalendarsAndColors();
-   if(getGoogleCalendarConfig()?.calendarId&&getGoogleCalendarConfig()?.colorId){
-    await syncGoogleCalendarAfterAuth(true);
-   }
-  }catch(e){console.warn('Google-Dienste nach Verbindung:',e)}
+  await loadGoogleCalendarsAndColors();
+  const cfg=getGoogleCalendarConfig()||{};
+  if(cfg.calendarId&&cfg.colorId)await syncGoogleCalendarAfterAuth(true);
+  updateDriveStatus();
+  updateGoogleCalendarStatus();
   return true;
- });
+ }catch(e){
+  console.warn('Google-Dienste nach Verbindung:',e);
+  alert('Google Drive / Kalender konnten nicht verbunden werden: '+(e.message||e));
+  return false;
+ }
 }
 
 function updateDriveStatus(){
@@ -5686,6 +5694,10 @@ async function syncGoogleCalendarAfterAuth(silent=false){
 }
 async function syncGoogleCalendar(){
  if(!getGoogleCalendarConfig()?.clientId){openGoogleCalendarSettings(true);return}
+ if(!window.google?.accounts?.oauth2){
+  alert('Google ist noch nicht geladen. Bitte kurz warten und erneut versuchen.');
+  return;
+ }
  try{
   const ok=await googleServicesAuth('consent');
   if(!ok)return;
@@ -7057,7 +7069,7 @@ function renderStudyTimer(){
 </script>
 
 
-<style id="msp-font-v268-final">
+<style id="msp-font-v269-final">
 html,body,body *{
   font-family:"DM Sans",Arial,sans-serif !important;
 }
