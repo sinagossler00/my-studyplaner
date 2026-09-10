@@ -3715,6 +3715,25 @@ aside.sidebar{
 })();
 </script>
 
+
+<style id="msp-v271-reauth-fix">
+.google-reauth-overlay{
+  pointer-events:auto!important;
+  cursor:default!important;
+}
+.google-reauth-overlay>div{
+  position:relative!important;
+  z-index:10001!important;
+  pointer-events:auto!important;
+}
+.google-reauth-overlay button{
+  position:relative!important;
+  z-index:10002!important;
+  pointer-events:auto!important;
+  cursor:pointer!important;
+  touch-action:manipulation!important;
+}
+</style>
 </head>
 <body>
 
@@ -5021,21 +5040,44 @@ let googleReauthShown=false;
 let googleReauthTimer=null;
 
 function showGoogleReauth(){
- if(googleReauthShown)return;
- googleReauthShown=true;
  const el=$('googleReauthModal');
- if(el)el.style.display='flex';
+ if(!el)return;
+ googleReauthShown=true;
+ el.style.display='flex';
+ el.style.visibility='visible';
+ el.style.opacity='1';
+ el.style.pointerEvents='auto';
 }
 function closeGoogleReauth(){
  const el=$('googleReauthModal');
- if(el)el.style.display='none';
+ if(el){
+  el.style.display='none';
+  el.style.pointerEvents='none';
+ }
  googleReauthShown=false;
 }
 async function reauthorizeGoogleServices(){
- closeGoogleReauth();
- const ok=await googleServicesAuth('consent');
- if(ok)scheduleGoogleTokenRefresh();
- else showGoogleReauth();
+ const btn=document.querySelector('#googleReauthModal button[onclick*="reauthorizeGoogleServices"]');
+ if(btn){btn.disabled=true;btn.textContent='🔄 Verbinde…';}
+ try{
+  const ok=await googleServicesAuth('consent');
+  if(ok){
+   closeGoogleReauth();
+   scheduleGoogleTokenRefresh();
+   try{
+    if(typeof loadGoogleCalendarsAndColors==='function')await loadGoogleCalendarsAndColors();
+    if(typeof updateDriveStatus==='function')updateDriveStatus();
+    if(typeof updateGoogleCalendarStatus==='function')updateGoogleCalendarStatus();
+   }catch(e){console.warn('Google nach Re-Login:',e)}
+  }else{
+   showGoogleReauth();
+  }
+ }catch(e){
+  console.warn('Google Re-Login:',e);
+  showGoogleReauth();
+ }finally{
+  if(btn){btn.disabled=false;btn.textContent='🔵 Mit Google verbinden';}
+ }
 }
 function scheduleGoogleTokenRefresh(){
  clearTimeout(googleReauthTimer);
@@ -7048,7 +7090,7 @@ function renderStudyTimer(){
 </script>
 
 
-<style id="msp-font-v270-final">
+<style id="msp-font-v271-final">
 html,body,body *{
   font-family:"DM Sans",Arial,sans-serif !important;
 }
@@ -7058,7 +7100,7 @@ body *::before,body *::after{
 </style>
 
 
-<div id="googleReauthModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:9999;align-items:center;justify-content:center;padding:18px">
+<div id="googleReauthModal" class="google-reauth-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:9999;align-items:center;justify-content:center;padding:18px">
   <div style="width:min(420px,100%);background:var(--card,#fff);border:1px solid var(--line,#ddd);border-radius:16px;padding:20px;box-shadow:0 18px 60px rgba(0,0,0,.18)">
     <div style="font-size:18px;font-weight:850;margin-bottom:8px">🔐 Google-Verbindung erforderlich</div>
     <div style="font-size:13px;line-height:1.5;color:var(--muted,#666);margin-bottom:16px">
@@ -7072,7 +7114,7 @@ body *::before,body *::after{
 </div>
 
 
-<script id="msp-v270-visibility">
+<script id="msp-v271-visibility">
 document.addEventListener('visibilitychange',()=>{
  if(!document.hidden){
   const cfg=getGoogleCalendarConfig()||{};
