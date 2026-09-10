@@ -3715,6 +3715,47 @@ aside.sidebar{
 })();
 </script>
 
+
+<style id="msp-v266-mobile-file-explorer-final">
+/* V266: mobile file explorer — compact, no clipped columns, no horizontal page scroll */
+@media screen and (max-width:700px){
+  html,body{width:100%;max-width:100%;overflow-x:hidden!important}
+  main,.page,.card,.files-explorer-card{min-width:0!important;max-width:100%!important;box-sizing:border-box!important}
+  #files .files-explorer-head{width:100%!important;box-sizing:border-box!important}
+  #files .files-toolbar{display:grid!important;grid-template-columns:1fr 1fr!important;width:100%!important;gap:7px!important}
+  #files .files-toolbar .btn{width:100%!important;min-width:0!important;box-sizing:border-box!important;padding:9px 7px!important;font-size:12px!important}
+  #files .files-breadcrumb{max-width:100%!important;overflow:hidden!important;box-sizing:border-box!important;white-space:nowrap!important;text-overflow:ellipsis!important}
+  #files .file-explorer{width:100%!important;max-width:100%!important;overflow:hidden!important;box-sizing:border-box!important}
+  #files .file-explorer-header{display:none!important}
+  #files .file-explorer-row{
+    width:100%!important;min-width:0!important;max-width:100%!important;
+    box-sizing:border-box!important;
+    grid-template-columns:minmax(0,1fr) auto!important;
+    gap:7px!important;
+    min-height:52px!important;
+    padding:7px 8px!important;
+  }
+  #files .explorer-name{min-width:0!important;width:100%!important;overflow:hidden!important;gap:7px!important}
+  #files .explorer-name span:last-child,#files .explorer-name strong{
+    min-width:0!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important;
+    font-size:11px!important;
+  }
+  #files .explorer-icon{width:24px!important;min-width:24px!important;font-size:19px!important}
+  #files .explorer-type,#files .explorer-size{display:none!important}
+  #files .explorer-actions{min-width:0!important;width:auto!important;gap:2px!important;justify-content:flex-end!important}
+  #files .file-pin-btn{font-size:14px!important;padding:4px 5px!important}
+  #files .icon-action{width:29px!important;min-width:29px!important;height:29px!important}
+  #files .file-explorer-empty{padding:30px 12px!important}
+}
+@media screen and (max-width:390px){
+  #files .files-toolbar{grid-template-columns:1fr!important}
+  #files .files-toolbar .btn{padding:8px 7px!important}
+  #files .file-explorer-row{padding:7px 6px!important;gap:5px!important}
+  #files .explorer-name span:last-child,#files .explorer-name strong{font-size:10.5px!important}
+  #files .explorer-icon{width:22px!important;min-width:22px!important}
+}
+</style>
+
 </head>
 <body>
 
