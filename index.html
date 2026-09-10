@@ -3716,7 +3716,7 @@ aside.sidebar{
 </script>
 
 
-<style id="msp-v272-reauth-fix">
+<style id="msp-v273-reauth-fix">
 .google-reauth-overlay{
   pointer-events:auto!important;
   cursor:default!important;
@@ -5058,27 +5058,34 @@ function closeGoogleReauth(){
 }
 async function reauthorizeGoogleServices(){
  const btn=document.querySelector('#googleReauthModal button[onclick*="reauthorizeGoogleServices"]');
- if(btn){btn.disabled=true;btn.textContent='🔄 Verbinde…';}
+ if(btn){btn.disabled=true;btn.textContent='🔄 Google wird geöffnet…';}
  try{
+  googleServicesAuthPromise=null;
+  googleServicesAccessToken='';
+  googleDriveAccessToken='';
+  googleCalendarAccessToken='';
   const ok=await googleServicesAuth('consent');
   if(ok){
    closeGoogleReauth();
    scheduleGoogleTokenRefresh();
    try{
-    if(typeof loadGoogleCalendarsAndColors==='function')await loadGoogleCalendarsAndColors();
-    if(typeof updateDriveStatus==='function')updateDriveStatus();
-    if(typeof updateGoogleCalendarStatus==='function')updateGoogleCalendarStatus();
+    await loadGoogleCalendarsAndColors();
+    updateDriveStatus();
+    updateGoogleCalendarStatus();
    }catch(e){console.warn('Google nach Re-Login:',e)}
   }else{
+   alert('Google-Anmeldung wurde nicht abgeschlossen. Bitte erneut versuchen.');
    showGoogleReauth();
   }
  }catch(e){
   console.warn('Google Re-Login:',e);
+  alert('Google-Anmeldung konnte nicht gestartet werden: '+(e.message||e));
   showGoogleReauth();
  }finally{
   if(btn){btn.disabled=false;btn.textContent='🔵 Mit Google verbinden';}
  }
 }
+
 function scheduleGoogleTokenRefresh(){
  clearTimeout(googleReauthTimer);
  googleReauthTimer=setTimeout(async()=>{
@@ -5096,27 +5103,57 @@ function googleServicesAuth(prompt='none'){
   googleCalendarAccessToken=googleServicesAccessToken;
   return Promise.resolve(true);
  }
- if(googleServicesAuthPromise)return googleServicesAuthPromise;
+
+ // IMPORTANT: a real user click must never be blocked by an older silent
+ // authorization attempt. A stale pending promise was the reason the buttons
+ // could appear clickable while Google never opened.
+ if(prompt==='consent')googleServicesAuthPromise=null;
+ else if(googleServicesAuthPromise)return googleServicesAuthPromise;
+
  const c=initGoogleServicesTokenClient();
  if(!c){
-  if(prompt==='consent')alert('Google ist noch nicht bereit. Bitte die Seite kurz laden und erneut versuchen.');
+  if(prompt==='consent')alert('Google ist noch nicht bereit. Bitte kurz warten und erneut versuchen.');
   return Promise.resolve(false);
  }
+
  googleServicesAuthPromise=new Promise(resolve=>{
-  c.callback=async r=>{
+  let finished=false;
+  const finish=value=>{
+   if(finished)return;
+   finished=true;
    googleServicesAuthPromise=null;
+   resolve(value);
+  };
+
+  c.callback=r=>{
    if(r&&r.access_token){
     googleServicesAccessToken=r.access_token;
     googleDriveAccessToken=r.access_token;
     googleCalendarAccessToken=r.access_token;
     updateDriveStatus();
     updateGoogleCalendarStatus();
-    scheduleGoogleTokenRefresh();
-    resolve(true);
-   }else resolve(false);
+    if(typeof scheduleGoogleTokenRefresh==='function')scheduleGoogleTokenRefresh();
+    finish(true);
+   }else finish(false);
   };
-  try{c.requestAccessToken({prompt});}
-  catch(e){googleServicesAuthPromise=null;console.warn(e);resolve(false)}
+
+  c.error_callback=e=>{
+   console.warn('Google-Dienste OAuth',e);
+   finish(false);
+  };
+
+  try{
+   // Google's documented pattern is "consent" for the first/manual grant
+   // and an empty prompt for an already-authorized session.
+   c.requestAccessToken({prompt:prompt==='consent'?'consent':''});
+  }catch(e){
+   console.warn('Google OAuth Start:',e);
+   finish(false);
+  }
+
+  // Silent GIS requests do not always call a callback when no silent grant is
+  // possible. Release the lock quickly so a later manual click always works.
+  if(prompt!=='consent')setTimeout(()=>finish(false),2500);
  });
  return googleServicesAuthPromise;
 }
@@ -5138,8 +5175,15 @@ async function connectGoogleDrive(){
 
 async function connectGoogleServices(){
  try{
+  googleServicesAuthPromise=null;
+  googleServicesAccessToken='';
+  googleDriveAccessToken='';
+  googleCalendarAccessToken='';
   const ok=await googleServicesAuth('consent');
-  if(!ok)return false;
+  if(!ok){
+   alert('Google-Anmeldung wurde nicht abgeschlossen. Bitte erneut versuchen.');
+   return false;
+  }
   await loadGoogleCalendarsAndColors();
   const cfg=getGoogleCalendarConfig()||{};
   if(cfg.calendarId&&cfg.colorId)await syncGoogleCalendarAfterAuth(true);
@@ -7094,7 +7138,7 @@ function renderStudyTimer(){
 </script>
 
 
-<style id="msp-font-v272-final">
+<style id="msp-font-v273-final">
 html,body,body *{
   font-family:"DM Sans",Arial,sans-serif !important;
 }
@@ -7118,7 +7162,7 @@ body *::before,body *::after{
 </div>
 
 
-<script id="msp-v272-visibility">
+<script id="msp-v273-visibility">
 document.addEventListener('visibilitychange',()=>{
  if(!document.hidden){
   const cfg=getGoogleCalendarConfig()||{};
@@ -7126,7 +7170,6 @@ document.addEventListener('visibilitychange',()=>{
    googleServicesAccessToken='';
    googleServicesAuth('none').then(ok=>{
     if(ok&&typeof autoSyncGoogleCalendar==='function')autoSyncGoogleCalendar();
-    else if(!ok)showGoogleReauth();
    });
   }
  }
