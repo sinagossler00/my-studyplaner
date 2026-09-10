@@ -3756,13 +3756,6 @@ aside.sidebar{
 })();
 </script>
 
-
-<style id="msp-v263-google-css">
-.msp-google-persist-note{
-  font-size:11px;opacity:.65;margin-top:5px;line-height:1.35;
-}
-</style>
-
 </head>
 <body>
 
@@ -7034,107 +7027,6 @@ function renderStudyTimer(){
   }
   const obs=new MutationObserver(decorate);
   function init(){decorate();obs.observe(document.body,{childList:true,subtree:true});}
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);
-  else init();
-})();
-</script>
-
-
-<script id="msp-v263-google-persist">
-(function(){
-  const DRIVE_KEY='msp_google_drive_config_v2';
-  const CAL_KEY='mystudyplaner_google_calendar_v2';
-
-  function safeSet(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
-  function safeGet(k){
-    try{return JSON.parse(localStorage.getItem(k)||'null');}catch(e){return null;}
-  }
-
-  // Keep the user's chosen Drive/Calendar setup in local storage and mirror
-  // non-secret configuration into the cloud data object when available.
-  window.mspPersistGoogleSetup=function(){
-    try{
-      if(window.data){
-        data.googleIntegrations=data.googleIntegrations||{};
-        data.googleIntegrations.drive=data.googleIntegrations.drive||{};
-        data.googleIntegrations.calendar=data.googleIntegrations.calendar||{};
-        if(typeof getGoogleDriveConfig==='function'){
-          const c=getGoogleDriveConfig()||{};
-          data.googleIntegrations.drive.clientId=c.clientId||'';
-        }
-        if(typeof getGoogleCalendarConfig==='function'){
-          const c=getGoogleCalendarConfig()||{};
-          data.googleIntegrations.calendar.clientId=c.clientId||'';
-        }
-      }
-      if(typeof saveData==='function') saveData();
-    }catch(e){}
-  };
-
-  // Restore config immediately after app initialization and after auth.
-  window.mspRestoreGoogleSetup=function(){
-    try{
-      const cd=window.data&&data.googleIntegrations;
-      if(cd&&cd.drive&&cd.drive.clientId && typeof setGoogleDriveConfig==='function'){
-        const current=typeof getGoogleDriveConfig==='function'?(getGoogleDriveConfig()||{}):{};
-        if(!current.clientId) setGoogleDriveConfig({clientId:cd.drive.clientId});
-      }
-      if(cd&&cd.calendar&&cd.calendar.clientId && typeof setGoogleCalendarConfig==='function'){
-        const current=typeof getGoogleCalendarConfig==='function'?(getGoogleCalendarConfig()||{}):{};
-        if(!current.clientId) setGoogleCalendarConfig({clientId:cd.calendar.clientId});
-      }
-    }catch(e){}
-  };
-
-  // Calendar: after the first successful OAuth grant, immediately import events
-  // and colors in one flow, instead of requiring a second manual setup action.
-  window.mspCalendarFirstLogin=function(){
-    try{
-      if(!window.googleCalendarAccessToken)return;
-      if(typeof updateGoogleCalendarStatus==='function') updateGoogleCalendarStatus();
-      if(typeof syncGoogleCalendar==='function'){
-        const r=syncGoogleCalendar();
-        if(r&&typeof r.then==='function')r.catch(()=>{});
-      }else if(typeof loadGoogleCalendarEvents==='function'){
-        const r=loadGoogleCalendarEvents();
-        if(r&&typeof r.then==='function')r.catch(()=>{});
-      }
-    }catch(e){}
-  };
-
-  // Drive: once connected, keep the configured client ID and automatically refresh
-  // the UI/config; do not wipe it when the OAuth token expires.
-  window.mspDriveConnected=function(){
-    try{
-      if(typeof getGoogleDriveConfig==='function'){
-        const c=getGoogleDriveConfig()||{};
-        if(c.clientId) safeSet(DRIVE_KEY,c);
-      }
-      window.mspPersistGoogleSetup();
-    }catch(e){}
-  };
-
-  // Observe Firebase auth becoming available; restore integration setup then.
-  function bindAuth(){
-    try{
-      if(window.fb&&window.fb.auth){
-        window.fb.auth().onAuthStateChanged(function(user){
-          if(user){
-            setTimeout(window.mspRestoreGoogleSetup,300);
-            setTimeout(window.mspRestoreGoogleSetup,1200);
-          }
-        });
-      }
-    }catch(e){}
-  }
-
-  function init(){
-    window.mspRestoreGoogleSetup();
-    bindAuth();
-    // Small delayed passes handle app code that initializes config after DOM ready.
-    [500,1500,3000].forEach(t=>setTimeout(window.mspRestoreGoogleSetup,t));
-  }
-
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);
   else init();
 })();
