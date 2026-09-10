@@ -1,4 +1,4 @@
-const CACHE = 'my-studyplaner-pwa-v262-files-clean-clean';
+const CACHE = 'my-studyplaner-pwa-v263-font-files-clean-clean';
 const APP_SHELL = [
   './',
   './index.html',
