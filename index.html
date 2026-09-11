@@ -85,6 +85,11 @@ h1{margin:0;font-size:29px;font-weight:850}h2{margin:0;font-size:19px;font-weigh
   .btn:hover,.tab:hover,.edit-btn:hover,.psychology-refresh:hover{transform:translateY(-1px)}
   .btn:active,.tab:active,.edit-btn:active,.psychology-refresh:active{transform:translateY(0) scale(.98)}
 }
+/* v296: sanfter Seitenwechsel */
+.page.page-transition-in{animation:mspPageIn .18s ease both;}
+@keyframes mspPageIn{from{opacity:.0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+@media(prefers-reduced-motion:reduce){.page.page-transition-in{animation:none!important}}
+
 /* v293: smooth psychology-of-the-day change */
 @keyframes psychologyDayIn{
   from{opacity:0;transform:translateY(7px)}
@@ -3873,6 +3878,23 @@ aside.sidebar{
 }
 </style>
 
+
+<style id="msp-v296-calendar-week-view">
+.calendar-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;flex-wrap:wrap}
+.calendar-toolbar .calendar-nav{margin-bottom:0;flex:1;justify-content:center}
+.calendar-view-toggle{display:flex;gap:5px}
+.calendar-view-toggle .tab{margin:0;padding:7px 11px}
+.week-calendar{display:grid;grid-template-columns:repeat(7,minmax(110px,1fr));gap:6px;min-width:760px}
+.week-calendar-wrap{overflow-x:auto;padding-bottom:3px}
+.week-day{min-height:210px;border:1px solid #ddd;border-radius:7px;padding:7px;background:#fff}
+.week-day.today{border:2px solid #777}
+.week-day-head{display:flex;align-items:center;justify-content:space-between;gap:6px;padding-bottom:7px;border-bottom:1px solid #eee}
+.week-day-head span{font-size:10px;color:#666;text-transform:uppercase;font-weight:800}
+.week-day-head b{font-size:15px}
+.week-empty{font-size:11px;color:#888;padding-top:10px}
+.week-calendar .cal-item{white-space:normal;overflow:visible;text-overflow:clip}
+@media(max-width:700px){.calendar-toolbar{align-items:stretch}.calendar-toolbar .calendar-nav{flex:1}.calendar-view-toggle{width:100%}.calendar-view-toggle .tab{flex:1}.week-calendar-wrap{margin-right:-4px}.week-calendar{min-width:700px}.week-day{min-height:190px}}
+</style>
 </head>
 <body>
 
@@ -4140,12 +4162,18 @@ aside.sidebar{
     <button class="btn" onclick="openCalendarEvent()">＋ Termin hinzufügen</button>
   </div>
   <div class="calendar-wrap planner-calendar-wrap">
-    <div class="calendar-nav">
-      <button class="btn secondary" onclick="changePlannerMonth(-1)">‹</button>
-      <strong id="plannerCalendarMonthTitle"></strong>
-      <button class="btn secondary" onclick="changePlannerMonth(1)">›</button>
+    <div class="calendar-toolbar">
+      <div class="calendar-nav">
+        <button class="btn secondary" onclick="changePlannerCalendar(-1)">‹</button>
+        <strong id="plannerCalendarMonthTitle"></strong>
+        <button class="btn secondary" onclick="changePlannerCalendar(1)">›</button>
+      </div>
+      <div class="calendar-view-toggle" role="group" aria-label="Kalenderansicht">
+        <button id="plannerMonthViewBtn" class="tab active" type="button" onclick="setPlannerCalendarView('month')">Monat</button>
+        <button id="plannerWeekViewBtn" class="tab" type="button" onclick="setPlannerCalendarView('week')">Woche</button>
+      </div>
     </div>
-    <div class="calendar-weekdays"><span>Mo</span><span>Di</span><span>Mi</span><span>Do</span><span>Fr</span><span>Sa</span><span>So</span></div>
+    <div id="plannerCalendarWeekdays" class="calendar-weekdays"><span>Mo</span><span>Di</span><span>Mi</span><span>Do</span><span>Fr</span><span>Sa</span><span>So</span></div>
     <div id="plannerMonthCalendar" class="month-calendar"></div>
   </div>
 </section>
@@ -4216,7 +4244,7 @@ function setActiveNav(page){
 }
 function go(page){
  setActiveNav(page);
- document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));$(page).classList.add('active');
+ document.querySelectorAll('.page').forEach(x=>x.classList.remove('active','page-transition-in'));$(page).classList.add('active','page-transition-in');
  document.querySelectorAll('.nav button').forEach(x=>x.classList.toggle('active',x.dataset.page===page));
  const t={'grades':['🎓 Noten','Deine Leistungen und Noten pro Modul im Überblick.'],home:['🏠 Hallo Sina!','Schön, dass du hier bist. Bleib dran!'],tasks:['☑️ Aufgaben','Was steht heute, diese Woche oder diesen Monat an?'],'planner-calendar':['Kalender 📅','Deadlines und Termine übersichtlich im Monatskalender.'],calendar:['❗ Deadlines & Termine','Behalte alle wichtigen Fristen im Blick.'],podcast:['🎙️ KI-Podcast','Deine Zusammenfassungen als Lern-Podcast.'],'study-timer':['⏱️ Lern-Timer','Konzentriert lernen – mit klaren Lern- und Pausenzeiten.'],'study-room':['🌱 Meine Lernpflanze','Sie wächst mit deiner Lernzeit.'],files:['📁 Dateien & Infos','Alles Wichtige schnell griffbereit.'],modules:['📚 Meine Module','Deine Module und ihre Dateien.'],stats:['📊 Statistiken','Dein aktueller Studienfortschritt.'],'uni-links':['Uni-Webseiten 🔗','Wichtige Webseiten rund ums Studium an einem Ort.']}[page];
  $('pageTitle').textContent=t[0];$('pageSubtitle').textContent=t[1];renderAll()
@@ -4948,29 +4976,74 @@ async function deleteCalendarEvent(id){
   await saveData();renderAll();
  }
 }
+let plannerCalendarView=localStorage.getItem('msp_planner_calendar_view_v1')||'month';
+function setPlannerCalendarView(view){
+ plannerCalendarView=view==='week'?'week':'month';
+ localStorage.setItem('msp_planner_calendar_view_v1',plannerCalendarView);
+ renderPlannerCalendar();
+}
+function changePlannerCalendar(delta){
+ if(plannerCalendarView==='week'){
+  calendarMonth=new Date(calendarMonth.getFullYear(),calendarMonth.getMonth(),calendarMonth.getDate()+delta*7);
+ }else{
+  calendarMonth=new Date(calendarMonth.getFullYear(),calendarMonth.getMonth()+delta,1);
+ }
+ renderPlannerCalendar();
+}
+function changePlannerMonth(delta){changePlannerCalendar(delta)}
+function plannerDayEvents(key){
+ const ds=data.deadlines.filter(d=>d.date===key), es=(data.events||[]).filter(e=>e.date===key);
+ return {ds,es,total:ds.length+es.length};
+}
 function renderPlannerCalendar(){
- const box=document.getElementById('plannerMonthCalendar'),title=document.getElementById('plannerCalendarMonthTitle');
+ const box=document.getElementById('plannerMonthCalendar'),title=document.getElementById('plannerCalendarMonthTitle'),weekdays=document.getElementById('plannerCalendarWeekdays');
  if(!box||!title)return;
+ const monthBtn=document.getElementById('plannerMonthViewBtn'),weekBtn=document.getElementById('plannerWeekViewBtn');
+ if(monthBtn)monthBtn.classList.toggle('active',plannerCalendarView==='month');
+ if(weekBtn)weekBtn.classList.toggle('active',plannerCalendarView==='week');
+ if(plannerCalendarView==='week'){
+  renderPlannerWeekCalendar(box,title,weekdays); return;
+ }
  const y=calendarMonth.getFullYear(),m=calendarMonth.getMonth();
  title.textContent=calendarMonth.toLocaleDateString('de-DE',{month:'long',year:'numeric'});
+ if(weekdays)weekdays.innerHTML='<span>Mo</span><span>Di</span><span>Mi</span><span>Do</span><span>Fr</span><span>Sa</span><span>So</span>';
+ box.className='month-calendar';
  const first=new Date(y,m,1),last=new Date(y,m+1,0),start=(first.getDay()+6)%7;
  const cells=[];
  for(let i=0;i<start;i++)cells.push('<div class="cal-day empty-day"></div>');
  for(let day=1;day<=last.getDate();day++){
   const key=`${y}-${String(m+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-  const ds=data.deadlines.filter(d=>d.date===key),es=(data.events||[]).filter(e=>e.date===key);
-  const today=key===getTodayKey();
-  cells.push(`<div class="cal-day ${today?'today':''}">
-   <b>${day}</b>
+  const {ds,es}=plannerDayEvents(key),today=key===getTodayKey();
+  cells.push(`<div class="cal-day ${today?'today':''}" onclick="openCalendarDay('${key}')"><b>${day}</b>
    ${ds.map(d=>`<div class="cal-item ${d.priority||'mittel'} deadline-cal-item" title="${esc(d.title)}${d.time?' · '+d.time+' Uhr':''}" onclick="event.stopPropagation();openCalendarDeadlineDetails(${d.id})">❗ ${esc(d.title)}${d.time?' · '+esc(d.time):''}</div>`).join('')}
    ${es.map(e=>`<div class="cal-item event-item ${e.googleImported?'google-calendar-event':''}" ${e.googleImported&&e.googleColor?`style="--google-event-color:${esc(e.googleColor)}"`:''} title="${esc(e.title)}${e.time?' · '+e.time+' Uhr':''}" onclick="event.stopPropagation();openCalendarEventDetails(${e.id})">${e.googleImported?'🗓️':'📅'} ${esc(e.title)}${e.time?' · '+esc(e.time):''}</div>`).join('')}
   </div>`);
  }
  box.innerHTML=cells.join('');
 }
-function changePlannerMonth(delta){
- calendarMonth=new Date(calendarMonth.getFullYear(),calendarMonth.getMonth()+delta,1);
- renderPlannerCalendar();
+function renderPlannerWeekCalendar(box,title,weekdays){
+ const base=new Date(calendarMonth.getFullYear(),calendarMonth.getMonth(),calendarMonth.getDate());
+ const day=(base.getDay()+6)%7;
+ const monday=new Date(base); monday.setDate(base.getDate()-day); monday.setHours(12,0,0,0);
+ const sunday=new Date(monday); sunday.setDate(monday.getDate()+6);
+ const fmtRange=d=>d.toLocaleDateString('de-DE',{day:'2-digit',month:'short',year:'numeric'}).replace('.','');
+ title.textContent=`${fmtRange(monday)} – ${fmtRange(sunday)}`;
+ if(weekdays)weekdays.innerHTML='';
+ box.className='week-calendar-wrap';
+ const cells=[];
+ for(let i=0;i<7;i++){
+  const d=new Date(monday); d.setDate(monday.getDate()+i);
+  const key=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const {ds,es}=plannerDayEvents(key),today=key===getTodayKey();
+  const name=d.toLocaleDateString('de-DE',{weekday:'short'});
+  cells.push(`<div class="week-day ${today?'today':''}" onclick="openCalendarDay('${key}')">
+    <div class="week-day-head"><span>${name}</span><b>${d.getDate()}</b></div>
+    ${ds.map(x=>`<div class="cal-item ${x.priority||'mittel'} deadline-cal-item" title="${esc(x.title)}${x.time?' · '+x.time+' Uhr':''}" onclick="event.stopPropagation();openCalendarDeadlineDetails(${x.id})">❗ ${esc(x.title)}${x.time?' · '+esc(x.time):''}</div>`).join('')}
+    ${es.map(x=>`<div class="cal-item event-item ${x.googleImported?'google-calendar-event':''}" ${x.googleImported&&x.googleColor?`style="--google-event-color:${esc(x.googleColor)}"`:''} title="${esc(x.title)}${x.time?' · '+x.time+' Uhr':''}" onclick="event.stopPropagation();openCalendarEventDetails(${x.id})">${x.googleImported?'🗓️':'📅'} ${esc(x.title)}${x.time?' · '+esc(x.time):''}</div>`).join('')}
+    ${!ds.length&&!es.length?'<div class="week-empty">Keine Termine</div>':''}
+   </div>`);
+ }
+ box.innerHTML=`<div class="week-calendar">${cells.join('')}</div>`;
 }
 
 function openModal(title,body){$('modalTitle').textContent=title;$('modalBody').innerHTML=body;$('modal').classList.add('show')}
