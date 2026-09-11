@@ -3734,6 +3734,23 @@ aside.sidebar{
   touch-action:manipulation!important;
 }
 </style>
+
+<style id="msp-home-study-dashboard-v278">
+.home-study-row{margin-top:16px;}
+.home-psychology-row{margin-top:16px;}
+.home-study-card,.home-progress-card{min-height:180px;}
+.home-study-label{font-size:12px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:5px;}
+.home-study-title{font-size:18px;margin:0 0 5px;}
+.home-study-meta{font-size:12px;}
+.home-study-action{margin-top:14px;}
+.home-study-empty{font-size:16px;line-height:1.6;}
+.home-progress-head{display:flex;justify-content:space-between;align-items:center;font-weight:750;margin:8px 0 9px;}
+.home-progress-head strong{font-size:22px;}
+.home-progress-bar{height:12px;background:#eee;border-radius:8px;overflow:hidden;}
+.home-progress-bar span{display:block;height:100%;background:var(--sage);border-radius:8px;transition:width .25s ease;}
+.home-progress-meta{font-size:12px;margin-top:8px;}
+@media(max-width:700px){.home-study-row{grid-template-columns:1fr;}.home-study-card,.home-progress-card{min-height:0;}}
+</style>
 </head>
 <body>
 
@@ -3758,7 +3775,6 @@ aside.sidebar{
       <button data-page="tasks"><span class="icon">☑️</span><span>Aufgaben</span></button>
       <button data-page="grades"><span class="icon">🎓</span><span>Noten</span></button>
       <button data-page="uni-links"><span class="icon">🔗</span><span>Uni-Webseiten</span></button>
-      <button type="button" onclick="window.open('https://drive.google.com/drive/my-drive', '_blank', 'noopener,noreferrer')"><span class="icon">📁</span><span>Google Drive</span></button>
       <button data-page="study-timer"><span class="icon">⏱️</span><span>Lern-Timer</span></button>
       <button data-page="podcast"><span class="icon">🎙️</span><span>KI-Podcast</span></button>
       <button data-page="study-room"><span class="icon">🏠</span><span>Study Room</span></button>
@@ -3797,7 +3813,17 @@ aside.sidebar{
     <div id="homeTasks"></div><button class="btn secondary full" onclick="go('tasks')">Alle Aufgaben anzeigen →</button>
    </div>
   </div>
-  <div class="two-col">
+  <div class="two-col home-study-row">
+   <div class="card home-study-card" id="homeTodayStudyCard">
+    <div class="card-head"><h2>📚 Heute lernen</h2></div>
+    <div id="homeTodayStudy"></div>
+   </div>
+   <div class="card home-progress-card" id="homeProgressCard">
+    <div class="card-head"><h2>📊 Studienfortschritt</h2></div>
+    <div id="homeStudyProgress"></div>
+   </div>
+  </div>
+  <div class="two-col home-psychology-row">
    <div class="card psychology-day-card"><div class="card-head"><h2>🧠 Psychologie des Tages</h2></div><div id="psychologyDay"></div></div>
   </div>
  </section>
@@ -4490,29 +4516,34 @@ function daysFromToday(date){
  return Math.round((b-a)/86400000);
 }
 function renderHomeOverview(){
- const today=getTodayKey();
- const now=new Date();
- const day=(now.getDay()+6)%7;
- const thisMonday=new Date(now);
- thisMonday.setHours(0,0,0,0);
- thisMonday.setDate(now.getDate()-day);
- const nextMonday=new Date(thisMonday);
- nextMonday.setDate(thisMonday.getDate()+7);
- const nextSunday=new Date(nextMonday);
- nextSunday.setDate(nextMonday.getDate()+6);
- const nextStart=nextMonday.toISOString().slice(0,10);
- const nextEnd=nextSunday.toISOString().slice(0,10);
- const weekEnd=new Date(thisMonday);
- weekEnd.setDate(thisMonday.getDate()+6);
- const weekKey=weekEnd.toISOString().slice(0,10);
+ const today=getTodayKey(); const now=new Date(); const day=(now.getDay()+6)%7;
+ const thisMonday=new Date(now); thisMonday.setHours(0,0,0,0); thisMonday.setDate(now.getDate()-day);
+ const nextMonday=new Date(thisMonday); nextMonday.setDate(thisMonday.getDate()+7);
+ const nextSunday=new Date(nextMonday); nextSunday.setDate(nextMonday.getDate()+6);
+ const nextStart=nextMonday.toISOString().slice(0,10); const nextEnd=nextSunday.toISOString().slice(0,10);
+ const weekEnd=new Date(thisMonday); weekEnd.setDate(thisMonday.getDate()+6); const weekKey=weekEnd.toISOString().slice(0,10);
  const openTasks=data.tasks.filter(t=>!t.done).length;
  const weekDeadlines=data.deadlines.filter(d=>d.date>=today&&d.date<=weekKey).length;
  const nextWeekDeadlines=data.deadlines.filter(d=>d.date>=nextStart&&d.date<=nextEnd).length;
- $('homeOverview').innerHTML=[
-  ['📋','Offene Aufgaben',openTasks],
-  ['❗','Deadlines diese Woche',weekDeadlines],
-  ['📅','Deadlines nächste Woche',nextWeekDeadlines]
- ].map(x=>`<div class="overview-card"><span class="overview-icon">${x[0]}</span><div><span>${x[1]}</span><strong>${x[2]}</strong></div></div>`).join('');
+ $('homeOverview').innerHTML=[['📋','Offene Aufgaben',openTasks],['❗','Deadlines diese Woche',weekDeadlines],['📅','Deadlines nächste Woche',nextWeekDeadlines]].map(x=>`<div class="overview-card"><span class="overview-icon">${x[0]}</span><div><span>${x[1]}</span><strong>${x[2]}</strong></div></div>`).join('');
+ renderHomeStudyCards();
+}
+function renderHomeStudyCards(){
+ const open=(data.tasks||[]).filter(t=>!t.done).slice().sort((a,b)=>String(a.deadline||a.date||'9999-12-31').localeCompare(String(b.deadline||b.date||'9999-12-31')));
+ const target=open[0]; const study=$('homeTodayStudy');
+ if(study){
+  if(target){
+   const moduleName=target.module||target.moduleName||'Dein Studium';
+   const deadline=target.deadline||target.date||'';
+   const deadlineText=deadline?new Date(deadline+'T12:00:00').toLocaleDateString('de-DE',{day:'numeric',month:'short',year:'numeric'}):'';
+   study.innerHTML=`<div class="home-study-label">${esc(moduleName)}</div><h3 class="home-study-title">${esc(target.title||target.name||'Nächste Aufgabe')}</h3>${deadline?`<div class="muted home-study-meta">⏱️ Frist: ${deadlineText}</div>`:''}<button class="btn home-study-action" onclick="go('tasks')">Weiterlernen →</button>`;
+  }else{
+   study.innerHTML=`<div class="home-study-empty">🎉 Alles erledigt!<br><span class="muted">Aktuell steht keine offene Lernaufgabe an.</span></div>`;
+  }
+ }
+ const allTasks=data.tasks||[]; const done=allTasks.filter(t=>t.done).length; const total=allTasks.length; const pct=total?Math.round(done/total*100):0;
+ const progress=$('homeStudyProgress');
+ if(progress) progress.innerHTML=`<div class="home-progress-head"><span>Aufgaben im Studium</span><strong>${pct}%</strong></div><div class="home-progress-bar"><span style="width:${pct}%"></span></div><div class="muted home-progress-meta">${done} von ${total} Aufgaben abgeschlossen</div><button class="btn secondary home-study-action" onclick="go('tasks')">Aufgaben ansehen →</button>`;
 }
 function renderCalendar(){
  const box=$('monthCalendar'),title=$('calendarMonthTitle');
