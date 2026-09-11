@@ -4319,7 +4319,7 @@ data.grades=Array.isArray(data.grades)?data.grades:[];
 data.uniLinks=Array.isArray(data.uniLinks)?data.uniLinks:[];
 if(!Array.isArray(data.podcasts))data.podcasts=[];
 if(!Array.isArray(data.tasks))data.tasks=[];data.tasks.forEach(t=>{if(typeof t.deadline!=='string')t.deadline='';});
-let deadlineFilter='all',taskFilter='open',taskTimeFilter='all',taskSort='deadline',deadlineCalendarView=localStorage.getItem('msp_deadline_calendar_view_v1')||'month',taskCalendarView=localStorage.getItem('msp_task_calendar_view_v1')||'month',currentUser=null,fb=null,cloudEnabled=false,cloudUnsubscribe=null,calendarMonth=new Date(new Date().getFullYear(),new Date().getMonth(),1);
+let deadlineFilter='all',taskFilter='open',taskTimeFilter='all',taskSort='deadline',deadlineCalendarView=localStorage.getItem('msp_deadline_calendar_view_v1')||'month',taskCalendarView=localStorage.getItem('msp_task_calendar_view_v1')||'month',currentUser=null,fb=null,cloudEnabled=false,cloudUnsubscribe=null,cloudInitialSyncDone=false,calendarMonth=new Date(new Date().getFullYear(),new Date().getMonth(),1);
 const $=id=>document.getElementById(id);
 function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
 function saveLocal(){localStorage.setItem(KEY,JSON.stringify(data))}
@@ -5634,6 +5634,9 @@ async function initCloud(){
  try{
   if(!firebase.apps.length)firebase.initializeApp(cfg);
   fb={auth:firebase.auth(),db:firebase.firestore()};
+  // Keep the Firebase login on this device so the next visit restores the
+  // same cloud account automatically (also on mobile/tablet browsers).
+  fb.auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(e=>console.warn('Auth-Persistenz:',e));
   cloudReadyResolve(fb);
   fb.auth.onAuthStateChanged(async user=>{
    currentUser=user;
@@ -5708,56 +5711,73 @@ async function initCloud(){
       renderAll();
      }
 
-     // Real-time sync: another phone/tablet/PC changing grades (or other
-     // planner data) updates this device automatically.
-     cloudUnsubscribe=ref.onSnapshot(remoteSnap=>{
+     // Real-time sync: the complete Studyplaner data object is synchronized,
+     // not only grades/links. This is important when another phone/tablet/PC
+     // creates or changes tasks, deadlines, modules, notes, etc.
+     cloudInitialSyncDone=false;
+     cloudUnsubscribe=ref.onSnapshot(async remoteSnap=>{
       if(!remoteSnap.exists||!remoteSnap.data().data)return;
       const remoteData=remoteSnap.data().data||{};
-      const remoteGrades=Array.isArray(remoteData.grades)?remoteData.grades:[];
-      const remoteModules=Array.isArray(remoteData.gradeModules)?remoteData.gradeModules:[];
+
+      if(!cloudInitialSyncDone){
+       // First snapshot after login: keep local-only records from this device,
+       // then upload the combined dataset so no device loses newly created data.
+       const localBeforeSnapshot=structuredClone(data||{});
+       const base=Object.assign(structuredClone(defaultData),remoteData);
+       const arrayKeys=[
+        'deadlines','tasks','files','fileFolders','modules','notes','podcasts',
+        'gradeModules','grades','uniLinks'
+       ];
+       const mergeById=(cloudArr,localArr)=>{
+        const result=[],seen=new Set();
+        [...(Array.isArray(cloudArr)?cloudArr:[]),...(Array.isArray(localArr)?localArr:[])].forEach(item=>{
+         if(item==null)return;
+         const id=(typeof item==='object')?String(item.id??''):'';
+         const key=id||JSON.stringify(item);
+         if(seen.has(key))return;
+         seen.add(key);result.push(item);
+        });
+        return result;
+       };
+       arrayKeys.forEach(k=>{
+        base[k]=mergeById(remoteData[k],localBeforeSnapshot[k]);
+       });
+       const remotePlant=Number(remoteData.plantMinutes);
+       const localPlant=Number(localBeforeSnapshot.plantMinutes);
+       const legacyPlant=Number(localStorage.getItem('msp_total_learning_minutes')||0);
+       base.plantMinutes=Math.max(
+        Number.isFinite(remotePlant)?remotePlant:0,
+        Number.isFinite(localPlant)?localPlant:0,
+        Number.isFinite(legacyPlant)?legacyPlant:0
+       );
+       data=base;
+       saveLocal();
+       await ref.set({data,updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});
+       cloudInitialSyncDone=true;
+       renderAll();
+       return;
+      }
+
+      // After the initial merge, Firestore is authoritative. Every change made
+      // in the app goes through saveData(), so the complete remote object can
+      // safely update all other devices, including tasks and deadlines.
+      const next=Object.assign(structuredClone(defaultData),remoteData);
       const remotePlant=Number(remoteData.plantMinutes);
-
-      const localGradeSignature=JSON.stringify({
-       gradeModules:Array.isArray(data.gradeModules)?data.gradeModules:[],
-       grades:Array.isArray(data.grades)?data.grades:[]
-      });
-      const remoteGradeSignature=JSON.stringify({
-       gradeModules:remoteModules,
-       grades:remoteGrades
-      });
-
-      // Grades are authoritative per cloud snapshot.
-      if(localGradeSignature!==remoteGradeSignature){
-       data.gradeModules=remoteModules;
-       data.grades=remoteGrades;
-       saveLocal();
-       renderGrades();
+      const localPlant=Number(data.plantMinutes);
+      if(Number.isFinite(localPlant)&&localPlant>Number(next.plantMinutes||0)){
+       next.plantMinutes=localPlant;
       }
-
-      // Plant growth is cumulative: a remote increase should immediately show
-      // on this device, while a local larger value is never reduced.
-      if(Number.isFinite(remotePlant) && remotePlant>=0 &&
-         remotePlant!==Number(data.plantMinutes)){
-       if(remotePlant>Number(data.plantMinutes||0)){
-        data.plantMinutes=Math.round(remotePlant);
-        saveLocal();
-        renderPlant();
-       }
-      }
-
-      // Uni-Webseiten are shared data too: update this device immediately when
-      // another device adds, edits, or deletes a link.
-      const remoteLinks=Array.isArray(remoteData.uniLinks)?remoteData.uniLinks:[];
-      const localLinksNow=Array.isArray(data.uniLinks)?data.uniLinks:[];
-      if(JSON.stringify(localLinksNow)!==JSON.stringify(remoteLinks)){
-       data.uniLinks=remoteLinks;
+      const changed=JSON.stringify(data)!==JSON.stringify(next);
+      if(changed){
+       data=next;
        saveLocal();
-       if(typeof renderUniLinks==='function')renderUniLinks();
+       renderAll();
       }
      },err=>console.warn('Cloud-Echtzeit-Sync:',err));
 
     }catch(e){console.warn('Cloud-Sync:',e)}
    }else{
+    cloudInitialSyncDone=false;
     cloudEnabled=false;
     window.cloudEnabled=false;
     window.currentUser=null;
