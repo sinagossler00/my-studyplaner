@@ -4025,11 +4025,6 @@ aside.sidebar{
           <option value="date">Datum</option>
         </select>
       </div>
-      <select id="homeDeadlineFilter" class="deadline-filter-select" aria-label="Deadlines filtern" onchange="setDeadlineFilter(this.value,this)">
-        <option value="all">Alle</option>
-        <option value="task">☑️ Aufgaben</option>
-        <option value="reg">Anmeldungen</option>
-      </select>
     </div>
     <div id="homeDeadlines"></div><button class="btn secondary full" onclick="go('calendar')">Alle Deadlines anzeigen →</button>
    </div>
@@ -4090,11 +4085,6 @@ aside.sidebar{
               <option value="date">Datum</option>
             </select>
           </div>
-          <select id="deadlineFilterSelect" class="deadline-filter-select" aria-label="Deadlines filtern" onchange="setDeadlineFilter(this.value,this)">
-            <option value="all">Alle</option>
-            <option value="task">☑️ Aufgaben</option>
-            <option value="reg">Anmeldungen</option>
-          </select>
         </div>
         <button class="btn deadline-new-btn" onclick="openDeadline()">＋ Neuer Eintrag</button>
       </div>
@@ -4367,8 +4357,7 @@ function deadlinePriorityRank(p){
 }
 function renderDeadlines(target){
  let arr=data.deadlines
-   .filter(matches)
-   .filter(d=>deadlineFilter==='all'||d.type===deadlineFilter);
+   .filter(matches);
 
  const mode=getDeadlineSortMode();
  arr.sort((a,b)=>{
@@ -4997,7 +4986,7 @@ function renderGrades(){
 function renderAll(){if(!data.events)data.events=[];
  data.deadlines=(data.deadlines||[]).map(d=>({...d,priority:['hoch','mittel','leicht'].includes(String(d.priority||'').toLowerCase())?String(d.priority||'').toLowerCase():'mittel'}));renderHomeOverview();renderDeadlines('home');renderDeadlines('calendar');renderTasks();renderGrades();renderFiles();renderCalendar();renderPlannerCalendar();renderReminders();renderPsychologyDay();renderSavedPodcasts();updateGoogleCalendarStatus()}
 function setDeadlineFilter(v,btn){
- deadlineFilter=v;
+ deadlineFilter='all';
  const h=$('homeDeadlineFilter'), c=$('deadlineFilterSelect');
  if(h)h.value=v;
  if(c)c.value=v;
@@ -7539,6 +7528,22 @@ document.addEventListener('visibilitychange',()=>{
 })();
 </script>
 
+
+<style id="deadline-sort-only-v302">
+#calendar .deadline-top-controls,
+#home .deadline-controls-row{
+  justify-content:flex-start !important;
+}
+#calendar .deadline-sort-control,
+#home .home-deadline-sort{
+  margin:0 !important;
+}
+#calendar #deadlineSort,
+#home #homeDeadlineSort{
+  width:140px !important;
+  max-width:140px !important;
+}
+</style>
 </body>
 </html>
 
