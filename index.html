@@ -7626,6 +7626,30 @@ document.addEventListener('visibilitychange',()=>{
   max-width:140px !important;
 }
 </style>
+<style id="msp-v308-list-scroll-three">
+/* v308: Aufgaben-/Deadline-Listen zeigen maximal drei Einträge; weitere Einträge scrollen im Listenbereich. */
+#tasks #taskList,#calendar #deadlineList{min-width:0;scrollbar-gutter:stable}
+#tasks #taskList.msp-list-scroll,#calendar #deadlineList.msp-list-scroll{overflow-y:auto!important;overflow-x:hidden!important;overscroll-behavior:contain;padding-right:4px;scrollbar-width:thin;scrollbar-color:#c9c1ba transparent}
+#tasks #taskList.msp-list-scroll::-webkit-scrollbar,#calendar #deadlineList.msp-list-scroll::-webkit-scrollbar{width:7px}
+#tasks #taskList.msp-list-scroll::-webkit-scrollbar-thumb,#calendar #deadlineList.msp-list-scroll::-webkit-scrollbar-thumb{background:#c9c1ba;border-radius:8px}
+</style>
+<script>
+(function(){
+ function fitListToThree(id){
+  const el=document.getElementById(id); if(!el)return;
+  const items=Array.from(el.children).filter(x=>x.classList.contains('task-row')||x.classList.contains('deadline'));
+  el.classList.remove('msp-list-scroll'); el.style.maxHeight=''; el.style.overflowY='';
+  if(items.length<=3)return;
+  const height=items.slice(0,3).reduce((sum,item)=>sum+item.getBoundingClientRect().height,0);
+  el.style.maxHeight=Math.ceil(height+2)+'px'; el.classList.add('msp-list-scroll');
+ }
+ function fitAll(){fitListToThree('taskList');fitListToThree('deadlineList')}
+ function wrapRender(name){const original=window[name];if(typeof original!=='function')return;window[name]=function(){const result=original.apply(this,arguments);requestAnimationFrame(fitAll);return result}}
+ wrapRender('renderTasks'); wrapRender('renderDeadlines'); requestAnimationFrame(fitAll);
+ window.addEventListener('resize',()=>requestAnimationFrame(fitAll),{passive:true});
+})();
+</script>
+
 </body>
 </html>
 
