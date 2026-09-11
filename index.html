@@ -4526,9 +4526,14 @@ function renderHomeOverview(){
  renderHomeStudyCards();
 }
 function renderHomeStudyCards(){
- const allTasks=data.tasks||[]; const done=allTasks.filter(t=>t.done).length; const total=allTasks.length; const pct=total?Math.round(done/total*100):0;
+ // Der Studienfortschritt richtet sich ausschließlich nach dem Semesterzähler.
+ // 6 Semester + Bachelorarbeit = 7 gleichgewichtete Studienabschnitte.
+ const step=Math.max(1,Math.min(7,Number(data.semester)||1));
+ const totalSteps=7;
+ const pct=Math.round((step/totalSteps)*100);
+ const label=step<=6?`${step}. Semester`:'Bachelorarbeit';
  const progress=$('homeStudyProgress');
- if(progress) progress.innerHTML=`<div class="home-progress-head"><span>Aufgaben im Studium</span><strong>${pct}%</strong></div><div class="home-progress-bar"><span style="width:${pct}%"></span></div><div class="muted home-progress-meta">${done} von ${total} Aufgaben abgeschlossen</div><button class="btn secondary home-study-action" onclick="go('tasks')">Aufgaben ansehen →</button>`;
+ if(progress) progress.innerHTML=`<div class="home-progress-head"><span>${label}</span><strong>${pct}%</strong></div><div class="home-progress-bar"><span style="width:${pct}%"></span></div><div class="muted home-progress-meta">${step<=6?`Studium: ${step} von 6 Semestern`:'Bachelorarbeit · Abschlussphase'}</div><button class="btn secondary full" type="button" onclick="openSemesterSettings()" style="margin-top:12px">Semester / Bachelorarbeit auswählen</button>`;
 }
 function renderCalendar(){
  const box=$('monthCalendar'),title=$('calendarMonthTitle');
@@ -6591,7 +6596,14 @@ window.addEventListener('load',()=>{try{updateGeminiOAuthStatus()}catch(e){conso
     return diff<0?'0':String(diff);
   }
   function semesterValue(){
-    return String(Math.max(1,Math.min(6,Number(data.semester)||1)));
+    return String(Math.max(1,Math.min(7,Number(data.semester)||1)));
+  }
+  function studyProgressValue(){
+    return Math.round((semesterValue()/7)*100);
+  }
+  function studyStageLabel(){
+    const value=Number(semesterValue());
+    return value<=6 ? value+'. Semester' : 'Bachelorarbeit';
   }
 
   window.openExamCountdownSettings=function(){
@@ -6613,18 +6625,20 @@ window.addEventListener('load',()=>{try{updateGeminiOAuthStatus()}catch(e){conso
   };
 
   window.openSemesterSettings=function(){
-    openModal('📚 Semester',`<div class="muted" style="margin-bottom:10px">Wähle dein aktuelles Semester.</div>
-      <label>Aktuelles Semester</label>
+    openModal('📚 Semester',`<div class="muted" style="margin-bottom:10px">Wähle deinen aktuellen Studienabschnitt.</div>
+      <label>Studienabschnitt</label>
       <select id="semesterCounterValue">
         ${[1,2,3,4,5,6].map(n=>`<option value="${n}" ${Number(data.semester||1)===n?'selected':''}>${n}. Semester</option>`).join('')}
+        <option value="7" ${Number(data.semester||1)===7?'selected':''}>Bachelorarbeit</option>
       </select>
+      <div class="muted" style="margin-top:8px">6 Semester + Bachelorarbeit = 100 %</div>
       <div style="display:flex;gap:8px;margin-top:12px">
         <button class="btn" type="button" onclick="saveSemesterCounter()">Speichern</button>
       </div>`);
   };
   window.saveSemesterCounter=async function(){
     const value=Number($('semesterCounterValue')?.value||1);
-    if(!Number.isInteger(value)||value<1||value>6)return;
+    if(!Number.isInteger(value)||value<1||value>7)return;
     data.semester=value; await saveData(); renderHomeOverview(); closeModal();
   };
 
@@ -6652,7 +6666,7 @@ window.addEventListener('load',()=>{try{updateGeminiOAuthStatus()}catch(e){conso
     sem.setAttribute('role','button');
     sem.setAttribute('tabindex','0');
     sem.title='Aktuelles Semester festlegen';
-    sem.innerHTML='<span class="overview-icon">📚</span><div><span>Semester</span><strong>'+semesterValue()+' / 6</strong></div>';
+    sem.innerHTML='<span class="overview-icon">📚</span><div><span>'+studyStageLabel()+'</span><strong>'+studyProgressValue()+'%</strong></div>';
     sem.onclick=window.openSemesterSettings;
     sem.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();window.openSemesterSettings();}};
     box.appendChild(sem);
