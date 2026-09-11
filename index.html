@@ -3891,21 +3891,37 @@ aside.sidebar{
 @media(max-width:1000px){.task-calendar-list-layout{grid-template-columns:1fr}.task-calendar-card{margin-top:0}}
 @media(max-width:700px){.deadline-calendar-toolbar,.task-calendar-toolbar{align-items:stretch}.deadline-calendar-toolbar .calendar-nav,.task-calendar-toolbar .calendar-nav{flex:1}.deadline-calendar-toolbar .calendar-view-toggle,.task-calendar-toolbar .calendar-view-toggle{width:100%}.deadline-calendar-toolbar .calendar-view-toggle .tab,.task-calendar-toolbar .calendar-view-toggle .tab{flex:1}}
 </style>
+<style id="msp-v298-responsive-calendar">
+/* v298: Kalender größer, Listen schmaler; Wochenansicht ohne horizontales Scrollen */
+.deadlines-page-layout{grid-template-columns:minmax(260px,.68fr) minmax(0,1.32fr);gap:16px;}
+.task-calendar-list-layout{grid-template-columns:minmax(260px,.68fr) minmax(0,1.32fr);gap:16px;}
+.deadlines-list-card,.task-calendar-list-layout > .card:first-child{min-width:0;}
+.deadlines-calendar-card,.task-calendar-card{min-width:0;}
+@media (min-width:701px) and (max-width:1100px){
+  .deadlines-page-layout,.task-calendar-list-layout{grid-template-columns:minmax(230px,.62fr) minmax(0,1.38fr);gap:12px;}
+  .deadlines-calendar-card,.task-calendar-card{padding:12px;}
+}
+@media (max-width:700px){
+  .deadlines-page-layout,.task-calendar-list-layout{grid-template-columns:1fr;gap:12px;}
+  .deadlines-calendar-card,.task-calendar-card{width:100%;padding:12px;}
+}
+</style>
 <style id="msp-v296-calendar-week-view">
 .calendar-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;flex-wrap:wrap}
 .calendar-toolbar .calendar-nav{margin-bottom:0;flex:1;justify-content:center}
 .calendar-view-toggle{display:flex;gap:5px}
 .calendar-view-toggle .tab{margin:0;padding:7px 11px}
-.week-calendar{display:grid;grid-template-columns:repeat(7,minmax(110px,1fr));gap:6px;min-width:760px}
-.week-calendar-wrap{overflow-x:auto;padding-bottom:3px}
-.week-day{min-height:210px;border:1px solid #ddd;border-radius:7px;padding:7px;background:#fff}
+.week-calendar{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px;min-width:0;width:100%;}
+.week-calendar-wrap{overflow:hidden;padding-bottom:3px;width:100%;}
+.week-day{min-height:210px;min-width:0;border:1px solid #ddd;border-radius:7px;padding:7px;background:#fff;overflow:hidden}
 .week-day.today{border:2px solid #777}
 .week-day-head{display:flex;align-items:center;justify-content:space-between;gap:6px;padding-bottom:7px;border-bottom:1px solid #eee}
 .week-day-head span{font-size:10px;color:#666;text-transform:uppercase;font-weight:800}
 .week-day-head b{font-size:15px}
 .week-empty{font-size:11px;color:#888;padding-top:10px}
 .week-calendar .cal-item{white-space:normal;overflow:visible;text-overflow:clip}
-@media(max-width:700px){.calendar-toolbar{align-items:stretch}.calendar-toolbar .calendar-nav{flex:1}.calendar-view-toggle{width:100%}.calendar-view-toggle .tab{flex:1}.week-calendar-wrap{margin-right:-4px}.week-calendar{min-width:700px}.week-day{min-height:190px}}
+@media(max-width:700px){.calendar-toolbar{align-items:stretch}.calendar-toolbar .calendar-nav{flex:1}.calendar-view-toggle{width:100%}.calendar-view-toggle .tab{flex:1}.week-calendar-wrap{margin-right:0}.week-calendar{min-width:0;width:100%;gap:3px}.week-day{min-height:150px;padding:4px;border-radius:6px}.week-day-head{padding-bottom:4px}.week-day-head span{font-size:8px}.week-day-head b{font-size:12px}.week-calendar .cal-item{font-size:8px;line-height:1.2;padding:3px 2px;margin-top:3px;border-radius:4px;overflow:hidden;word-break:break-word}}
+@media(max-width:390px){.week-calendar{gap:2px}.week-day{min-height:135px;padding:3px}.week-day-head span{font-size:7px}.week-day-head b{font-size:11px}.week-calendar .cal-item{font-size:7px;padding:2px 1px}}
 </style>
 </head>
 <body>
