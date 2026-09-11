@@ -5735,7 +5735,7 @@ async function initCloud(){
       const ref=fb.db.collection('users').doc(user.uid);
       cloudHydrating=true;
       try{
-        const snap=await ref.get();
+        const snap=await ref.get({source:'server'});
         if(generation!==cloudSyncGeneration||!currentUser||currentUser.uid!==user.uid)return;
 
         if(snap.exists && snap.data() && snap.data().data){
@@ -5823,7 +5823,7 @@ function openCloud(){
      <button class="btn secondary full" style="margin-top:4px" onclick="connectGoogleCalendar()">🔵 Google Kalender verbinden</button>
    </div>
    <div class="account-note">Google Kalender einmal freigeben. Beim Laden öffnet sich kein Google-Fenster. Wenn der Google-Zugriff abläuft, kannst du ihn bewusst über „Google Kalender verbinden“ neu freigeben.</div>
-   <details class="account-advanced"><summary>⚙️ Erweiterte Firebase-Einstellungen</summary><div class="muted account-small" style="margin:8px 0">Nur nötig, wenn du eine eigene Firebase-Konfiguration ändern möchtest.</div><textarea id="firebaseConfig" placeholder='{"apiKey":"...","authDomain":"...","projectId":"...","storageBucket":"...","messagingSenderId":"...","appId":"..."}'>${esc(JSON.stringify(cfg,null,2))}</textarea><div style="display:flex;gap:7px;margin-top:8px"><button class="btn" onclick="saveFirebaseConfig()">Speichern</button><button class="btn secondary" onclick="clearFirebaseConfig()">Löschen</button></div><button class="btn secondary full" style="margin-top:8px" onclick="testCloudSync()">☁️ Cloud-Synchronisation testen</button></details>
+   <details class="account-advanced"><summary>⚙️ Erweiterte Firebase-Einstellungen</summary><div class="muted account-small" style="margin:8px 0">Nur nötig, wenn du eine eigene Firebase-Konfiguration ändern möchtest.</div><textarea id="firebaseConfig" placeholder='{"apiKey":"...","authDomain":"...","projectId":"...","storageBucket":"...","messagingSenderId":"...","appId":"..."}'>${esc(JSON.stringify(cfg,null,2))}</textarea><div style="display:flex;gap:7px;margin-top:8px"><button class="btn" onclick="saveFirebaseConfig()">Speichern</button><button class="btn secondary" onclick="clearFirebaseConfig()">Löschen</button></div><button class="btn secondary full" style="margin-top:8px" onclick="testCloudSync()">☁️ Cloud-Synchronisation testen</button><button class="btn secondary full" style="margin-top:8px" onclick="forceCloudRefresh()">🔄 Cloud-Daten jetzt neu laden</button><button class="btn secondary full" style="margin-top:8px" onclick="showCloudDiagnostics()">🔎 Cloud-Diagnose anzeigen</button></details>
  </div>`)
 }
 
@@ -5843,6 +5843,50 @@ async function testCloudSync(){
   console.error('Cloud-Test:',e);
   alert('❌ Cloud-Synchronisation fehlgeschlagen.\n\n'+(e&&e.message?e.message:e));
  }
+}
+
+async function forceCloudRefresh(){
+ try{
+  const u=(fb&&fb.auth&&fb.auth.currentUser)||currentUser;
+  if(!u)throw new Error('Nicht bei Firebase angemeldet.');
+  currentUser=u; cloudEnabled=true; window.currentUser=u; window.cloudEnabled=true;
+  const ref=fb.db.collection('users').doc(u.uid);
+  // Always ask Firestore's server for the current document, not a phone cache.
+  const snap=await ref.get({source:'server'});
+  if(!snap.exists||!snap.data()||!snap.data().data)throw new Error('Für dieses Firebase-Konto gibt es noch kein gespeichertes Studyplaner-Dokument.');
+  const remote=snap.data().data;
+  data=Object.assign(structuredClone(defaultData),remote);
+  data.deadlines=Array.isArray(data.deadlines)?data.deadlines:[];
+  data.tasks=Array.isArray(data.tasks)?data.tasks:[];
+  data.files=Array.isArray(data.files)?data.files:[];
+  data.fileFolders=Array.isArray(data.fileFolders)?data.fileFolders:[];
+  data.modules=Array.isArray(data.modules)?data.modules:[];
+  data.notes=Array.isArray(data.notes)?data.notes:[];
+  data.podcasts=Array.isArray(data.podcasts)?data.podcasts:[];
+  data.gradeModules=Array.isArray(data.gradeModules)?data.gradeModules:[];
+  data.grades=Array.isArray(data.grades)?data.grades:[];
+  data.uniLinks=Array.isArray(data.uniLinks)?data.uniLinks:[];
+  saveLocal();
+  renderAll();
+  const updated=snap.data().updatedAt&&snap.data().updatedAt.toDate?snap.data().updatedAt.toDate().toLocaleString('de-DE'):'unbekannt';
+  alert('✅ Cloud neu geladen.\n\nGerät: '+(u.email||'')+'\nFirebase-UID: '+u.uid.slice(0,12)+'…\n\nAufgaben: '+data.tasks.length+'\nDeadlines: '+data.deadlines.length+'\n\nLetzte Cloud-Aktualisierung: '+updated);
+ }catch(e){
+  console.error('Cloud-Refresh:',e);
+  alert('❌ Cloud konnte nicht neu geladen werden.\n\n'+(e&&e.message?e.message:e));
+ }
+}
+
+async function showCloudDiagnostics(){
+ try{
+  const u=(fb&&fb.auth&&fb.auth.currentUser)||currentUser;
+  if(!u)throw new Error('Nicht bei Firebase angemeldet.');
+  const snap=await fb.db.collection('users').doc(u.uid).get({source:'server'});
+  const remote=snap.exists&&snap.data()&&snap.data().data?snap.data().data:null;
+  const rt=remote&&Array.isArray(remote.tasks)?remote.tasks:[];
+  const rd=remote&&Array.isArray(remote.deadlines)?remote.deadlines:[];
+  const titles=rt.slice(-5).map(x=>'• '+(x.title||'(ohne Titel)')).join('\n')||'Keine Aufgaben';
+  alert('🔎 Cloud-Diagnose\n\nE-Mail: '+(u.email||'')+'\nFirebase-UID: '+u.uid+'\nDokument vorhanden: '+(snap.exists?'JA':'NEIN')+'\nAufgaben in Firestore: '+rt.length+'\nDeadlines in Firestore: '+rd.length+'\n\nLetzte Aufgaben:\n'+titles);
+ }catch(e){alert('❌ Diagnose fehlgeschlagen.\n\n'+(e&&e.message?e.message:e));}
 }
 
 
@@ -7491,7 +7535,7 @@ function renderStudyTimer(){
 (function(){
   if('serviceWorker' in navigator){
     window.addEventListener('load', function(){
-      navigator.serviceWorker.register('./sw.js?v=314').then(function(reg){ try{ reg.update(); }catch(e){} }).catch(function(err){
+      navigator.serviceWorker.register('./sw.js?v=315').then(function(reg){ try{ reg.update(); }catch(e){} }).catch(function(err){
         console.warn('PWA Service Worker konnte nicht registriert werden:', err);
       });
     });
