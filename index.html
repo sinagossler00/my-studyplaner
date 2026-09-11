@@ -3879,6 +3879,18 @@ aside.sidebar{
 </style>
 
 
+<style id="msp-v297-task-deadline-calendar-views">
+/* v297: Monats-/Wochenansichten für Deadlines und Aufgaben */
+.deadline-calendar-toolbar,.task-calendar-toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+.deadline-calendar-toolbar .calendar-nav,.task-calendar-toolbar .calendar-nav{margin-bottom:0;flex:1;justify-content:center}
+.task-calendar-card{min-width:0;padding:16px}
+.task-calendar-list-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(360px,1fr);gap:18px}
+.task-calendar-card .calendar-wrap{margin:0;border:0;padding:0}
+.task-calendar-item{border-left:3px solid var(--sage);}
+.task-calendar-item.done{opacity:.62;text-decoration:line-through}
+@media(max-width:1000px){.task-calendar-list-layout{grid-template-columns:1fr}.task-calendar-card{margin-top:0}}
+@media(max-width:700px){.deadline-calendar-toolbar,.task-calendar-toolbar{align-items:stretch}.deadline-calendar-toolbar .calendar-nav,.task-calendar-toolbar .calendar-nav{flex:1}.deadline-calendar-toolbar .calendar-view-toggle,.task-calendar-toolbar .calendar-view-toggle{width:100%}.deadline-calendar-toolbar .calendar-view-toggle .tab,.task-calendar-toolbar .calendar-view-toggle .tab{flex:1}}
+</style>
 <style id="msp-v296-calendar-week-view">
 .calendar-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;flex-wrap:wrap}
 .calendar-toolbar .calendar-nav{margin-bottom:0;flex:1;justify-content:center}
@@ -3960,7 +3972,8 @@ aside.sidebar{
   </div>
  </section>
 
- <section id="tasks" class="page"><div class="card">
+ <section id="tasks" class="page"><div class="task-calendar-list-layout">
+ <div class="card">
  <div class="card-head">
   <div><button class="btn" onclick="openTask()">＋ Neue Aufgabe</button></div>
   <div class="tabs">
@@ -3978,6 +3991,16 @@ aside.sidebar{
   </select></div>
  </div>
  <div id="taskList"></div>
+ </div>
+ <div class="card task-calendar-card">
+  <div class="card-head"><h2>📅 Aufgaben-Kalender</h2></div>
+  <div class="task-calendar-toolbar">
+   <div class="calendar-nav"><button class="btn secondary" onclick="changeTaskCalendar(-1)">‹</button><strong id="taskCalendarTitle"></strong><button class="btn secondary" onclick="changeTaskCalendar(1)">›</button></div>
+   <div class="calendar-view-toggle" role="group" aria-label="Aufgaben-Kalenderansicht"><button id="taskMonthViewBtn" class="tab active" type="button" onclick="setTaskCalendarView('month')">Monat</button><button id="taskWeekViewBtn" class="tab" type="button" onclick="setTaskCalendarView('week')">Woche</button></div>
+  </div>
+  <div id="taskCalendarWeekdays" class="calendar-weekdays"><span>Mo</span><span>Di</span><span>Mi</span><span>Do</span><span>Fr</span><span>Sa</span><span>So</span></div>
+  <div id="taskCalendar" class="month-calendar"></div>
+ </div>
  </div></section>
 
  <section id="calendar" class="page">
@@ -4015,12 +4038,18 @@ aside.sidebar{
         </div>
       </div>
       <div class="calendar-wrap">
-        <div class="calendar-nav">
-          <button class="btn secondary" onclick="changeCalendarMonth(-1)">‹</button>
-          <strong id="calendarMonthTitle"></strong>
-          <button class="btn secondary" onclick="changeCalendarMonth(1)">›</button>
+        <div class="deadline-calendar-toolbar">
+          <div class="calendar-nav">
+            <button class="btn secondary" onclick="changeDeadlineCalendar(-1)">‹</button>
+            <strong id="calendarMonthTitle"></strong>
+            <button class="btn secondary" onclick="changeDeadlineCalendar(1)">›</button>
+          </div>
+          <div class="calendar-view-toggle" role="group" aria-label="Deadlines-Kalenderansicht">
+            <button id="deadlineMonthViewBtn" class="tab active" type="button" onclick="setDeadlineCalendarView('month')">Monat</button>
+            <button id="deadlineWeekViewBtn" class="tab" type="button" onclick="setDeadlineCalendarView('week')">Woche</button>
+          </div>
         </div>
-        <div class="calendar-weekdays"><span>Mo</span><span>Di</span><span>Mi</span><span>Do</span><span>Fr</span><span>Sa</span><span>So</span></div>
+        <div id="calendarWeekdays" class="calendar-weekdays"><span>Mo</span><span>Di</span><span>Mi</span><span>Do</span><span>Fr</span><span>Sa</span><span>So</span></div>
         <div id="monthCalendar" class="month-calendar"></div>
       </div>
     </div>
@@ -4225,7 +4254,7 @@ data.grades=Array.isArray(data.grades)?data.grades:[];
 data.uniLinks=Array.isArray(data.uniLinks)?data.uniLinks:[];
 if(!Array.isArray(data.podcasts))data.podcasts=[];
 if(!Array.isArray(data.tasks))data.tasks=[];data.tasks.forEach(t=>{if(typeof t.deadline!=='string')t.deadline='';});
-let deadlineFilter='all',taskFilter='open',taskTimeFilter='all',taskSort='deadline',currentUser=null,fb=null,cloudEnabled=false,cloudUnsubscribe=null,calendarMonth=new Date(new Date().getFullYear(),new Date().getMonth(),1);
+let deadlineFilter='all',taskFilter='open',taskTimeFilter='all',taskSort='deadline',deadlineCalendarView=localStorage.getItem('msp_deadline_calendar_view_v1')||'month',taskCalendarView=localStorage.getItem('msp_task_calendar_view_v1')||'month',currentUser=null,fb=null,cloudEnabled=false,cloudUnsubscribe=null,calendarMonth=new Date(new Date().getFullYear(),new Date().getMonth(),1);
 const $=id=>document.getElementById(id);
 function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
 function saveLocal(){localStorage.setItem(KEY,JSON.stringify(data))}
@@ -4323,6 +4352,7 @@ function renderTasks(){
  $('homeTasks').innerHTML=open.length?open.map(taskHTML).join(''):'<div class="empty">Alles erledigt ✓</div>';
  if($('taskTimeFilter'))$('taskTimeFilter').value=taskTimeFilter;
  if($('taskSort'))$('taskSort').value=taskSort;
+ renderTaskCalendar();
 }
 function fileIcon(f){
  const name=String(f?.name||'').toLowerCase();
@@ -4655,8 +4685,34 @@ function renderHomeStudyCards(){
  const progress=$('homeStudyProgress');
  if(progress) progress.innerHTML=`<div class="home-progress-head"><span>${label}</span><strong>${pct}%</strong></div><div class="home-progress-bar"><span style="width:${pct}%"></span></div><div class="muted home-progress-meta">${step<=6?`Studium: ${step} von 6 Semestern`:'Bachelorarbeit · Abschlussphase'}</div><button class="btn secondary full" type="button" onclick="openSemesterSettings()" style="margin-top:12px">Semester / Bachelorarbeit auswählen</button>`;
 }
+function setDeadlineCalendarView(view){deadlineCalendarView=view==='week'?'week':'month';localStorage.setItem('msp_deadline_calendar_view_v1',deadlineCalendarView);renderCalendar()}
+function changeDeadlineCalendar(delta){if(deadlineCalendarView==='week'){calendarMonth=new Date(calendarMonth.getFullYear(),calendarMonth.getMonth(),calendarMonth.getDate()+delta*7)}else{calendarMonth=new Date(calendarMonth.getFullYear(),calendarMonth.getMonth()+delta,1)}renderCalendar()}
+function deadlineCalendarItemsForDay(key){return data.deadlines.filter(d=>d.date===key)}
+function renderDeadlineWeekCalendar(box,title,weekdays){
+ const base=new Date(calendarMonth.getFullYear(),calendarMonth.getMonth(),calendarMonth.getDate()); const day=(base.getDay()+6)%7;
+ const monday=new Date(base); monday.setDate(base.getDate()-day); monday.setHours(12,0,0,0); const sunday=new Date(monday); sunday.setDate(monday.getDate()+6);
+ title.textContent=`${monday.toLocaleDateString('de-DE',{day:'2-digit',month:'short'})} – ${sunday.toLocaleDateString('de-DE',{day:'2-digit',month:'short',year:'numeric'})}`;
+ if(weekdays)weekdays.innerHTML=''; box.className='week-calendar-wrap'; const cells=[];
+ for(let i=0;i<7;i++){const d=new Date(monday);d.setDate(monday.getDate()+i);const key=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;const ds=deadlineCalendarItemsForDay(key),today=key===getTodayKey();cells.push(`<div class="week-day ${today?'today':''}"><div class="week-day-head"><span>${d.toLocaleDateString('de-DE',{weekday:'short'})}</span><b>${d.getDate()}</b></div>${ds.map(x=>`<div class="cal-item ${x.priority||'mittel'} deadline-cal-item" title="${esc(x.title)}" onclick="openCalendarDeadlineDetails(${x.id})">❗ ${esc(x.title)}${x.time?' · '+esc(x.time):''}</div>`).join('')}${!ds.length?'<div class="week-empty">Keine Deadlines</div>':''}</div>`)}
+ box.innerHTML=`<div class="week-calendar">${cells.join('')}</div>`;
+}
+function renderTaskCalendar(){
+ const box=$('taskCalendar'),title=$('taskCalendarTitle'),weekdays=$('taskCalendarWeekdays'); if(!box||!title)return;
+ const mb=$('taskMonthViewBtn'),wb=$('taskWeekViewBtn'); if(mb)mb.classList.toggle('active',taskCalendarView==='month'); if(wb)wb.classList.toggle('active',taskCalendarView==='week');
+ const taskForDay=key=>data.tasks.filter(t=>t.deadline===key);
+ if(taskCalendarView==='week'){
+  const base=new Date(calendarMonth.getFullYear(),calendarMonth.getMonth(),calendarMonth.getDate());const day=(base.getDay()+6)%7;const monday=new Date(base);monday.setDate(base.getDate()-day);monday.setHours(12,0,0,0);const sunday=new Date(monday);sunday.setDate(monday.getDate()+6);title.textContent=`${monday.toLocaleDateString('de-DE',{day:'2-digit',month:'short'})} – ${sunday.toLocaleDateString('de-DE',{day:'2-digit',month:'short',year:'numeric'})}`;if(weekdays)weekdays.innerHTML='';box.className='week-calendar-wrap';const cells=[];for(let i=0;i<7;i++){const d=new Date(monday);d.setDate(monday.getDate()+i);const key=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;const ts=taskForDay(key),today=key===getTodayKey();cells.push(`<div class="week-day ${today?'today':''}"><div class="week-day-head"><span>${d.toLocaleDateString('de-DE',{weekday:'short'})}</span><b>${d.getDate()}</b></div>${ts.map(t=>`<div class="cal-item task-calendar-item ${t.done?'done':''}" title="${esc(t.title)}" onclick="editTask(${t.id})">☑️ ${esc(t.title)}</div>`).join('')}${!ts.length?'<div class="week-empty">Keine Aufgaben</div>':''}</div>`)}box.innerHTML=`<div class="week-calendar">${cells.join('')}</div>`;return;
+ }
+ const y=calendarMonth.getFullYear(),m=calendarMonth.getMonth();title.textContent=calendarMonth.toLocaleDateString('de-DE',{month:'long',year:'numeric'});if(weekdays)weekdays.innerHTML='<span>Mo</span><span>Di</span><span>Mi</span><span>Do</span><span>Fr</span><span>Sa</span><span>So</span>';box.className='month-calendar';const first=new Date(y,m,1),last=new Date(y,m+1,0),start=(first.getDay()+6)%7,cells=[];for(let i=0;i<start;i++)cells.push('<div class="cal-day empty-day"></div>');for(let day=1;day<=last.getDate();day++){const key=`${y}-${String(m+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`,ts=taskForDay(key),today=key===getTodayKey();cells.push(`<div class="cal-day ${today?'today':''}"><b>${day}</b>${ts.slice(0,4).map(t=>`<div class="cal-item task-calendar-item ${t.done?'done':''}" title="${esc(t.title)}" onclick="event.stopPropagation();editTask(${t.id})">☑️ ${esc(t.title)}</div>`).join('')}${ts.length>4?'<small>+ weitere</small>':''}</div>`)}box.innerHTML=cells.join('');
+}
+function setTaskCalendarView(view){taskCalendarView=view==='week'?'week':'month';localStorage.setItem('msp_task_calendar_view_v1',taskCalendarView);renderTaskCalendar()}
+function changeTaskCalendar(delta){if(taskCalendarView==='week'){calendarMonth=new Date(calendarMonth.getFullYear(),calendarMonth.getMonth(),calendarMonth.getDate()+delta*7)}else{calendarMonth=new Date(calendarMonth.getFullYear(),calendarMonth.getMonth()+delta,1)}renderTaskCalendar()}
+
 function renderCalendar(){
  const box=$('monthCalendar'),title=$('calendarMonthTitle');
+ if(!box||!title)return;
+ const mb=$('deadlineMonthViewBtn'),wb=$('deadlineWeekViewBtn'); if(mb)mb.classList.toggle('active',deadlineCalendarView==='month'); if(wb)wb.classList.toggle('active',deadlineCalendarView==='week');
+ if(deadlineCalendarView==='week'){renderDeadlineWeekCalendar(box,title,$('calendarWeekdays'));return;}
  if(!box||!title)return;
  const y=calendarMonth.getFullYear(),m=calendarMonth.getMonth();
  title.textContent=calendarMonth.toLocaleDateString('de-DE',{month:'long',year:'numeric'});
@@ -4667,11 +4723,13 @@ function renderCalendar(){
  for(let day=1;day<=last.getDate();day++){
    const key=`${y}-${String(m+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
    const deadlines=data.deadlines.filter(d=>d.date===key).slice(0,3);
+   const tasks=data.tasks.filter(t=>t.deadline===key).slice(0,3);
    const events=(data.events||[]).filter(e=>e.date===key).slice(0,3);
-   const total=(data.deadlines.filter(d=>d.date===key).length)+(data.events||[]).filter(e=>e.date===key).length;
+   const total=(data.deadlines.filter(d=>d.date===key).length)+(data.tasks.filter(t=>t.deadline===key).length)+(data.events||[]).filter(e=>e.date===key).length;
    const today=key===getTodayKey();
    cells.push(`<div class="cal-day ${today?'today':''}" onclick="openCalendarDay('${key}')"><b>${day}</b>
     ${deadlines.map(d=>`<div class="cal-item ${d.priority||'mittel'} deadline-cal-item" title="${esc(d.title)}${d.time?' · '+d.time+' Uhr':''}" onclick="event.stopPropagation();openCalendarDeadlineDetails(${d.id})">❗ ${esc(d.title)}${d.time?' · '+esc(d.time):''}</div>`).join('')}
+    ${tasks.map(t=>`<div class="cal-item task-calendar-item ${t.done?'done':''}" title="${esc(t.title)}" onclick="event.stopPropagation();editTask(${t.id})">☑️ ${esc(t.title)}</div>`).join('')}
     ${events.map(e=>`<div class="cal-item event-item ${e.googleImported?'google-calendar-event':''}" ${e.googleImported&&e.googleColor?`style="--google-event-color:${esc(e.googleColor)}"`:''} title="${esc(e.title)}${e.time?' · '+e.time+' Uhr':''}" onclick="event.stopPropagation();openCalendarEventDetails(${e.id})">${e.googleImported?'🗓️':'📅'} ${esc(e.title)}${e.time?' · '+esc(e.time):''}</div>`).join('')}
     ${total>6?'<small>+ weitere</small>':''}</div>`);
  }
@@ -4992,8 +5050,8 @@ function changePlannerCalendar(delta){
 }
 function changePlannerMonth(delta){changePlannerCalendar(delta)}
 function plannerDayEvents(key){
- const ds=data.deadlines.filter(d=>d.date===key), es=(data.events||[]).filter(e=>e.date===key);
- return {ds,es,total:ds.length+es.length};
+ const ds=data.deadlines.filter(d=>d.date===key), ts=data.tasks.filter(t=>t.deadline===key), es=(data.events||[]).filter(e=>e.date===key);
+ return {ds,ts,es,total:ds.length+ts.length+es.length};
 }
 function renderPlannerCalendar(){
  const box=document.getElementById('plannerMonthCalendar'),title=document.getElementById('plannerCalendarMonthTitle'),weekdays=document.getElementById('plannerCalendarWeekdays');
@@ -5013,9 +5071,10 @@ function renderPlannerCalendar(){
  for(let i=0;i<start;i++)cells.push('<div class="cal-day empty-day"></div>');
  for(let day=1;day<=last.getDate();day++){
   const key=`${y}-${String(m+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-  const {ds,es}=plannerDayEvents(key),today=key===getTodayKey();
+  const {ds,ts,es}=plannerDayEvents(key),today=key===getTodayKey();
   cells.push(`<div class="cal-day ${today?'today':''}" onclick="openCalendarDay('${key}')"><b>${day}</b>
    ${ds.map(d=>`<div class="cal-item ${d.priority||'mittel'} deadline-cal-item" title="${esc(d.title)}${d.time?' · '+d.time+' Uhr':''}" onclick="event.stopPropagation();openCalendarDeadlineDetails(${d.id})">❗ ${esc(d.title)}${d.time?' · '+esc(d.time):''}</div>`).join('')}
+   ${ts.map(t=>`<div class="cal-item task-calendar-item ${t.done?'done':''}" title="${esc(t.title)}" onclick="event.stopPropagation();editTask(${t.id})">☑️ ${esc(t.title)}</div>`).join('')}
    ${es.map(e=>`<div class="cal-item event-item ${e.googleImported?'google-calendar-event':''}" ${e.googleImported&&e.googleColor?`style="--google-event-color:${esc(e.googleColor)}"`:''} title="${esc(e.title)}${e.time?' · '+e.time+' Uhr':''}" onclick="event.stopPropagation();openCalendarEventDetails(${e.id})">${e.googleImported?'🗓️':'📅'} ${esc(e.title)}${e.time?' · '+esc(e.time):''}</div>`).join('')}
   </div>`);
  }
@@ -5034,13 +5093,14 @@ function renderPlannerWeekCalendar(box,title,weekdays){
  for(let i=0;i<7;i++){
   const d=new Date(monday); d.setDate(monday.getDate()+i);
   const key=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-  const {ds,es}=plannerDayEvents(key),today=key===getTodayKey();
+  const {ds,ts,es}=plannerDayEvents(key),today=key===getTodayKey();
   const name=d.toLocaleDateString('de-DE',{weekday:'short'});
   cells.push(`<div class="week-day ${today?'today':''}" onclick="openCalendarDay('${key}')">
     <div class="week-day-head"><span>${name}</span><b>${d.getDate()}</b></div>
     ${ds.map(x=>`<div class="cal-item ${x.priority||'mittel'} deadline-cal-item" title="${esc(x.title)}${x.time?' · '+x.time+' Uhr':''}" onclick="event.stopPropagation();openCalendarDeadlineDetails(${x.id})">❗ ${esc(x.title)}${x.time?' · '+esc(x.time):''}</div>`).join('')}
+    ${ts.map(x=>`<div class="cal-item task-calendar-item ${x.done?'done':''}" title="${esc(x.title)}" onclick="event.stopPropagation();editTask(${x.id})">☑️ ${esc(x.title)}</div>`).join('')}
     ${es.map(x=>`<div class="cal-item event-item ${x.googleImported?'google-calendar-event':''}" ${x.googleImported&&x.googleColor?`style="--google-event-color:${esc(x.googleColor)}"`:''} title="${esc(x.title)}${x.time?' · '+x.time+' Uhr':''}" onclick="event.stopPropagation();openCalendarEventDetails(${x.id})">${x.googleImported?'🗓️':'📅'} ${esc(x.title)}${x.time?' · '+esc(x.time):''}</div>`).join('')}
-    ${!ds.length&&!es.length?'<div class="week-empty">Keine Termine</div>':''}
+    ${!ds.length&&!ts.length&&!es.length?'<div class="week-empty">Keine Termine</div>':''}
    </div>`);
  }
  box.innerHTML=`<div class="week-calendar">${cells.join('')}</div>`;
