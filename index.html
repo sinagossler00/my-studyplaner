@@ -5624,12 +5624,17 @@ function getFirebaseConfig(){
  }catch{return BUILT_IN_FIREBASE_CONFIG}
 }
 window.MSP_FIREBASE_CONFIG=getFirebaseConfig();
+// Cloud readiness: the Firebase SDK/auth setup is asynchronous during page load.
+// Keep actions from racing that initialization; callers can safely wait for fb.
+let cloudReadyResolve;
+const cloudReadyPromise=new Promise(resolve=>{cloudReadyResolve=resolve});
 async function initCloud(){
  const cfg=getFirebaseConfig();
- if(!cfg||!cfg.apiKey){updateCloudStatus(false);return}
+ if(!cfg||!cfg.apiKey){updateCloudStatus(false);cloudReadyResolve(null);return}
  try{
   if(!firebase.apps.length)firebase.initializeApp(cfg);
   fb={auth:firebase.auth(),db:firebase.firestore()};
+  cloudReadyResolve(fb);
   fb.auth.onAuthStateChanged(async user=>{
    currentUser=user;
 
@@ -5755,6 +5760,7 @@ async function initCloud(){
   });
  }catch(e){
   console.error('Cloud-Initialisierung:',e);
+  cloudReadyResolve(null);
   updateCloudStatus(false,'Cloud nicht bereit');
  }
 }
@@ -5782,7 +5788,17 @@ async function saveFirebaseConfig(){
 function clearFirebaseConfig(){localStorage.removeItem('mystudyplaner_firebase_config');location.reload()}
 
 async function cloudGoogleAuth(){
- if(!fb){alert('Die Cloud-Verbindung ist noch nicht bereit. Bitte Seite kurz neu laden und erneut versuchen.');return}
+ if(!fb){
+  const ready=await Promise.race([
+   cloudReadyPromise,
+   new Promise(resolve=>setTimeout(()=>resolve(null),8000))
+  ]);
+  if(!ready){
+   alert('Die Cloud-Verbindung konnte nicht hergestellt werden. Bitte Internetverbindung prüfen und die Seite einmal neu laden.');
+   return;
+  }
+  fb=ready;
+ }
  try{
   const provider=new firebase.auth.GoogleAuthProvider();
   provider.setCustomParameters({prompt:'select_account'});
@@ -5799,7 +5815,11 @@ async function cloudGoogleAuth(){
 }
 
 async function cloudAuth(){
- if(!fb){alert('Bitte zuerst die Firebase-Konfiguration einfügen und „Cloud aktivieren“ wählen.');return}
+ if(!fb){
+  const ready=await Promise.race([cloudReadyPromise,new Promise(resolve=>setTimeout(()=>resolve(null),8000))]);
+  if(!ready){alert('Die Cloud-Verbindung konnte nicht hergestellt werden. Bitte Internetverbindung prüfen und die Seite einmal neu laden.');return}
+  fb=ready;
+ }
  try{
   let email=$('cEmail').value.trim(),pw=$('cPassword').value,action=$('cAction').value;if(!email||!pw)throw Error('E-Mail und Passwort eingeben.');
   if(action==='signup')await fb.auth.createUserWithEmailAndPassword(email,pw);else await fb.auth.signInWithEmailAndPassword(email,pw);
