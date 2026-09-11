@@ -5687,6 +5687,8 @@ window.MSP_FIREBASE_CONFIG=getFirebaseConfig();
 // Keep actions from racing that initialization; callers can safely wait for fb.
 var cloudReadyResolve;
 var cloudReadyPromise=window.mspCloudReadyPromise=new Promise(function(resolve){cloudReadyResolve=resolve});
+var cloudInitialSyncResolve;
+var cloudInitialSyncPromise=window.mspCloudInitialSyncPromise=new Promise(function(resolve){cloudInitialSyncResolve=resolve});
 
 function mergeArrayById(cloudArr,localArr){
  const cloud=Array.isArray(cloudArr)?cloudArr:[];
@@ -5714,17 +5716,27 @@ function mergeCloudWithLocal(cloudData,localData){
 }
 async function initCloud(){
   const cfg=getFirebaseConfig();
-  if(!cfg||!cfg.apiKey){updateCloudStatus(false);cloudReadyResolve(null);return;}
+  if(!cfg||!cfg.apiKey){updateCloudStatus(false);cloudReadyResolve(null);cloudInitialSyncResolve(null);return;}
   try{
     if(!firebase.apps.length)firebase.initializeApp(cfg);
     fb={auth:firebase.auth(),db:firebase.firestore()};
-    try{await fb.auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);}catch(e){console.warn('Auth-Persistenz:',e)}
+    // Keep Firebase Auth persistent across browser/PWA reloads.
+    // Explicitly set LOCAL before any sign-in and wait for Firebase's
+    // initial auth state restoration before the rest of the app renders.
+    try{
+      await fb.auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+      window.mspAuthPersistence='LOCAL';
+    }catch(e){
+      window.mspAuthPersistenceError=e;
+      console.warn('Auth-Persistenz:',e);
+    }
     cloudReadyResolve(fb);
 
     fb.auth.onAuthStateChanged(async user=>{
       const generation=++cloudSyncGeneration;
       currentUser=user;
       window.currentUser=user;
+      if(user){try{localStorage.setItem('msp_auth_session_marker',JSON.stringify({email:user.email||'',uid:user.uid,at:Date.now()}))}catch(e){}}
       cloudEnabled=!!user;
       window.cloudEnabled=!!user;
       cloudListenerReady=false;
@@ -5732,6 +5744,7 @@ async function initCloud(){
 
       if(!user){
         updateCloudStatus(false);
+        if(generation===cloudSyncGeneration) cloudInitialSyncResolve(null);
         return;
       }
 
@@ -5792,12 +5805,22 @@ async function initCloud(){
           if(window.mspSetSyncStatus)window.mspSetSyncStatus('offline','Cloud: Sync fehlgeschlagen',err&&err.message?err.message:'Echtzeit-Sync fehlgeschlagen');
         });
 
-        // The cloud state is now authoritative. Render only after the download above.
-        try{renderAll()}catch(err){
-          console.error('Initiales Rendern nach Cloud-Login:',err);
-        }
+        // The cloud state is now authoritative. Render after the download above.
+        // A few delayed repaint passes are intentional: on mobile browsers several
+        // DOMContentLoaded/load handlers can render the old local state while the
+        // Firebase auth callback is still resolving. The cloud result must win.
+        const renderCloudState=()=>{
+          try{renderAll()}catch(err){console.error('Render nach Cloud-Login:',err)}
+        };
+        renderCloudState();
+        requestAnimationFrame(renderCloudState);
+        setTimeout(renderCloudState,150);
+        setTimeout(renderCloudState,600);
+        setTimeout(renderCloudState,1500);
+        if(generation===cloudSyncGeneration) cloudInitialSyncResolve(true);
       }catch(e){
         console.error('Cloud-Initialisierung/Synchronisierung:',e);
+        if(generation===cloudSyncGeneration) cloudInitialSyncResolve(false);
         if(window.mspSetSyncStatus)window.mspSetSyncStatus('offline','Cloud: Sync fehlgeschlagen',e&&e.message?e.message:'Firestore-Fehler');
       }finally{
         if(generation===cloudSyncGeneration)cloudHydrating=false;
@@ -5806,6 +5829,7 @@ async function initCloud(){
   }catch(e){
     console.error('Cloud-Initialisierung:',e);
     cloudReadyResolve(null);
+    cloudInitialSyncResolve(false);
     updateCloudStatus(false,'Cloud nicht bereit');
   }
 }
@@ -5903,7 +5927,9 @@ async function showCloudDiagnostics(){
   const rt=remote&&Array.isArray(remote.tasks)?remote.tasks:[];
   const rd=remote&&Array.isArray(remote.deadlines)?remote.deadlines:[];
   const titles=rt.slice(-5).map(x=>'• '+(x.title||'(ohne Titel)')).join('\n')||'Keine Aufgaben';
-  alert('🔎 Cloud-Diagnose\n\nE-Mail: '+(u.email||'')+'\nFirebase-UID: '+u.uid+'\nDokument vorhanden: '+(snap.exists?'JA':'NEIN')+'\nAufgaben in Firestore: '+rt.length+'\nDeadlines in Firestore: '+rd.length+'\n\nLetzte Aufgaben:\n'+titles);
+  let persist='unbekannt';
+  try{persist=window.mspAuthPersistenceError?'FEHLER: '+(window.mspAuthPersistenceError.message||window.mspAuthPersistenceError):'LOCAL';}catch(e){}
+  alert('🔎 Cloud-Diagnose\n\nE-Mail: '+(u.email||'')+'\nFirebase-UID: '+u.uid+'\nAuth-Persistenz: '+persist+'\nDokument vorhanden: '+(snap.exists?'JA':'NEIN')+'\nAufgaben in Firestore: '+rt.length+'\nDeadlines in Firestore: '+rd.length+'\n\nLetzte Aufgaben:\n'+titles);
  }catch(e){alert('❌ Diagnose fehlgeschlagen.\n\n'+(e&&e.message?e.message:e));}
 }
 
@@ -5945,6 +5971,18 @@ async function cloudGoogleAuth(){
    window.cloudEnabled=true;
   }
 
+  // Re-assert LOCAL persistence immediately before Google sign-in.
+  // This is important on mobile/PWA browsers where storage can otherwise
+  // be selected differently between sessions.
+  try{
+   await fb.auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+   window.mspAuthPersistence='LOCAL';
+  }catch(persistErr){
+   console.error('Firebase Auth LOCAL persistence:',persistErr);
+   alert('Die dauerhafte Cloud-Anmeldung konnte im Browser nicht aktiviert werden.\n\n'+(persistErr.message||persistErr));
+   return;
+  }
+
   const provider=new firebase.auth.GoogleAuthProvider();
   provider.setCustomParameters({prompt:'select_account'});
 
@@ -5981,7 +6019,7 @@ async function cloudAuth(){
   closeModal()
  }catch(e){alert('Anmeldung fehlgeschlagen: '+e.message)}
 }
-async function cloudLogout(){if(fb){await fb.auth.signOut();closeModal()}}
+async function cloudLogout(){if(fb){await fb.auth.signOut();try{localStorage.removeItem('msp_auth_session_marker')}catch(e){}closeModal()}}
 
 /* ---------- Google Kalender ---------- */
 const GOOGLE_CONFIG_KEY='mystudyplaner_google_calendar_v1';
@@ -6311,6 +6349,9 @@ function tryInitGoogleFromSavedConfig(){
 window.addEventListener('load',tryInitGoogleFromSavedConfig);
 
 initCloud();
+// Firebase Auth restoration is asynchronous. Do not treat the initial null
+// auth state as a real logout while LOCAL persistence is being restored.
+// The main initCloud listener remains the authoritative source.
 // Complete a Firebase redirect login when the browser returns to GitHub Pages.
 (async()=>{
  try{
@@ -6321,13 +6362,17 @@ initCloud();
   }
  }catch(e){console.warn('Firebase Google Redirect:',e)}
 })();
-// Ensure the start page is populated immediately on first load as well as after navigation.
-if(document.readyState==='loading'){
-  document.addEventListener('DOMContentLoaded',()=>{try{renderAll()}catch(e){console.warn('Initial render:',e)}});
-}else{
-  try{renderAll()}catch(e){console.warn('Initial render:',e)}
-}
-window.addEventListener('load',()=>{try{renderAll()}catch(e){console.warn('Final initial render:',e)}});
+// Initial UI: wait briefly for Firebase's first auth/cloud read so the
+// first visible render uses the cloud state instead of the stale local state.
+(async function initialCloudAwareRender(){
+  try{
+    const p=window.mspCloudInitialSyncPromise||cloudInitialSyncPromise;
+    await Promise.race([p,new Promise(resolve=>setTimeout(resolve,12000))]);
+  }catch(e){}
+  try{renderAll()}catch(e){console.warn('Initial cloud-aware render:',e)}
+  setTimeout(()=>{try{renderAll()}catch(e){}},200);
+  setTimeout(()=>{try{renderAll()}catch(e){}},1000);
+})();
 </script>
 
 
@@ -7548,7 +7593,7 @@ function renderStudyTimer(){
 (function(){
   if('serviceWorker' in navigator){
     window.addEventListener('load', function(){
-      navigator.serviceWorker.register('./sw.js?v=315').then(function(reg){ try{ reg.update(); }catch(e){} }).catch(function(err){
+      navigator.serviceWorker.register('./sw.js?v=320').then(function(reg){ try{ reg.update(); }catch(e){} }).catch(function(err){
         console.warn('PWA Service Worker konnte nicht registriert werden:', err);
       });
     });
