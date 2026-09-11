@@ -8120,46 +8120,55 @@ document.addEventListener('DOMContentLoaded', function(){
 }
 
 
-/* v288: Uni-Webseiten hinzufügen/bearbeiten als eigenes Modal */
+/* v289: Uni-Webseiten nutzt exakt denselben Modal-Aufbau wie die übrigen Dialogfenster */
 #uni-links .uni-link-modal{
   position:fixed !important;
   inset:0 !important;
   display:none !important;
   align-items:center !important;
   justify-content:center !important;
-  padding:20px !important;
-  background:rgba(55,40,35,.28) !important;
+  padding:16px !important;
+  background:rgba(62,47,39,.22) !important;
   z-index:99998 !important;
 }
 #uni-links .uni-link-modal.open{display:flex !important;}
 #uni-links .uni-link-modal-box{
-  width:min(560px,100%);
-  max-height:90vh;
-  overflow:auto;
+  width:min(620px,100%) !important;
+  max-height:90vh !important;
+  overflow:auto !important;
   background:#fffdf9 !important;
-  border:1px solid #5a625f;
-  border-radius:17px;
-  padding:19px;
-  box-shadow:0 18px 60px rgba(0,0,0,.3);
+  border:1px solid #dfd3c9 !important;
+  border-radius:17px !important;
+  padding:19px !important;
+  box-shadow:0 18px 55px rgba(70,50,38,.18) !important;
 }
+
 #uni-links .uni-link-modal-head{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:12px;
-  margin-bottom:15px;
+  display:flex !important;
+  justify-content:space-between !important;
+  align-items:center !important;
+  margin-bottom:15px !important;
 }
-#uni-links .uni-link-modal-head h3{margin:0;font-size:20px;color:#111;}
+#uni-links .uni-link-modal-head h3{
+  margin:0 !important;
+  font-family:"DM Sans",Arial,sans-serif !important;
+  font-size:20px !important;
+  font-weight:700 !important;
+  color:#111 !important;
+}
 #uni-links .uni-link-modal-close{
   border:0 !important;
   background:transparent !important;
   color:#111 !important;
   font-size:24px !important;
-  line-height:1;
+  line-height:1 !important;
   padding:2px 7px !important;
-  cursor:pointer;
+  cursor:pointer !important;
 }
-#uni-links .uni-link-modal-body{display:grid;gap:12px;}
+#uni-links .uni-link-modal-body{
+  display:grid !important;
+  gap:12px !important;
+}
 #uni-links .uni-link-modal-body label{
   display:block;
   font-size:13px;
