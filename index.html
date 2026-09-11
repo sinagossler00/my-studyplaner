@@ -3983,6 +3983,7 @@ aside.sidebar{
 }
 </style>
 <meta name="msp-version" content="v318-cloud-authoritative"><!-- v318: cloud-authoritative refresh -->
+<meta name="msp-version" content="v328">
 </head>
 <body>
 
@@ -5744,6 +5745,27 @@ function mergeCloudWithLocal(cloudData,localData){
  );
  return merged;
 }
+async function mspRestoreFirebaseSessionIfNeeded(){
+  try{
+    if(!fb||!fb.auth)return false;
+    // Firebase LOCAL persistence should normally restore the user itself.
+    // If the browser/PWA loses that Auth state after a reload, use the
+    // previously stored signed-in marker to perform one normal Firebase
+    // Google redirect. This is only a recovery path; no marker means no
+    // automatic login attempt. A deliberate logout removes the marker.
+    if(fb.auth.currentUser)return true;
+    let marker=null;
+    try{ marker=JSON.parse(localStorage.getItem('msp_auth_session_marker')||'null'); }catch(e){}
+    if(!marker||!marker.uid||!marker.email)return false;
+    const provider=new firebase.auth.GoogleAuthProvider();
+    provider.setCustomParameters({prompt:'none'});
+    await fb.auth.signInWithRedirect(provider);
+    return true;
+  }catch(e){
+    console.warn('Firebase Session-Recovery:',e);
+    return false;
+  }
+}
 async function initCloud(){
   const cfg=getFirebaseConfig();
   if(!cfg||!cfg.apiKey){
@@ -5777,6 +5799,14 @@ async function initCloud(){
     try{
       if(typeof fb.auth.authStateReady==='function') await fb.auth.authStateReady();
     }catch(e){console.warn('Firebase authStateReady:',e)}
+
+    // If Firebase did not restore the session but this device previously had
+    // a deliberate Google login, recover it once via Firebase's own redirect
+    // flow. This prevents a manual login on every page reload while avoiding
+    // any custom token/session handling.
+    if(!fb.auth.currentUser){
+      try{ await mspRestoreFirebaseSessionIfNeeded(); }catch(e){console.warn('Firebase session recovery:',e)}
+    }
 
     fb.auth.onAuthStateChanged(async user=>{
       const generation=++cloudSyncGeneration;
