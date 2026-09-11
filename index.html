@@ -4320,6 +4320,8 @@ data.uniLinks=Array.isArray(data.uniLinks)?data.uniLinks:[];
 if(!Array.isArray(data.podcasts))data.podcasts=[];
 if(!Array.isArray(data.tasks))data.tasks=[];data.tasks.forEach(t=>{if(typeof t.deadline!=='string')t.deadline='';});
 let deadlineFilter='all',taskFilter='open',taskTimeFilter='all',taskSort='deadline',deadlineCalendarView=localStorage.getItem('msp_deadline_calendar_view_v1')||'month',taskCalendarView=localStorage.getItem('msp_task_calendar_view_v1')||'month',currentUser=null,fb=null,cloudEnabled=false,cloudUnsubscribe=null,cloudInitialSyncDone=false,calendarMonth=new Date(new Date().getFullYear(),new Date().getMonth(),1);
+// Google Calendar state must exist before any renderer can access it.
+let googleCalendarTokenClient=null,googleCalendarAccessToken='',googleCalendarCalendars=[],googleCalendarColors={};
 const $=id=>document.getElementById(id);
 function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
 function saveLocal(){localStorage.setItem(KEY,JSON.stringify(data))}
@@ -5972,10 +5974,6 @@ async function cloudLogout(){if(fb){await fb.auth.signOut();closeModal()}}
 
 /* ---------- Google Kalender ---------- */
 const GOOGLE_CONFIG_KEY='mystudyplaner_google_calendar_v1';
-let googleCalendarTokenClient=null;
-let googleCalendarAccessToken='';
-let googleCalendarCalendars=[];
-let googleCalendarColors={};
 
 function getGoogleCalendarConfig(){
  try{
