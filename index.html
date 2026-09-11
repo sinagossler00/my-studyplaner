@@ -5788,28 +5788,53 @@ async function saveFirebaseConfig(){
 function clearFirebaseConfig(){localStorage.removeItem('mystudyplaner_firebase_config');location.reload()}
 
 async function cloudGoogleAuth(){
- if(!fb){
-  const ready=await Promise.race([
-   cloudReadyPromise,
-   new Promise(resolve=>setTimeout(()=>resolve(null),8000))
-  ]);
-  if(!ready){
-   alert('Die Cloud-Verbindung konnte nicht hergestellt werden. Bitte Internetverbindung prüfen und die Seite einmal neu laden.');
+ // Always make sure Firebase Auth is actually ready before the click is handled.
+ // This also covers a fast click immediately after opening the account window.
+ try{
+  if(!fb){
+   if(typeof initCloud==='function') initCloud();
+   const ready=await Promise.race([
+    cloudReadyPromise,
+    new Promise(resolve=>setTimeout(()=>resolve(null),12000))
+   ]);
+   if(ready) fb=ready;
+  }
+
+  // Fallback: if the readiness promise was missed for any reason, create the
+  // Firebase app/auth instance directly from the configured Firebase settings.
+  if(!fb && window.firebase){
+   const cfg=getFirebaseConfig();
+   if(cfg && cfg.apiKey && cfg.projectId){
+    if(!firebase.apps.length) firebase.initializeApp(cfg);
+    fb={auth:firebase.auth(),db:firebase.firestore()};
+   }
+  }
+
+  if(!fb || !fb.auth){
+   alert('Die Cloud-Verbindung ist noch nicht bereit. Bitte kurz warten und erneut auf „Mit Google anmelden“ klicken.');
    return;
   }
-  fb=ready;
- }
- try{
+
   const provider=new firebase.auth.GoogleAuthProvider();
   provider.setCustomParameters({prompt:'select_account'});
-  await fb.auth.signInWithPopup(provider);
+
+  try{
+   await fb.auth.signInWithPopup(provider);
+  }catch(e){
+   // Popup blockers are common on GitHub Pages/Chromebook browsers.
+   // Fall back to the normal Firebase redirect flow instead of making the
+   // button appear broken.
+   if(e&&e.code==='auth/popup-blocked'){
+    await fb.auth.signInWithRedirect(provider);
+    return;
+   }
+   if(e&&e.code==='auth/cancelled-popup-request')return;
+   if(e&&e.code==='auth/popup-closed-by-user')return;
+   throw e;
+  }
   closeModal();
  }catch(e){
-  if(e&&e.code==='auth/popup-closed-by-user')return;
-  if(e&&e.code==='auth/popup-blocked'){
-   alert('Der Google-Anmelde-Popup wurde blockiert. Bitte Popups für My Studyplaner erlauben.');
-   return;
-  }
+  console.error('Firebase Google-Anmeldung:',e);
   alert('Google-Anmeldung fehlgeschlagen: '+(e.message||e));
  }
 }
@@ -6161,6 +6186,16 @@ function tryInitGoogleFromSavedConfig(){
 window.addEventListener('load',tryInitGoogleFromSavedConfig);
 
 initCloud();
+// Complete a Firebase redirect login when the browser returns to GitHub Pages.
+(async()=>{
+ try{
+  const ready=await Promise.race([cloudReadyPromise,new Promise(resolve=>setTimeout(()=>resolve(null),12000))]);
+  if(ready && ready.auth){
+   const result=await ready.auth.getRedirectResult();
+   if(result && result.user) closeModal();
+  }
+ }catch(e){console.warn('Firebase Google Redirect:',e)}
+})();
 // Ensure the start page is populated immediately on first load as well as after navigation.
 if(document.readyState==='loading'){
   document.addEventListener('DOMContentLoaded',()=>{try{renderAll()}catch(e){console.warn('Initial render:',e)}});
