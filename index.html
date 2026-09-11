@@ -80,6 +80,9 @@ h1{margin:0;font-size:29px;font-weight:850}h2{margin:0;font-size:19px;font-weigh
 .psychology-day-card{min-height:170px}
 .psychology-day-card .card-head{margin-bottom:9px}
 .psychology-day-card h2{font-size:18px}
+.psychology-refresh{width:34px;height:34px;border:1px solid var(--line);border-radius:50%;background:var(--card);color:var(--text);font-size:19px;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:transform .18s ease,background .18s ease}
+.psychology-refresh:hover{background:var(--soft);transform:rotate(25deg)}
+.psychology-refresh:active{transform:rotate(90deg) scale(.96)}
 .psychology-day-content{display:flex;flex-direction:column;gap:8px}
 .psychology-day-category{font-size:10px;font-weight:850;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
 .psychology-day-title{font-size:15px;font-weight:850;line-height:1.25}
@@ -3818,7 +3821,7 @@ aside.sidebar{
     <div class="card-head"><h2>📊 Studienfortschritt</h2></div>
     <div id="homeStudyProgress"></div>
    </div>
-   <div class="card psychology-day-card"><div class="card-head"><h2>🧠 Psychologie des Tages</h2></div><div id="psychologyDay"></div></div>
+   <div class="card psychology-day-card"><div class="card-head"><h2>🧠 Psychologie des Tages</h2><button class="psychology-refresh" type="button" onclick="nextPsychologyDay()" title="Anderen Psychologie-Impuls anzeigen" aria-label="Anderen Psychologie-Impuls anzeigen">↻</button></div><div id="psychologyDay"></div></div>
   </div>
  </section>
 
@@ -4593,19 +4596,27 @@ const psychologyPrompts=[
  {category:'Psychologie-Miniwissen',title:'Das Arbeitsgedächtnis ist begrenzt',text:'Wir können nur eine begrenzte Menge an Informationen gleichzeitig aktiv verarbeiten. Strukturieren und Wiederholen kann deshalb beim Lernen helfen.',question:'Wie kann ich komplexe Lerninhalte in kleinere Einheiten aufteilen?'}
 ];
 
+let psychologyDayOffset=Number(localStorage.getItem('msp_psychology_day_offset_v1')||0);
+if(!Number.isFinite(psychologyDayOffset))psychologyDayOffset=0;
 function renderPsychologyDay(){
  const el=$('psychologyDay');
  if(!el)return;
  const now=new Date();
  const start=new Date(now.getFullYear(),0,0);
  const dayOfYear=Math.floor((new Date(now.getFullYear(),now.getMonth(),now.getDate())-start)/86400000);
- const item=psychologyPrompts[(dayOfYear-1)%psychologyPrompts.length];
+ const index=((dayOfYear-1+psychologyDayOffset)%psychologyPrompts.length+psychologyPrompts.length)%psychologyPrompts.length;
+ const item=psychologyPrompts[index];
  el.innerHTML=`<div class="psychology-day-content">
   <div class="psychology-day-category">${esc(item.category)}</div>
   <div class="psychology-day-title">${esc(item.title)}</div>
   <div class="psychology-day-text">${esc(item.text)}</div>
   <div class="psychology-day-question"><b>💭 Denkfrage:</b> ${esc(item.question)}</div>
  </div>`;
+}
+function nextPsychologyDay(){
+ psychologyDayOffset=(psychologyDayOffset+1)%psychologyPrompts.length;
+ localStorage.setItem('msp_psychology_day_offset_v1',String(psychologyDayOffset));
+ renderPsychologyDay();
 }
 
 
@@ -8029,4 +8040,26 @@ document.addEventListener('DOMContentLoaded', function(){
   if(page) setActiveNav(page);
  }
 });
+</script>
+
+
+<script id="msp-home-initial-render-v281">
+(function(){
+  function renderHomeImmediately(){
+    try{
+      if(typeof renderHomeOverview==='function') renderHomeOverview();
+      if(typeof renderDeadlines==='function') renderDeadlines('home');
+      if(typeof renderTasks==='function') renderTasks();
+      if(typeof renderPsychologyDay==='function') renderPsychologyDay();
+    }catch(e){ console.warn('Home initial render:',e); }
+  }
+  function scheduleHomeRender(){
+    if(typeof requestAnimationFrame==='function') requestAnimationFrame(renderHomeImmediately);
+    else renderHomeImmediately();
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',scheduleHomeRender,{once:true});
+  else scheduleHomeRender();
+  window.addEventListener('load',scheduleHomeRender,{once:true});
+  window.addEventListener('pageshow',scheduleHomeRender);
+})();
 </script>
