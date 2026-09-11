@@ -4347,22 +4347,49 @@ function sanitizeForFirestore(value){
   return value;
 }
 
+async function getActiveFirebaseUser(){
+  // Never rely only on the app-level flags for a write. Firebase Auth itself
+  // is the source of truth and may restore currentUser a little later on
+  // mobile/PWA browsers.
+  if(fb&&fb.auth&&fb.auth.currentUser){
+    const u=fb.auth.currentUser;
+    currentUser=u; window.currentUser=u; cloudEnabled=true; window.cloudEnabled=true;
+    return u;
+  }
+  if(window.mspCloudAuthStatePromise){
+    try{await Promise.race([window.mspCloudAuthStatePromise,new Promise(r=>setTimeout(r,10000))])}catch(e){}
+  }
+  const u=(fb&&fb.auth&&fb.auth.currentUser)||currentUser||null;
+  if(u){currentUser=u;window.currentUser=u;cloudEnabled=true;window.cloudEnabled=true;}
+  return u;
+}
+
 async function writeCloudData(){
-  if(!cloudEnabled||!currentUser||!fb)return false;
-  const ref=fb.db.collection('users').doc(currentUser.uid);
+  const u=await getActiveFirebaseUser();
+  if(!u||!fb||!fb.db)return false;
+  const ref=fb.db.collection('users').doc(u.uid);
   const safeData=sanitizeForFirestore(structuredClone(data));
   await ref.set({data:safeData,updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});
+  cloudEnabled=true; currentUser=u; window.currentUser=u; window.cloudEnabled=true;
   if(window.mspSetSyncStatus)window.mspSetSyncStatus('connected','Cloud: verbunden','Gerade synchronisiert');
   return true;
 }
 
 async function saveData(){
   saveLocal();
-  if(!cloudEnabled||!currentUser||!fb||cloudHydrating)return false;
+  // Queue all writes so rapid edits cannot overwrite each other. Importantly,
+  // determine the Firebase user at write time instead of trusting a possibly
+  // stale cloudEnabled/currentUser flag.
+  if(cloudHydrating)return false;
   cloudSavePromise=cloudSavePromise.then(async()=>{
-    if(!cloudEnabled||!currentUser||!fb||cloudHydrating)return false;
-    try{return await writeCloudData();}
-    catch(e){
+    try{
+      const u=await getActiveFirebaseUser();
+      if(!u||!fb||!fb.db){
+        if(window.mspSetSyncStatus)window.mspSetSyncStatus('offline','Cloud: nicht angemeldet','Lokal gespeichert');
+        return false;
+      }
+      return await writeCloudData();
+    }catch(e){
       console.error('Cloud-Sync fehlgeschlagen:',e);
       if(window.mspSetSyncStatus)window.mspSetSyncStatus('offline','Cloud: Sync fehlgeschlagen',e&&e.message?e.message:'Firestore-Schreibfehler');
       return false;
@@ -5316,7 +5343,7 @@ async function updateTask(e,id){
 }
 
 function openTask(){openModal('Neue Aufgabe',`<form onsubmit="addTask(event)"><div class="form-grid"><div class="wide"><label>Aufgabe</label><input id="tTitle" placeholder="z. B. Kapitel 4 lesen" required></div><div><label>Rhythmus</label><select id="tPeriod"><option>wöchentlich</option><option>monatlich</option><option>einmalig</option></select></div><div><label>Modul</label><input id="tModule" placeholder="z. B. Entwicklungspsychologie"></div><div><label>Frist</label><input id="tDeadline" type="date"></div></div><br><button class="btn" type="submit">Aufgabe speichern</button></form>`)}
-async function addTask(e){e.preventDefault();data.tasks.push({id:Date.now(),title:tTitle.value,period:tPeriod.value,module:tModule.value.trim(),moduleId:'',deadline:tDeadline.value||'',done:false});await saveData();closeModal();renderAll()}
+async function addTask(e){e.preventDefault();data.tasks.push({id:Date.now(),title:tTitle.value,period:tPeriod.value,module:tModule.value.trim(),moduleId:'',deadline:tDeadline.value||'',done:false});const cloudSaved=await saveData();closeModal();renderAll();if(!cloudSaved&&(fb&&fb.auth&&fb.auth.currentUser))alert('⚠️ Die Aufgabe wurde lokal gespeichert, konnte aber nicht zu Firebase synchronisiert werden.')}
 async function toggleTask(id){let t=data.tasks.find(x=>x.id===id);if(t)t.done=!t.done;await saveData();renderAll()}
 async function deleteTask(id){
  data.tasks=data.tasks.filter(x=>Number(x.id)!==Number(id));
@@ -5724,11 +5751,26 @@ async function initCloud(){
     if(!firebase.apps.length)firebase.initializeApp(cfg);
     fb={auth:firebase.auth(),db:firebase.firestore()};
     window.fb=fb;
+
+    // IMPORTANT: configure LOCAL persistence BEFORE registering the auth
+    // observer. Otherwise a mobile/PWA load can fire the initial null auth
+    // state before Firebase has restored the saved Google session.
+    try{
+      await fb.auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+      window.mspAuthPersistence='LOCAL';
+      window.mspAuthPersistenceError=null;
+    }catch(e){
+      window.mspAuthPersistenceError=e;
+      console.error('Firebase Auth LOCAL persistence:',e);
+      // Keep the app usable; a successful sign-in may still work, but the
+      // UI/diagnostics will expose that persistence could not be enabled.
+    }
+
+    window.fb=fb;
     cloudReadyResolve(fb);
 
-    // Register the auth observer immediately. Firebase restores a LOCAL
-    // session asynchronously; the app must not mistake the initial state for
-    // a logout or render the local-only state before restoration completes.
+    // Register the auth observer only after persistence has been configured.
+    // Firebase can now restore the saved session before the first callback.
     fb.auth.onAuthStateChanged(async user=>{
       if(!cloudAuthStateResolved){
         cloudAuthStateResolved=true;
@@ -5819,15 +5861,8 @@ async function initCloud(){
       }
     });
 
-    // Keep persistence LOCAL. Do this without delaying registration of the
-    // auth observer. Also repeat it after a successful sign-in in cloudGoogleAuth.
-    try{
-      await fb.auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
-      window.mspAuthPersistence='LOCAL';
-    }catch(e){
-      window.mspAuthPersistenceError=e;
-      console.warn('Auth-Persistenz:',e);
-    }
+    // Persistence was configured before the auth observer above.
+    // Do not configure it again here; doing so can race the first restore.
   }catch(e){
     console.error('Cloud-Initialisierung:',e);
     cloudReadyResolve(null);
@@ -7611,7 +7646,7 @@ function renderStudyTimer(){
 (function(){
   if('serviceWorker' in navigator){
     window.addEventListener('load', function(){
-      navigator.serviceWorker.register('./sw.js?v=320').then(function(reg){ try{ reg.update(); }catch(e){} }).catch(function(err){
+      navigator.serviceWorker.register('./sw.js?v=322').then(function(reg){ try{ reg.update(); }catch(e){} }).catch(function(err){
         console.warn('PWA Service Worker konnte nicht registriert werden:', err);
       });
     });
