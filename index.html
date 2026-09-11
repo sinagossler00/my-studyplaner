@@ -117,12 +117,15 @@ h1{margin:0;font-size:29px;font-weight:850}h2{margin:0;font-size:19px;font-weigh
 </style>
 
 <script src="https://accounts.google.com/gsi/client" async></script>
+<script id="msp-v330-sw-cleanup">
+(function(){try{if('serviceWorker' in navigator){navigator.serviceWorker.getRegistrations().then(rs=>rs.forEach(r=>r.unregister())).catch(()=>{});}if(window.caches){caches.keys().then(ks=>ks.filter(k=>/mystudyplaner/i.test(k)).forEach(k=>caches.delete(k))).catch(()=>{});}}catch(e){}})();
+</script>
 
 <!-- Firebase: für echte Anmeldung + Synchronisierung. Die Firebase-Konfiguration wird unten in der App eingetragen. -->
-<script src="https://www.gstatic.com/firebasejs/12.18.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/12.18.0/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/12.18.0/firebase-storage-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
 
 <style id="mystudyplaner-v10-uni-links-style">
 #uni-links .section-head {
@@ -3982,8 +3985,6 @@ aside.sidebar{
   }
 }
 </style>
-<meta name="msp-version" content="v329-auth-persistence"><!-- v318: cloud-authoritative refresh -->
-<meta name="msp-version" content="v328">
 </head>
 <body>
 
@@ -4322,83 +4323,31 @@ data.uniLinks=Array.isArray(data.uniLinks)?data.uniLinks:[];
 if(!Array.isArray(data.podcasts))data.podcasts=[];
 if(!Array.isArray(data.tasks))data.tasks=[];data.tasks.forEach(t=>{if(typeof t.deadline!=='string')t.deadline='';});
 let deadlineFilter='all',taskFilter='open',taskTimeFilter='all',taskSort='deadline',deadlineCalendarView=localStorage.getItem('msp_deadline_calendar_view_v1')||'month',taskCalendarView=localStorage.getItem('msp_task_calendar_view_v1')||'month',currentUser=null,fb=null,cloudEnabled=false,cloudUnsubscribe=null,cloudInitialSyncDone=false,calendarMonth=new Date(new Date().getFullYear(),new Date().getMonth(),1);
-// Google Calendar state must exist before any renderer can access it.
-let googleCalendarTokenClient=null,googleCalendarAccessToken='',googleCalendarCalendars=[],googleCalendarColors={};
 const $=id=>document.getElementById(id);
 function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
 function saveLocal(){localStorage.setItem(KEY,JSON.stringify(data))}
-let cloudSavePromise=Promise.resolve();
-let cloudListenerReady=false;
-let cloudSyncGeneration=0;
-let cloudHydrating=false;
-
-function sanitizeForFirestore(value){
-  if(value===undefined)return null;
-  if(value===null)return null;
-  if(value instanceof Date)return value;
-  if(Array.isArray(value))return value.map(sanitizeForFirestore);
-  if(typeof value==='object'){
-    const out={};
-    for(const [k,v] of Object.entries(value)){
-      if(v===undefined||typeof v==='function')continue;
-      out[k]=sanitizeForFirestore(v);
-    }
-    return out;
-  }
-  return value;
-}
-
-async function getActiveFirebaseUser(){
-  // Never rely only on the app-level flags for a write. Firebase Auth itself
-  // is the source of truth and may restore currentUser a little later on
-  // mobile/PWA browsers.
-  if(fb&&fb.auth&&fb.auth.currentUser){
-    const u=fb.auth.currentUser;
-    currentUser=u; window.currentUser=u; cloudEnabled=true; window.cloudEnabled=true;
-    return u;
-  }
-  if(window.mspCloudAuthStatePromise){
-    try{await Promise.race([window.mspCloudAuthStatePromise,new Promise(r=>setTimeout(r,10000))])}catch(e){}
-  }
-  const u=(fb&&fb.auth&&fb.auth.currentUser)||currentUser||null;
-  if(u){currentUser=u;window.currentUser=u;cloudEnabled=true;window.cloudEnabled=true;}
-  return u;
-}
-
-async function writeCloudData(){
-  const u=await getActiveFirebaseUser();
-  if(!u||!fb||!fb.db)return false;
-  const ref=fb.db.collection('users').doc(u.uid);
-  const safeData=sanitizeForFirestore(structuredClone(data));
-  await ref.set({data:safeData,updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});
-  cloudEnabled=true; currentUser=u; window.currentUser=u; window.cloudEnabled=true;
-  if(window.mspSetSyncStatus)window.mspSetSyncStatus('connected','Cloud: verbunden','Gerade synchronisiert');
-  return true;
-}
-
 async function saveData(){
   saveLocal();
-  // Queue all writes so rapid edits cannot overwrite each other. Importantly,
-  // determine the Firebase user at write time instead of trusting a possibly
-  // stale cloudEnabled/currentUser flag.
-  if(cloudHydrating)return false;
-  cloudSavePromise=cloudSavePromise.then(async()=>{
-    try{
-      const u=await getActiveFirebaseUser();
-      if(!u||!fb||!fb.db){
-        if(window.mspSetSyncStatus)window.mspSetSyncStatus('offline','Cloud: nicht angemeldet','Lokal gespeichert');
-        return false;
-      }
-      return await writeCloudData();
-    }catch(e){
-      console.error('Cloud-Sync fehlgeschlagen:',e);
-      if(window.mspSetSyncStatus)window.mspSetSyncStatus('offline','Cloud: Sync fehlgeschlagen',e&&e.message?e.message:'Firestore-Schreibfehler');
+  try{
+    const authUser=(fb&&fb.auth&&fb.auth.currentUser)||currentUser;
+    if(!authUser||!fb||!fb.db){
+      if(window.mspSetSyncStatus)window.mspSetSyncStatus('offline','Cloud: nicht angemeldet','Lokal gespeichert');
       return false;
     }
-  });
-  return cloudSavePromise;
+    currentUser=authUser;
+    cloudEnabled=true;
+    window.currentUser=authUser;
+    window.cloudEnabled=true;
+    const safe=JSON.parse(JSON.stringify(data));
+    await fb.db.collection('users').doc(authUser.uid).set({data:safe,updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});
+    if(window.mspSetSyncStatus)window.mspSetSyncStatus('connected','Cloud: verbunden','Gerade synchronisiert');
+    return true;
+  }catch(e){
+    console.error('Cloud-Sync fehlgeschlagen:',e);
+    if(window.mspSetSyncStatus)window.mspSetSyncStatus('offline','Cloud: Sync fehlgeschlagen',e&&e.message?e.message:'Firestore-Fehler');
+    return false;
+  }
 }
-
 function fmt(d){return new Date(d+'T12:00:00').toLocaleDateString('de-DE',{day:'2-digit',month:'short',year:'numeric'})}
 function dateBox(d){let x=new Date(d+'T12:00:00');return `<strong>${x.getDate()}</strong><span>${x.toLocaleDateString('de-DE',{month:'short'}).replace('.','').toUpperCase()}</span>`}
 function matches(x){let q=$('search').value.toLowerCase();return !q||JSON.stringify(x).toLowerCase().includes(q)}
@@ -5248,22 +5197,7 @@ function openModal(title,body){$('modalTitle').textContent=title;$('modalBody').
 function closeModal(){$('modal').classList.remove('show')}
 function openDeadline(){openModal('Neuer Deadline-Eintrag',`<form onsubmit="addDeadline(event)"><div class="form-grid"><div><label>Art</label><select id="dType"><option value="task">Aufgabe / Abgabe</option><option value="reg">Anmeldung / Termin</option></select></div><div><label>Datum</label><input id="dDate" type="date" required></div>
   <div><label>Uhrzeit (optional)</label><input id="dTime" type="time"></div><div class="wide"><label>Titel</label><input id="dTitle" placeholder="z. B. Hausarbeit abgeben" required></div><div class="wide"><label>Modul (optional)</label><input id="dModule" placeholder="z. B. Statistik 1"></div><div class="wide"><label>Priorität</label><select id="dPriority"><option value="leicht">🟢 Leicht</option><option value="mittel" selected>🟡 Mittel</option><option value="hoch">🔴 Hoch</option></select></div></div><br><button class="btn" type="submit">💾 Speichern</button></form>`)}
-async function addDeadline(e){
- e.preventDefault();
- data.deadlines.push({
-  id:Date.now(),
-  title:dTitle.value.trim(),
-  date:dDate.value,
-  type:dType.value,
-  module:dModule.value.trim(),
-  time:dTime.value||'',
-  priority:dPriority.value||'mittel',
-  reminder:'none'
- });
- await saveData();
- closeModal();
- renderAll();
-}
+async function addDeadline(e){e.preventDefault();data.deadlines.push({id:Date.now(),title:dTitle.value,date:dDate.value,type:dType.value,module:dModule.value,time:dTime.value||'',priority:dPriority.value||'mittel',reminder:dReminder.value||'none'});await saveData();closeModal();renderAll()}
 async function deleteDeadline(id){
  data.deadlines=data.deadlines.filter(x=>Number(x.id)!==Number(id));
  renderAll();
@@ -5344,7 +5278,7 @@ async function updateTask(e,id){
 }
 
 function openTask(){openModal('Neue Aufgabe',`<form onsubmit="addTask(event)"><div class="form-grid"><div class="wide"><label>Aufgabe</label><input id="tTitle" placeholder="z. B. Kapitel 4 lesen" required></div><div><label>Rhythmus</label><select id="tPeriod"><option>wöchentlich</option><option>monatlich</option><option>einmalig</option></select></div><div><label>Modul</label><input id="tModule" placeholder="z. B. Entwicklungspsychologie"></div><div><label>Frist</label><input id="tDeadline" type="date"></div></div><br><button class="btn" type="submit">Aufgabe speichern</button></form>`)}
-async function addTask(e){e.preventDefault();data.tasks.push({id:Date.now(),title:tTitle.value,period:tPeriod.value,module:tModule.value.trim(),moduleId:'',deadline:tDeadline.value||'',done:false});const cloudSaved=await saveData();closeModal();renderAll();if(!cloudSaved&&(fb&&fb.auth&&fb.auth.currentUser))alert('⚠️ Die Aufgabe wurde lokal gespeichert, konnte aber nicht zu Firebase synchronisiert werden.')}
+async function addTask(e){e.preventDefault();data.tasks.push({id:Date.now(),title:tTitle.value,period:tPeriod.value,module:tModule.value.trim(),moduleId:'',deadline:tDeadline.value||'',done:false});await saveData();closeModal();renderAll()}
 async function toggleTask(id){let t=data.tasks.find(x=>x.id===id);if(t)t.done=!t.done;await saveData();renderAll()}
 async function deleteTask(id){
  data.tasks=data.tasks.filter(x=>Number(x.id)!==Number(id));
@@ -5357,7 +5291,6 @@ async function handleFiles(files){for(const f of [...files])await addFile(f,null
 async function uploadModule(id){let f=$('moduleInput_'+id);f.value='';f.click()}
 async function handleModuleFiles(id,files){for(const f of [...files])await addFile(f,id);await saveData();renderAll()}
 
-const GOOGLE_CALENDAR_DEFAULT_CLIENT_ID='119642140783-mbnm7m2v2lkqpirvaj5ronou3l0bga5d.apps.googleusercontent.com';
 const GOOGLE_DRIVE_SCOPE='https://www.googleapis.com/auth/drive.file';
 const GOOGLE_CALENDAR_SCOPE='https://www.googleapis.com/auth/calendar.readonly';
 const GOOGLE_SERVICES_SCOPE=GOOGLE_DRIVE_SCOPE+' '+GOOGLE_CALENDAR_SCOPE;
@@ -5715,154 +5648,111 @@ window.MSP_FIREBASE_CONFIG=getFirebaseConfig();
 // Keep actions from racing that initialization; callers can safely wait for fb.
 var cloudReadyResolve;
 var cloudReadyPromise=window.mspCloudReadyPromise=new Promise(function(resolve){cloudReadyResolve=resolve});
-var cloudInitialSyncResolve;
-var cloudInitialSyncPromise=window.mspCloudInitialSyncPromise=new Promise(function(resolve){cloudInitialSyncResolve=resolve});
 var cloudAuthStateResolve;
 var cloudAuthStatePromise=window.mspCloudAuthStatePromise=new Promise(function(resolve){cloudAuthStateResolve=resolve});
 var cloudAuthStateResolved=false;
-
-function mergeArrayById(cloudArr,localArr){
- const cloud=Array.isArray(cloudArr)?cloudArr:[];
- const local=Array.isArray(localArr)?localArr:[];
- const result=[],seen=new Set();
- for(const item of [...cloud,...local]){
-  if(item==null)continue;
-  const id=typeof item==='object'&&item.id!=null?String(item.id):'';
-  const key=id||JSON.stringify(item);
-  if(seen.has(key))continue;
-  seen.add(key);result.push(item);
- }
- return result;
-}
-function mergeCloudWithLocal(cloudData,localData){
- const merged=Object.assign(structuredClone(defaultData),structuredClone(cloudData||{}));
- const keys=['deadlines','tasks','files','fileFolders','modules','notes','podcasts','gradeModules','grades','uniLinks'];
- for(const k of keys)merged[k]=mergeArrayById(cloudData&&cloudData[k],localData&&localData[k]);
- merged.plantMinutes=Math.max(
-  Number.isFinite(Number(cloudData&&cloudData.plantMinutes))?Number(cloudData.plantMinutes):0,
-  Number.isFinite(Number(localData&&localData.plantMinutes))?Number(localData.plantMinutes):0,
-  Number(localStorage.getItem('msp_total_learning_minutes')||0)||0
- );
- return merged;
-}
-async function mspRestoreFirebaseSessionIfNeeded(){ return false; }
-
 async function initCloud(){
   const cfg=getFirebaseConfig();
   if(!cfg||!cfg.apiKey){
     updateCloudStatus(false);
     cloudReadyResolve(null);
-    cloudInitialSyncResolve(null);
-    if(!cloudAuthStateResolved){cloudAuthStateResolved=true;cloudAuthStateResolve(null)}
-    return;
+    return null;
   }
   try{
     if(!firebase.apps.length)firebase.initializeApp(cfg);
     fb={auth:firebase.auth(),db:firebase.firestore()};
     window.fb=fb;
 
-    // Firebase documents LOCAL persistence as the normal browser persistence.
-    // Configure it once, before the sign-in flow, and do not run custom
-    // re-authentication logic on reload.
+    // IMPORTANT: configure persistence BEFORE registering the auth listener.
+    // Firebase then restores the existing Google session itself on reload.
     try{
-      // Explicitly use Firebase's browser LOCAL persistence. Do this before
-      // registering auth listeners or starting any sign-in flow.
       await fb.auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
       window.mspAuthPersistence='LOCAL';
       window.mspAuthPersistenceError=null;
-    }catch(e){
-      window.mspAuthPersistenceError=e;
-      console.error('Firebase Auth LOCAL persistence:',e);
+    }catch(err){
+      window.mspAuthPersistenceError=err;
+      console.error('Firebase Auth LOCAL persistence failed:',err);
     }
 
     cloudReadyResolve(fb);
 
-    // Let Firebase finish restoring its persisted user before the app reacts.
-    // authStateReady() is available in current Firebase Auth releases.
-    try{
-      if(typeof fb.auth.authStateReady==='function') await fb.auth.authStateReady();
-    }catch(e){console.warn('Firebase authStateReady:',e)}
-
-    // If Firebase did not restore the session but this device previously had
-    // a deliberate Google login, recover it once via Firebase's own redirect
-    // flow. This prevents a manual login on every page reload while avoiding
-    // any custom token/session handling.
+    // Resolve once, when Firebase has delivered its first auth state.
+    let resolveAuth;
+    const authReady=new Promise(resolve=>resolveAuth=resolve);
+    window.mspCloudAuthStatePromise=authReady;
 
     fb.auth.onAuthStateChanged(async user=>{
-      const generation=++cloudSyncGeneration;
       currentUser=user||null;
-      window.currentUser=currentUser;
       cloudEnabled=!!user;
+      window.currentUser=currentUser;
       window.cloudEnabled=!!user;
-      cloudListenerReady=false;
-      if(cloudUnsubscribe){try{cloudUnsubscribe()}catch(e){} cloudUnsubscribe=null;}
-
       if(!cloudAuthStateResolved){
         cloudAuthStateResolved=true;
         cloudAuthStateResolve(user||null);
+        resolveAuth(user||null);
       }
+
+      if(cloudUnsubscribe){try{cloudUnsubscribe()}catch(e){} cloudUnsubscribe=null;}
 
       if(!user){
         updateCloudStatus(false);
-        if(generation===cloudSyncGeneration) cloudInitialSyncResolve(null);
+        cloudInitialSyncDone=false;
         try{renderAll()}catch(e){}
         return;
       }
 
       updateCloudStatus(true,user.email||'Angemeldet');
-
       const ref=fb.db.collection('users').doc(user.uid);
-      cloudHydrating=true;
       try{
-        const snap=await ref.get({source:'server'});
-        if(generation!==cloudSyncGeneration||!currentUser||currentUser.uid!==user.uid)return;
-
-        if(snap.exists && snap.data() && snap.data().data){
-          data=Object.assign(structuredClone(defaultData),snap.data().data);
-          // Cloud is authoritative on startup. Save it locally so the UI and
-          // offline state are based on exactly the same snapshot.
-          try{saveLocal()}catch(e){}
+        // Firestore is the shared source of truth once the account exists.
+        const snap=await ref.get();
+        if(!snap.exists||!snap.data()||!snap.data().data){
+          await ref.set({data:JSON.parse(JSON.stringify(data)),updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});
         }else{
-          await writeCloudData();
+          const remote=snap.data().data||{};
+          data=Object.assign(structuredClone(defaultData),remote);
+          const arrayKeys=['deadlines','tasks','files','fileFolders','modules','notes','podcasts','gradeModules','grades','uniLinks','events'];
+          arrayKeys.forEach(k=>{if(!Array.isArray(data[k]))data[k]=[]});
+          saveLocal();
         }
-
-        cloudInitialSyncResolve(true);
+        cloudInitialSyncDone=true;
         try{renderAll()}catch(e){}
-      }catch(e){
-        console.error('Cloud load:',e);
-        cloudInitialSyncResolve(false);
-        updateCloudStatus(true,'Cloud: Ladevorgang fehlgeschlagen');
-      }finally{
-        cloudHydrating=false;
+        if(window.mspSetSyncStatus)window.mspSetSyncStatus('connected','Cloud: verbunden','Synchronisiert');
+      }catch(err){
+        console.error('Firestore initial load:',err);
+        if(window.mspSetSyncStatus)window.mspSetSyncStatus('offline','Cloud: Ladevorgang fehlgeschlagen',err.message||'Fehler');
       }
 
-      // One realtime listener for changes made on other devices.
+      // Exactly one realtime listener for changes from other devices.
       try{
         cloudUnsubscribe=ref.onSnapshot(snap=>{
           if(!snap.exists||!snap.data()||!snap.data().data)return;
-          const remote=snap.data().data;
-          if(cloudHydrating)return;
           if(!currentUser||currentUser.uid!==user.uid)return;
-          data=Object.assign(structuredClone(defaultData),remote);
-          try{saveLocal()}catch(e){}
-          try{renderAll()}catch(e){}
+          const remote=snap.data().data||{};
+          const next=Object.assign(structuredClone(defaultData),remote);
+          ['deadlines','tasks','files','fileFolders','modules','notes','podcasts','gradeModules','grades','uniLinks','events'].forEach(k=>{if(!Array.isArray(next[k]))next[k]=[]});
+          if(JSON.stringify(next)!==JSON.stringify(data)){
+            data=next;
+            saveLocal();
+            try{renderAll()}catch(e){}
+          }
           if(window.mspSetSyncStatus)window.mspSetSyncStatus('connected','Cloud: verbunden','Gerade synchronisiert');
         },err=>{
-          console.warn('Firestore onSnapshot:',err);
-          if(window.mspSetSyncStatus)window.mspSetSyncStatus('offline','Cloud: Sync fehlgeschlagen','Wird erneut versucht');
+          console.warn('Firestore Echtzeit-Sync:',err);
+          if(window.mspSetSyncStatus)window.mspSetSyncStatus('offline','Cloud: Sync fehlgeschlagen',err.message||'Fehler');
         });
-      }catch(e){console.warn('Cloud listener:',e)}
+      }catch(err){console.warn('Cloud listener:',err)}
     },err=>{
       console.error('Firebase Auth state:',err);
-      if(!cloudAuthStateResolved){cloudAuthStateResolved=true;cloudAuthStateResolve(null)}
-      cloudInitialSyncResolve(false);
+      if(!cloudAuthStateResolved){cloudAuthStateResolved=true;cloudAuthStateResolve(null);resolveAuth(null)}
+      updateCloudStatus(false,'Cloud-Login konnte nicht geladen werden');
     });
-  }catch(e){
-    console.error('Cloud-Initialisierung:',e);
+    return fb;
+  }catch(err){
+    console.error('Cloud-Initialisierung:',err);
     cloudReadyResolve(null);
-    cloudInitialSyncResolve(false);
-    if(!cloudAuthStateResolved){cloudAuthStateResolved=true;cloudAuthStateResolve(null)}
     updateCloudStatus(false,'Cloud nicht bereit');
+    return null;
   }
 }
 function updateCloudStatus(on,label){$('cloudStatus').innerHTML=`<span class="dot ${on?'on':''}"></span><span>${esc(label||'Nur auf diesem Gerät')}</span>`}
@@ -5887,7 +5777,7 @@ function openCloud(){
      <button class="btn secondary full" style="margin-top:4px" onclick="connectGoogleCalendar()">🔵 Google Kalender verbinden</button>
    </div>
    <div class="account-note">Google Kalender einmal freigeben. Beim Laden öffnet sich kein Google-Fenster. Wenn der Google-Zugriff abläuft, kannst du ihn bewusst über „Google Kalender verbinden“ neu freigeben.</div>
-   <details class="account-advanced"><summary>⚙️ Erweiterte Firebase-Einstellungen</summary><div class="muted account-small" style="margin:8px 0">Nur nötig, wenn du eine eigene Firebase-Konfiguration ändern möchtest.</div><textarea id="firebaseConfig" placeholder='{"apiKey":"...","authDomain":"...","projectId":"...","storageBucket":"...","messagingSenderId":"...","appId":"..."}'>${esc(JSON.stringify(cfg,null,2))}</textarea><div style="display:flex;gap:7px;margin-top:8px"><button class="btn" onclick="saveFirebaseConfig()">Speichern</button><button class="btn secondary" onclick="clearFirebaseConfig()">Löschen</button></div><button class="btn secondary full" style="margin-top:8px" onclick="testCloudSync()">☁️ Cloud-Synchronisation testen</button><button class="btn secondary full" style="margin-top:8px" onclick="forceCloudRefresh()">🔄 Cloud-Daten jetzt neu laden</button><button class="btn secondary full" style="margin-top:8px" onclick="showCloudDiagnostics()">🔎 Cloud-Diagnose anzeigen</button></details>
+   <details class="account-advanced"><summary>⚙️ Erweiterte Firebase-Einstellungen</summary><div class="muted account-small" style="margin:8px 0">Nur nötig, wenn du eine eigene Firebase-Konfiguration ändern möchtest.</div><textarea id="firebaseConfig" placeholder='{"apiKey":"...","authDomain":"...","projectId":"...","storageBucket":"...","messagingSenderId":"...","appId":"..."}'>${esc(JSON.stringify(cfg,null,2))}</textarea><div style="display:flex;gap:7px;margin-top:8px"><button class="btn" onclick="saveFirebaseConfig()">Speichern</button><button class="btn secondary" onclick="clearFirebaseConfig()">Löschen</button></div></details>
  </div>`)
 }
 
@@ -5895,106 +5785,13 @@ async function saveFirebaseConfig(){
  try{let cfg=JSON.parse($('firebaseConfig').value);if(!cfg.apiKey||!cfg.projectId)throw Error('apiKey und projectId fehlen.');localStorage.setItem('mystudyplaner_firebase_config',JSON.stringify(cfg));location.reload()}catch(e){alert('Ungültige Konfiguration: '+e.message)}
 }
 function clearFirebaseConfig(){localStorage.removeItem('mystudyplaner_firebase_config');location.reload()}
-async function testCloudSync(){
- try{
-  if(!fb||!fb.auth||!fb.auth.currentUser)throw new Error('Nicht bei Firebase angemeldet.');
-  currentUser=fb.auth.currentUser; cloudEnabled=true; window.currentUser=currentUser; window.cloudEnabled=true;
-  await writeCloudData();
-  const snap=await fb.db.collection('users').doc(currentUser.uid).get();
-  if(!snap.exists||!snap.data()||!snap.data().data)throw new Error('Firestore-Dokument wurde nicht gefunden.');
-  alert('✅ Cloud-Synchronisation funktioniert.\n\nFirestore kann gelesen und geschrieben werden.');
- }catch(e){
-  console.error('Cloud-Test:',e);
-  alert('❌ Cloud-Synchronisation fehlgeschlagen.\n\n'+(e&&e.message?e.message:e));
- }
-}
-
-async function forceCloudRefresh(){
- try{
-  if(!cloudAuthStateResolved && window.mspCloudAuthStatePromise){
-   try{await Promise.race([window.mspCloudAuthStatePromise,new Promise(resolve=>setTimeout(resolve,10000))])}catch(e){}
-  }
-  const u=(fb&&fb.auth&&fb.auth.currentUser)||currentUser;
-  if(!u)throw new Error('Nicht bei Firebase angemeldet.');
-  currentUser=u; cloudEnabled=true; window.currentUser=u; window.cloudEnabled=true;
-  const ref=fb.db.collection('users').doc(u.uid);
-  const snap=await ref.get({source:'server'});
-  if(!snap.exists||!snap.data()||!snap.data().data)throw new Error('Für dieses Firebase-Konto gibt es noch kein gespeichertes Studyplaner-Dokument.');
-  const remote=snap.data().data;
-  const next=Object.assign(structuredClone(defaultData),remote);
-  // Normalize the cloud object before putting it into the app.
-  next.deadlines=Array.isArray(next.deadlines)?next.deadlines:[];
-  next.tasks=Array.isArray(next.tasks)?next.tasks:[];
-  next.files=Array.isArray(next.files)?next.files:[];
-  next.fileFolders=Array.isArray(next.fileFolders)?next.fileFolders:[];
-  next.modules=Array.isArray(next.modules)?next.modules:[];
-  next.notes=Array.isArray(next.notes)?next.notes:[];
-  next.podcasts=Array.isArray(next.podcasts)?next.podcasts:[];
-  next.gradeModules=Array.isArray(next.gradeModules)?next.gradeModules:[];
-  next.grades=Array.isArray(next.grades)?next.grades:[];
-  next.uniLinks=Array.isArray(next.uniLinks)?next.uniLinks:[];
-  if(!Array.isArray(next.events))next.events=[];
-  data=next;
-  // Make the freshly downloaded cloud state the browser's local state too.
-  saveLocal();
-  cloudHydrating=true;
-  try{
-    if(cloudUnsubscribe){try{cloudUnsubscribe()}catch(e){} cloudUnsubscribe=null;}
-    renderAll();
-  }finally{
-    cloudHydrating=false;
-  }
-  if(window.mspSetSyncStatus)window.mspSetSyncStatus('connected','Cloud: verbunden','Cloud-Stand geladen');
-  const updated=snap.data().updatedAt&&snap.data().updatedAt.toDate?snap.data().updatedAt.toDate().toLocaleString('de-DE'):'unbekannt';
-  alert('✅ Cloud neu geladen.\n\nGerät: '+(u.email||'')+'\nFirebase-UID: '+u.uid.slice(0,12)+'…\n\nAufgaben: '+data.tasks.length+'\nDeadlines: '+data.deadlines.length+'\n\nLetzte Cloud-Aktualisierung: '+updated+'\n\nDie Cloud-Daten wurden jetzt auch als lokaler App-Stand übernommen.');
- }catch(e){
-  console.error('Cloud-Refresh:',e);
-  alert('❌ Cloud konnte nicht neu geladen werden.\n\n'+(e&&e.message?e.message:e));
- }
-}
-
-async function showCloudDiagnostics(){
- try{
-  if(!cloudAuthStateResolved && window.mspCloudAuthStatePromise){
-   try{await Promise.race([window.mspCloudAuthStatePromise,new Promise(resolve=>setTimeout(resolve,10000))])}catch(e){}
-  }
-  const u=(fb&&fb.auth&&fb.auth.currentUser)||currentUser;
-  if(!u)throw new Error('Nicht bei Firebase angemeldet.');
-  const snap=await fb.db.collection('users').doc(u.uid).get({source:'server'});
-  const remote=snap.exists&&snap.data()&&snap.data().data?snap.data().data:null;
-  const rt=remote&&Array.isArray(remote.tasks)?remote.tasks:[];
-  const rd=remote&&Array.isArray(remote.deadlines)?remote.deadlines:[];
-  const titles=rt.slice(-5).map(x=>'• '+(x.title||'(ohne Titel)')).join('\n')||'Keine Aufgaben';
-  let persist='unbekannt';
-  try{
-    const authKey='firebase:authUser:'+getFirebaseConfig().apiKey+':[DEFAULT]';
-    const stored=localStorage.getItem(authKey);
-    persist=window.mspAuthPersistenceError?'FEHLER: '+(window.mspAuthPersistenceError.message||window.mspAuthPersistenceError):(stored?'LOCAL-Speicher vorhanden':'LOCAL-Speicher NICHT vorhanden');
-  }catch(e){persist='Speicherprüfung fehlgeschlagen: '+(e.message||e)}
-  alert('🔎 Cloud-Diagnose\n\nE-Mail: '+(u.email||'')+'\nFirebase-UID: '+u.uid+'\nAuth-Persistenz: '+persist+'\nDokument vorhanden: '+(snap.exists?'JA':'NEIN')+'\nAufgaben in Firestore: '+rt.length+'\nDeadlines in Firestore: '+rd.length+'\n\nLetzte Aufgaben:\n'+titles);
- }catch(e){alert('❌ Diagnose fehlgeschlagen.\n\n'+(e&&e.message?e.message:e));}
-}
-
 
 async function cloudGoogleAuth(){
  // Always make sure Firebase Auth is actually ready before the click is handled.
  // This also covers a fast click immediately after opening the account window.
  try{
   if(!fb){
-   if(typeof initCloud==='function') (async function disableLegacyStudyplanerServiceWorkers(){
-  try{
-    if('serviceWorker' in navigator){
-      const regs=await navigator.serviceWorker.getRegistrations();
-      for(const reg of regs){ try{ await reg.unregister(); }catch(e){} }
-    }
-    if(window.caches){
-      const keys=await caches.keys();
-      await Promise.all(keys.filter(k=>String(k).indexOf('mystudyplaner-')===0).map(k=>caches.delete(k)));
-    }
-  }catch(e){ console.warn('PWA cleanup:',e); }
-})();
-
-initCloud();
+   if(typeof initCloud==='function') initCloud();
    const readiness = window.mspCloudReadyPromise || cloudReadyPromise;
    const ready=readiness ? await Promise.race([
     readiness,
@@ -6017,12 +5814,6 @@ initCloud();
    alert('Die Cloud-Verbindung ist noch nicht bereit. Bitte kurz warten und erneut auf „Mit Google anmelden“ klicken.');
    return;
   }
-  // Wait for Firebase's initial persisted-auth restoration before deciding
-  // whether the user is signed in. This prevents a false "not logged in"
-  // state during the short startup race on mobile browsers.
-  if(!cloudAuthStateResolved && window.mspCloudAuthStatePromise){
-   try{await Promise.race([window.mspCloudAuthStatePromise,new Promise(resolve=>setTimeout(resolve,10000))])}catch(e){}
-  }
   // Firebase Auth can already have a restored session even if the app-level
   // auth-state callback has not fired yet. Keep our state in sync.
   if(fb.auth.currentUser){
@@ -6032,31 +5823,11 @@ initCloud();
    window.cloudEnabled=true;
   }
 
-  // Re-assert LOCAL persistence immediately before Google sign-in.
-  // This is important on mobile/PWA browsers where storage can otherwise
-  // be selected differently between sessions.
-  try{
-   await fb.auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
-   window.mspAuthPersistence='LOCAL';
-   if(typeof fb.auth.authStateReady==='function') await fb.auth.authStateReady();
-  }catch(persistErr){
-   console.error('Firebase Auth LOCAL persistence:',persistErr);
-   alert('Die dauerhafte Cloud-Anmeldung konnte im Browser nicht aktiviert werden.\n\n'+(persistErr.message||persistErr));
-   return;
-  }
-
   const provider=new firebase.auth.GoogleAuthProvider();
   provider.setCustomParameters({prompt:'select_account'});
 
   try{
    await fb.auth.signInWithPopup(provider);
-   if(typeof fb.auth.authStateReady==='function') await fb.auth.authStateReady();
-   if(fb.auth.currentUser){
-    currentUser=fb.auth.currentUser;
-    window.currentUser=currentUser;
-    cloudEnabled=true;
-    window.cloudEnabled=true;
-   }
   }catch(e){
    // Popup blockers are common on GitHub Pages/Chromebook browsers.
    // Fall back to the normal Firebase redirect flow instead of making the
@@ -6091,7 +5862,12 @@ async function cloudAuth(){
 async function cloudLogout(){if(fb){await fb.auth.signOut();closeModal()}}
 
 /* ---------- Google Kalender ---------- */
+const GOOGLE_CALENDAR_DEFAULT_CLIENT_ID='119642140783-mbnm7m2v2lkqpirvaj5ronou3l0bga5d.apps.googleusercontent.com';
 const GOOGLE_CONFIG_KEY='mystudyplaner_google_calendar_v1';
+let googleCalendarTokenClient=null;
+let googleCalendarAccessToken='';
+let googleCalendarCalendars=[];
+let googleCalendarColors={};
 
 function getGoogleCalendarConfig(){
  try{
@@ -6418,20 +6194,20 @@ function tryInitGoogleFromSavedConfig(){
 window.addEventListener('load',tryInitGoogleFromSavedConfig);
 
 initCloud();
-// Firebase Auth restoration is handled only by Firebase itself.
-// Do not attempt custom silent Google re-authentication here. Firebase's
-// LOCAL persistence is the authoritative session mechanism.
-// The app waits for onAuthStateChanged/authStateReady before cloud sync.
-// Initial UI: wait briefly for Firebase's first auth/cloud read so the
-// first visible render uses the cloud state instead of the stale local state.
-(async function initialCloudAwareRender(){
-  try{
-    const p=window.mspCloudInitialSyncPromise||cloudInitialSyncPromise;
-    await Promise.race([p,new Promise(resolve=>setTimeout(resolve,12000))]);
-  }catch(e){}
-  try{renderAll()}catch(e){console.warn('Initial cloud-aware render:',e)}
-  setTimeout(()=>{try{renderAll()}catch(e){}},200);
-  setTimeout(()=>{try{renderAll()}catch(e){}},1000);
+// Complete a Firebase redirect login when the browser returns to GitHub Pages.
+(async()=>{
+ try{
+  const ready=await Promise.race([window.mspCloudReadyPromise || cloudReadyPromise,new Promise(resolve=>setTimeout(()=>resolve(null),12000))]);
+  if(ready&&ready.auth){
+   const result=await ready.auth.getRedirectResult();
+   if(result&&result.user) closeModal();
+  }
+ }catch(e){console.warn('Firebase Google Redirect:',e)}
+})();
+// Wait briefly for Firebase to restore the auth state before the first visible render.
+(async()=>{
+ try{await Promise.race([window.mspCloudAuthStatePromise || cloudAuthStatePromise,new Promise(resolve=>setTimeout(resolve,12000))]);}catch(e){}
+ try{renderAll()}catch(e){console.warn('Initial render:',e)}
 })();
 </script>
 
@@ -6440,35 +6216,6 @@ initCloud();
 
 
 
-<script id="msp-cloud-startup-reliable-v324">
-(function(){
-  async function pullCloudNow(){
-    try{
-      if(typeof fb==='undefined'||!fb||!fb.auth||!fb.db)return false;
-      const u=fb.auth.currentUser||currentUser;
-      if(!u)return false;
-      if(typeof cloudHydrating!=='undefined'&&cloudHydrating)return false;
-      const snap=await fb.db.collection('users').doc(u.uid).get({source:'server'});
-      if(!snap.exists)return false;
-      const remote=snap.data()&&snap.data().data;
-      if(!remote)return false;
-      const next=Object.assign(structuredClone(defaultData),remote);
-      ['deadlines','tasks','files','fileFolders','modules','notes','podcasts','gradeModules','grades','uniLinks','events'].forEach(k=>{if(!Array.isArray(next[k]))next[k]=[]});
-      if(JSON.stringify(next)!==JSON.stringify(data)){data=next;saveLocal();try{renderAll()}catch(e){}}
-      if(window.mspSetSyncStatus)window.mspSetSyncStatus('connected','Cloud: verbunden','Synchronisiert');
-      return true;
-    }catch(e){console.warn('v324 Cloud-Startsync:',e);return false;}
-  }
-  async function startupSync(){
-    try{if(window.mspCloudReadyPromise)await Promise.race([window.mspCloudReadyPromise,new Promise(r=>setTimeout(r,15000))]);}catch(e){}
-    try{if(window.mspCloudAuthStatePromise)await Promise.race([window.mspCloudAuthStatePromise,new Promise(r=>setTimeout(r,15000))]);}catch(e){}
-    await pullCloudNow();setTimeout(pullCloudNow,1200);setTimeout(pullCloudNow,3500);
-  }
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',startupSync,{once:true});else startupSync();
-  setInterval(()=>{if(!document.hidden)pullCloudNow()},5000);
-  window.mspReliableCloudPull=pullCloudNow;
-})();
-</script>
 <script id="mystudyplaner-v13-priority">
 (function(){
   const PRIORITIES = {
@@ -7678,6 +7425,19 @@ function renderStudyTimer(){
 </script>
 
 
+<script id="msp-pwa-registration">
+(function(){
+  if('serviceWorker' in navigator){
+    window.addEventListener('load', function(){
+      navigator.serviceWorker.register('./sw.js').catch(function(err){
+        console.warn('PWA Service Worker konnte nicht registriert werden:', err);
+      });
+    });
+  }
+})();
+</script>
+
+
 <script id="msp-sync-v260-js">
 (function(){
   const statusId='mspLiveSyncStatus';
@@ -7694,7 +7454,7 @@ function renderStudyTimer(){
   function getAuthUser(){
     try{
       if(window.currentUser) return window.currentUser;
-      if(window.fb && window.fb.auth && window.fb.auth.currentUser) return window.fb.auth.currentUser;
+      if(window.fb && window.fb.auth && window.fb.auth().currentUser) return window.fb.auth().currentUser;
     }catch(e){}
     return null;
   }
@@ -7737,16 +7497,7 @@ function renderStudyTimer(){
   });
 
   // Firebase auth is the authoritative source for whether the user is actually signed in.
-  function bindFirebaseAuth(){
-    try{
-      if(window.fb && window.fb.auth){
-        // Firebase auth state is handled by the main initCloud() listener above.
-        // Do not register a second listener here; it used to race the cloud hydration.
-        return true;
-      }
-    }catch(e){}
-    return false;
-  }
+  function bindFirebaseAuth(){ return false; }
 
   function init(){
     bindFirebaseAuth();
