@@ -8431,3 +8431,102 @@ document.addEventListener('DOMContentLoaded', function(){
   margin-bottom: 10px !important;
 }
 </style>
+<style id="msp-deadline-controls-final-v303">
+/* Final compact deadline controls: keep the sort control and action button on one clean row. */
+#calendar .deadline-card-head{
+  display:flex !important;
+  align-items:center !important;
+  justify-content:space-between !important;
+  gap:10px !important;
+  flex-wrap:nowrap !important;
+}
+#calendar .deadline-card-head .deadline-top-controls{
+  display:flex !important;
+  align-items:center !important;
+  flex:1 1 auto !important;
+  min-width:0 !important;
+  margin:0 !important;
+}
+#calendar .deadline-card-head .deadline-sort-control{
+  display:flex !important;
+  align-items:center !important;
+  gap:7px !important;
+  margin:0 !important;
+  min-width:0 !important;
+  flex:0 1 auto !important;
+}
+#calendar .deadline-card-head .deadline-sort-control label{
+  white-space:nowrap !important;
+  word-break:normal !important;
+  overflow-wrap:normal !important;
+  width:auto !important;
+  min-width:max-content !important;
+  font-family:"DM Sans",Arial,sans-serif !important;
+  font-size:11px !important;
+  line-height:1 !important;
+  font-weight:700 !important;
+}
+#calendar .deadline-card-head #deadlineSort{
+  width:105px !important;
+  min-width:105px !important;
+  max-width:105px !important;
+  height:30px !important;
+  min-height:30px !important;
+  padding:4px 8px !important;
+  font-family:"DM Sans",Arial,sans-serif !important;
+  font-size:11px !important;
+  font-weight:600 !important;
+  border:1px solid #b6b6b6 !important;
+  border-radius:9px !important;
+  box-sizing:border-box !important;
+}
+#calendar .deadline-card-head .deadline-new-btn{
+  flex:0 0 auto !important;
+  width:auto !important;
+  min-width:125px !important;
+  height:42px !important;
+  padding:8px 12px !important;
+  font-family:"DM Sans",Arial,sans-serif !important;
+  font-size:14px !important;
+  font-weight:700 !important;
+  white-space:nowrap !important;
+}
+@media(max-width:700px){
+  #calendar .deadline-card-head{
+    gap:8px !important;
+  }
+  #calendar .deadline-card-head #deadlineSort{
+    width:100px !important;
+    min-width:100px !important;
+    max-width:100px !important;
+  }
+  #calendar .deadline-card-head .deadline-new-btn{
+    min-width:116px !important;
+    height:38px !important;
+    padding:7px 10px !important;
+    font-size:12px !important;
+  }
+}
+@media(max-width:390px){
+  #calendar .deadline-card-head{
+    gap:6px !important;
+  }
+  #calendar .deadline-card-head .deadline-sort-control{
+    gap:5px !important;
+  }
+  #calendar .deadline-card-head .deadline-sort-control label{
+    font-size:10px !important;
+  }
+  #calendar .deadline-card-head #deadlineSort{
+    width:92px !important;
+    min-width:92px !important;
+    max-width:92px !important;
+    font-size:10px !important;
+  }
+  #calendar .deadline-card-head .deadline-new-btn{
+    min-width:108px !important;
+    font-size:11px !important;
+    padding:6px 8px !important;
+  }
+}
+</style>
