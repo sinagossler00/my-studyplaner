@@ -5326,6 +5326,7 @@ async function handleFiles(files){for(const f of [...files])await addFile(f,null
 async function uploadModule(id){let f=$('moduleInput_'+id);f.value='';f.click()}
 async function handleModuleFiles(id,files){for(const f of [...files])await addFile(f,id);await saveData();renderAll()}
 
+const GOOGLE_CALENDAR_DEFAULT_CLIENT_ID='119642140783-mbnm7m2v2lkqpirvaj5ronou3l0bga5d.apps.googleusercontent.com';
 const GOOGLE_DRIVE_SCOPE='https://www.googleapis.com/auth/drive.file';
 const GOOGLE_CALENDAR_SCOPE='https://www.googleapis.com/auth/calendar.readonly';
 const GOOGLE_SERVICES_SCOPE=GOOGLE_DRIVE_SCOPE+' '+GOOGLE_CALENDAR_SCOPE;
@@ -5739,11 +5740,9 @@ async function initCloud(){
         if(generation!==cloudSyncGeneration||!currentUser||currentUser.uid!==user.uid)return;
 
         if(snap.exists && snap.data() && snap.data().data){
-          // Firestore is the shared source of truth once a cloud document exists.
           const remote=snap.data().data;
           data=Object.assign(structuredClone(defaultData),remote);
         }else{
-          // First login on this account: upload the current local data once.
           await writeCloudData();
         }
 
@@ -5758,9 +5757,11 @@ async function initCloud(){
         data.grades=Array.isArray(data.grades)?data.grades:[];
         data.uniLinks=Array.isArray(data.uniLinks)?data.uniLinks:[];
         saveLocal();
-        renderAll();
 
         if(generation!==cloudSyncGeneration||!currentUser||currentUser.uid!==user.uid)return;
+
+        // Attach the real-time listener BEFORE rendering. This way a later
+        // remote change cannot be missed even if some UI renderer throws.
         cloudListenerReady=true;
         cloudUnsubscribe=ref.onSnapshot(remoteSnap=>{
           if(generation!==cloudSyncGeneration||!cloudListenerReady||!remoteSnap.exists)return;
@@ -5780,13 +5781,18 @@ async function initCloud(){
           if(JSON.stringify(next)!==JSON.stringify(data)){
             data=next;
             saveLocal();
-            renderAll();
+            try{renderAll()}catch(err){console.error('Render nach Cloud-Sync:',err)}
           }
           if(window.mspSetSyncStatus)window.mspSetSyncStatus('connected','Cloud: verbunden','Synchronisiert');
         },err=>{
           console.error('Cloud-Echtzeit-Sync:',err);
           if(window.mspSetSyncStatus)window.mspSetSyncStatus('offline','Cloud: Sync fehlgeschlagen',err&&err.message?err.message:'Echtzeit-Sync fehlgeschlagen');
         });
+
+        try{renderAll()}catch(err){
+          // A UI/Calendar problem must never abort Firebase synchronization.
+          console.error('Initiales Rendern nach Cloud-Login:',err);
+        }
       }catch(e){
         console.error('Cloud-Initialisierung/Synchronisierung:',e);
         if(window.mspSetSyncStatus)window.mspSetSyncStatus('offline','Cloud: Sync fehlgeschlagen',e&&e.message?e.message:'Firestore-Fehler');
@@ -5800,7 +5806,6 @@ async function initCloud(){
     updateCloudStatus(false,'Cloud nicht bereit');
   }
 }
-
 function updateCloudStatus(on,label){$('cloudStatus').innerHTML=`<span class="dot ${on?'on':''}"></span><span>${esc(label||'Nur auf diesem Gerät')}</span>`}
 function refreshAccountCloudState(){
  try{
@@ -5966,7 +5971,6 @@ async function cloudAuth(){
 async function cloudLogout(){if(fb){await fb.auth.signOut();closeModal()}}
 
 /* ---------- Google Kalender ---------- */
-const GOOGLE_CALENDAR_DEFAULT_CLIENT_ID='119642140783-mbnm7m2v2lkqpirvaj5ronou3l0bga5d.apps.googleusercontent.com';
 const GOOGLE_CONFIG_KEY='mystudyplaner_google_calendar_v1';
 let googleCalendarTokenClient=null;
 let googleCalendarAccessToken='';
