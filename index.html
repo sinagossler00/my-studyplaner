@@ -5637,6 +5637,10 @@ async function initCloud(){
   cloudReadyResolve(fb);
   fb.auth.onAuthStateChanged(async user=>{
    currentUser=user;
+   // Keep both the module variable and window properties in sync. Other
+   // app components use the window properties to display cloud status.
+   window.currentUser=user;
+   window.cloudEnabled=!!user;
 
    if(cloudUnsubscribe){cloudUnsubscribe();cloudUnsubscribe=null;}
 
@@ -5755,6 +5759,8 @@ async function initCloud(){
     }catch(e){console.warn('Cloud-Sync:',e)}
    }else{
     cloudEnabled=false;
+    window.cloudEnabled=false;
+    window.currentUser=null;
     updateCloudStatus(false);
    }
   });
@@ -5765,11 +5771,19 @@ async function initCloud(){
  }
 }
 function updateCloudStatus(on,label){$('cloudStatus').innerHTML=`<span class="dot ${on?'on':''}"></span><span>${esc(label||'Nur auf diesem Gerät')}</span>`}
+function refreshAccountCloudState(){
+ try{
+  const u=currentUser || (fb&&fb.auth?fb.auth.currentUser:null);
+  if(u){ currentUser=u; window.currentUser=u; cloudEnabled=true; window.cloudEnabled=true; }
+ }catch(e){}
+}
 
 function openCloud(){
+ refreshAccountCloudState();
  let cfg=getFirebaseConfig()||{};
- const signed=!!(currentUser&&currentUser.email);
- const cloudText=signed ? `Angemeldet als <b>${esc(currentUser.email)}</b>` : 'Noch nicht angemeldet';
+ const authUser=currentUser || (fb && fb.auth ? fb.auth.currentUser : null);
+ const signed=!!(authUser&&authUser.email);
+ const cloudText=signed ? `Angemeldet als <b>${esc(authUser.email)}</b>` : 'Noch nicht angemeldet';
  openModal('☁️ Konto',`<div class="account-clean">
    <div class="account-status ${signed?'is-on':''}"><span class="account-dot"></span><div><strong>${cloudText}</strong><div class="muted account-small">${signed?'Cloud-Synchronisierung aktiv · Daten werden automatisch gespeichert.':'Einmal anmelden, danach werden deine Studyplaner-Daten automatisch synchronisiert.'}</div></div></div>
    ${signed ? `<div class="account-actions"><button class="btn secondary" onclick="cloudLogout();closeModal()">Abmelden</button></div>` : `<div class="account-login"><button class="btn full" onclick="cloudGoogleAuth()">🔵 Mit Google anmelden</button><div class="account-or"><span></span>oder<span></span></div><div class="account-login-grid"><input id="cEmail" type="email" placeholder="E-Mail"><input id="cPassword" type="password" placeholder="Passwort"><select id="cAction"><option value="login">Anmelden</option><option value="signup">Konto erstellen</option></select></div><button class="btn full" style="margin-top:8px" onclick="cloudEmailAuth()">☁️ Mit E-Mail anmelden</button></div>`}
@@ -5814,6 +5828,14 @@ async function cloudGoogleAuth(){
   if(!fb || !fb.auth){
    alert('Die Cloud-Verbindung ist noch nicht bereit. Bitte kurz warten und erneut auf „Mit Google anmelden“ klicken.');
    return;
+  }
+  // Firebase Auth can already have a restored session even if the app-level
+  // auth-state callback has not fired yet. Keep our state in sync.
+  if(fb.auth.currentUser){
+   currentUser=fb.auth.currentUser;
+   window.currentUser=currentUser;
+   cloudEnabled=true;
+   window.cloudEnabled=true;
   }
 
   const provider=new firebase.auth.GoogleAuthProvider();
@@ -7499,8 +7521,12 @@ function renderStudyTimer(){
           if(user){
             window.currentUser=user;
             window.cloudEnabled=true;
+            try{ currentUser=user; cloudEnabled=true; }catch(e){}
             setStatus('connected','Cloud: verbunden','Automatische Synchronisierung aktiv');
           }else{
+            window.currentUser=null;
+            window.cloudEnabled=false;
+            try{ currentUser=null; cloudEnabled=false; }catch(e){}
             setStatus('offline','Cloud: nicht verbunden','Bitte anmelden');
           }
         });
