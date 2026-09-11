@@ -7491,7 +7491,7 @@ function renderStudyTimer(){
 (function(){
   if('serviceWorker' in navigator){
     window.addEventListener('load', function(){
-      navigator.serviceWorker.register('./sw.js').catch(function(err){
+      navigator.serviceWorker.register('./sw.js?v=314').then(function(reg){ try{ reg.update(); }catch(e){} }).catch(function(err){
         console.warn('PWA Service Worker konnte nicht registriert werden:', err);
       });
     });
