@@ -3982,7 +3982,7 @@ aside.sidebar{
   }
 }
 </style>
-<meta name="msp-version" content="v318-cloud-authoritative"><!-- v318: cloud-authoritative refresh -->
+<meta name="msp-version" content="v329-auth-persistence"><!-- v318: cloud-authoritative refresh -->
 <meta name="msp-version" content="v328">
 </head>
 <body>
@@ -5745,27 +5745,8 @@ function mergeCloudWithLocal(cloudData,localData){
  );
  return merged;
 }
-async function mspRestoreFirebaseSessionIfNeeded(){
-  try{
-    if(!fb||!fb.auth)return false;
-    // Firebase LOCAL persistence should normally restore the user itself.
-    // If the browser/PWA loses that Auth state after a reload, use the
-    // previously stored signed-in marker to perform one normal Firebase
-    // Google redirect. This is only a recovery path; no marker means no
-    // automatic login attempt. A deliberate logout removes the marker.
-    if(fb.auth.currentUser)return true;
-    let marker=null;
-    try{ marker=JSON.parse(localStorage.getItem('msp_auth_session_marker')||'null'); }catch(e){}
-    if(!marker||!marker.uid||!marker.email)return false;
-    const provider=new firebase.auth.GoogleAuthProvider();
-    provider.setCustomParameters({prompt:'none'});
-    await fb.auth.signInWithRedirect(provider);
-    return true;
-  }catch(e){
-    console.warn('Firebase Session-Recovery:',e);
-    return false;
-  }
-}
+async function mspRestoreFirebaseSessionIfNeeded(){ return false; }
+
 async function initCloud(){
   const cfg=getFirebaseConfig();
   if(!cfg||!cfg.apiKey){
@@ -5784,6 +5765,8 @@ async function initCloud(){
     // Configure it once, before the sign-in flow, and do not run custom
     // re-authentication logic on reload.
     try{
+      // Explicitly use Firebase's browser LOCAL persistence. Do this before
+      // registering auth listeners or starting any sign-in flow.
       await fb.auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
       window.mspAuthPersistence='LOCAL';
       window.mspAuthPersistenceError=null;
@@ -5804,9 +5787,6 @@ async function initCloud(){
     // a deliberate Google login, recover it once via Firebase's own redirect
     // flow. This prevents a manual login on every page reload while avoiding
     // any custom token/session handling.
-    if(!fb.auth.currentUser){
-      try{ await mspRestoreFirebaseSessionIfNeeded(); }catch(e){console.warn('Firebase session recovery:',e)}
-    }
 
     fb.auth.onAuthStateChanged(async user=>{
       const generation=++cloudSyncGeneration;
@@ -5830,7 +5810,6 @@ async function initCloud(){
       }
 
       updateCloudStatus(true,user.email||'Angemeldet');
-      try{localStorage.setItem('msp_auth_session_marker',JSON.stringify({email:user.email||'',uid:user.uid,at:Date.now()}))}catch(e){}
 
       const ref=fb.db.collection('users').doc(user.uid);
       cloudHydrating=true;
@@ -5987,7 +5966,11 @@ async function showCloudDiagnostics(){
   const rd=remote&&Array.isArray(remote.deadlines)?remote.deadlines:[];
   const titles=rt.slice(-5).map(x=>'• '+(x.title||'(ohne Titel)')).join('\n')||'Keine Aufgaben';
   let persist='unbekannt';
-  try{persist=window.mspAuthPersistenceError?'FEHLER: '+(window.mspAuthPersistenceError.message||window.mspAuthPersistenceError):(fb&&fb.auth&&fb.auth.currentUser?'LOCAL (angemeldet)':'LOCAL (kein User nach Auth-Init)');}catch(e){}
+  try{
+    const authKey='firebase:authUser:'+getFirebaseConfig().apiKey+':[DEFAULT]';
+    const stored=localStorage.getItem(authKey);
+    persist=window.mspAuthPersistenceError?'FEHLER: '+(window.mspAuthPersistenceError.message||window.mspAuthPersistenceError):(stored?'LOCAL-Speicher vorhanden':'LOCAL-Speicher NICHT vorhanden');
+  }catch(e){persist='Speicherprüfung fehlgeschlagen: '+(e.message||e)}
   alert('🔎 Cloud-Diagnose\n\nE-Mail: '+(u.email||'')+'\nFirebase-UID: '+u.uid+'\nAuth-Persistenz: '+persist+'\nDokument vorhanden: '+(snap.exists?'JA':'NEIN')+'\nAufgaben in Firestore: '+rt.length+'\nDeadlines in Firestore: '+rd.length+'\n\nLetzte Aufgaben:\n'+titles);
  }catch(e){alert('❌ Diagnose fehlgeschlagen.\n\n'+(e&&e.message?e.message:e));}
 }
@@ -5998,7 +5981,20 @@ async function cloudGoogleAuth(){
  // This also covers a fast click immediately after opening the account window.
  try{
   if(!fb){
-   if(typeof initCloud==='function') initCloud();
+   if(typeof initCloud==='function') (async function disableLegacyStudyplanerServiceWorkers(){
+  try{
+    if('serviceWorker' in navigator){
+      const regs=await navigator.serviceWorker.getRegistrations();
+      for(const reg of regs){ try{ await reg.unregister(); }catch(e){} }
+    }
+    if(window.caches){
+      const keys=await caches.keys();
+      await Promise.all(keys.filter(k=>String(k).indexOf('mystudyplaner-')===0).map(k=>caches.delete(k)));
+    }
+  }catch(e){ console.warn('PWA cleanup:',e); }
+})();
+
+initCloud();
    const readiness = window.mspCloudReadyPromise || cloudReadyPromise;
    const ready=readiness ? await Promise.race([
     readiness,
@@ -6092,7 +6088,7 @@ async function cloudAuth(){
   closeModal()
  }catch(e){alert('Anmeldung fehlgeschlagen: '+e.message)}
 }
-async function cloudLogout(){if(fb){await fb.auth.signOut();try{localStorage.removeItem('msp_auth_session_marker')}catch(e){}closeModal()}}
+async function cloudLogout(){if(fb){await fb.auth.signOut();closeModal()}}
 
 /* ---------- Google Kalender ---------- */
 const GOOGLE_CONFIG_KEY='mystudyplaner_google_calendar_v1';
@@ -7678,19 +7674,6 @@ function renderStudyTimer(){
       if(ctx.state==='suspended') ctx.resume().then(run); else run();
     }catch(e){}
   };
-})();
-</script>
-
-
-<script id="msp-pwa-registration">
-(function(){
-  if('serviceWorker' in navigator){
-    window.addEventListener('load', function(){
-      navigator.serviceWorker.register('./sw.js?v=326').then(function(reg){ try{ reg.update(); }catch(e){} }).catch(function(err){
-        console.warn('PWA Service Worker konnte nicht registriert werden:', err);
-      });
-    });
-  }
 })();
 </script>
 

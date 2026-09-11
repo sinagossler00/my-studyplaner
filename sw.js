@@ -1,4 +1,4 @@
-const CACHE = 'mystudyplaner-v328';
+const CACHE = 'mystudyplaner-v329';
 const CORE = ['./', './index.html'];
 
 self.addEventListener('install', event => {
