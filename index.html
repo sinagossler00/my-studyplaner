@@ -5626,8 +5626,8 @@ function getFirebaseConfig(){
 window.MSP_FIREBASE_CONFIG=getFirebaseConfig();
 // Cloud readiness: the Firebase SDK/auth setup is asynchronous during page load.
 // Keep actions from racing that initialization; callers can safely wait for fb.
-let cloudReadyResolve;
-const cloudReadyPromise=new Promise(resolve=>{cloudReadyResolve=resolve});
+var cloudReadyResolve;
+var cloudReadyPromise=window.mspCloudReadyPromise=new Promise(function(resolve){cloudReadyResolve=resolve});
 async function initCloud(){
  const cfg=getFirebaseConfig();
  if(!cfg||!cfg.apiKey){updateCloudStatus(false);cloudReadyResolve(null);return}
@@ -5793,10 +5793,11 @@ async function cloudGoogleAuth(){
  try{
   if(!fb){
    if(typeof initCloud==='function') initCloud();
-   const ready=await Promise.race([
-    cloudReadyPromise,
+   const readiness = window.mspCloudReadyPromise || cloudReadyPromise;
+   const ready=readiness ? await Promise.race([
+    readiness,
     new Promise(resolve=>setTimeout(()=>resolve(null),12000))
-   ]);
+   ]) : null;
    if(ready) fb=ready;
   }
 
@@ -5841,7 +5842,7 @@ async function cloudGoogleAuth(){
 
 async function cloudAuth(){
  if(!fb){
-  const ready=await Promise.race([cloudReadyPromise,new Promise(resolve=>setTimeout(()=>resolve(null),8000))]);
+  const ready=await Promise.race([(window.mspCloudReadyPromise || cloudReadyPromise),new Promise(resolve=>setTimeout(()=>resolve(null),8000))]);
   if(!ready){alert('Die Cloud-Verbindung konnte nicht hergestellt werden. Bitte Internetverbindung prüfen und die Seite einmal neu laden.');return}
   fb=ready;
  }
@@ -6189,7 +6190,7 @@ initCloud();
 // Complete a Firebase redirect login when the browser returns to GitHub Pages.
 (async()=>{
  try{
-  const ready=await Promise.race([cloudReadyPromise,new Promise(resolve=>setTimeout(()=>resolve(null),12000))]);
+  const ready=await Promise.race([window.mspCloudReadyPromise || cloudReadyPromise,new Promise(resolve=>setTimeout(()=>resolve(null),12000))]);
   if(ready && ready.auth){
    const result=await ready.auth.getRedirectResult();
    if(result && result.user) closeModal();
