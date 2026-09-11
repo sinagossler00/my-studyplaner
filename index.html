@@ -4323,31 +4323,31 @@ let deadlineFilter='all',taskFilter='open',taskTimeFilter='all',taskSort='deadli
 const $=id=>document.getElementById(id);
 function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]))}
 function saveLocal(){localStorage.setItem(KEY,JSON.stringify(data))}
-let cloudSaveChain=Promise.resolve();
-let cloudLastWriteAt=0;
-async function writeCloudData(snapshot){
- if(!(cloudEnabled&&currentUser&&fb))return false;
- try{
-  const payload={data:structuredClone(snapshot),updatedAt:firebase.firestore.FieldValue.serverTimestamp()};
-  await fb.db.collection('users').doc(currentUser.uid).set(payload,{merge:true});
-  cloudLastWriteAt=Date.now();
-  if(window.mspSetSyncStatus)window.mspSetSyncStatus('connected','Cloud: verbunden','Gerade synchronisiert');
-  return true;
- }catch(e){
-  console.warn('Cloud-Speichern fehlgeschlagen:',e);
-  if(window.mspSetSyncStatus)window.mspSetSyncStatus('offline','Cloud: Sync fehlgeschlagen','Wird erneut versucht');
-  return false;
- }
-}
-async function saveData(){
- saveLocal();
- const snapshot=structuredClone(data);
- if(cloudEnabled&&currentUser&&fb){
-  cloudSaveChain=cloudSaveChain.then(()=>writeCloudData(snapshot));
-  await cloudSaveChain;
- }
+let cloudSavePromise=Promise.resolve();
+let cloudListenerReady=false;
+let cloudSyncGeneration=0;
+
+async function writeCloudData(){
+ if(!cloudEnabled||!currentUser||!fb)return;
+ const ref=fb.db.collection('users').doc(currentUser.uid);
+ await ref.set({data,updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});
+ if(window.mspSetSyncStatus)window.mspSetSyncStatus('connected','Cloud: verbunden','Gerade synchronisiert');
 }
 
+async function saveData(){
+ saveLocal();
+ if(!cloudEnabled||!currentUser||!fb)return;
+ // Serialize writes so quick consecutive edits cannot overwrite each other.
+ cloudSavePromise=cloudSavePromise.then(async()=>{
+  if(!cloudEnabled||!currentUser||!fb)return;
+  try{await writeCloudData();}
+  catch(e){
+   console.warn('Cloud-Sync:',e);
+   if(window.mspSetSyncStatus)window.mspSetSyncStatus('offline','Cloud: Sync fehlgeschlagen','Wird erneut versucht');
+  }
+ });
+ return cloudSavePromise;
+}
 function fmt(d){return new Date(d+'T12:00:00').toLocaleDateString('de-DE',{day:'2-digit',month:'short',year:'numeric'})}
 function dateBox(d){let x=new Date(d+'T12:00:00');return `<strong>${x.getDate()}</strong><span>${x.toLocaleDateString('de-DE',{month:'short'}).replace('.','').toUpperCase()}</span>`}
 function matches(x){let q=$('search').value.toLowerCase();return !q||JSON.stringify(x).toLowerCase().includes(q)}
@@ -5196,29 +5196,25 @@ function renderPlannerWeekCalendar(box,title,weekdays){
 function openModal(title,body){$('modalTitle').textContent=title;$('modalBody').innerHTML=body;$('modal').classList.add('show')}
 function closeModal(){$('modal').classList.remove('show')}
 function openDeadline(){openModal('Neuer Deadline-Eintrag',`<form onsubmit="addDeadline(event)"><div class="form-grid"><div><label>Art</label><select id="dType"><option value="task">Aufgabe / Abgabe</option><option value="reg">Anmeldung / Termin</option></select></div><div><label>Datum</label><input id="dDate" type="date" required></div>
-  <div><label>Uhrzeit (optional)</label><input id="dTime" type="time"></div><div class="wide"><label>Titel</label><input id="dTitle" placeholder="z. B. Hausarbeit abgeben" required></div><div class="wide"><label>Modul (optional)</label><input id="dModule" placeholder="z. B. Statistik 1"></div><div class="wide"><label>Priorität</label><select id="dPriority"><option value="leicht">🟢 Leicht</option><option value="mittel" selected>🟡 Mittel</option><option value="hoch">🔴 Hoch</option></select></div><div class="wide"><label>🔔 Erinnerung</label><select id="dReminder"><option value="none" selected>Keine Erinnerung</option><option value="7">7 Tage vorher</option><option value="3">3 Tage vorher</option><option value="1">1 Tag vorher</option><option value="0">Am Tag selbst</option></select></div></div><br><button class="btn" type="submit">💾 Speichern</button></form>`)}
+  <div><label>Uhrzeit (optional)</label><input id="dTime" type="time"></div><div class="wide"><label>Titel</label><input id="dTitle" placeholder="z. B. Hausarbeit abgeben" required></div><div class="wide"><label>Modul (optional)</label><input id="dModule" placeholder="z. B. Statistik 1"></div><div class="wide"><label>Priorität</label><select id="dPriority"><option value="leicht">🟢 Leicht</option><option value="mittel" selected>🟡 Mittel</option><option value="hoch">🔴 Hoch</option></select></div></div><br><button class="btn" type="submit">💾 Speichern</button></form>`)}
 async function addDeadline(e){
  e.preventDefault();
- const title=($('dTitle')?.value||'').trim();
- const date=$('dDate')?.value||'';
- if(!title||!date)return;
- if(!Array.isArray(data.deadlines))data.deadlines=[];
  data.deadlines.push({
-  id:'dl-'+Date.now()+'-'+Math.random().toString(16).slice(2),
-  title,
-  date,
-  type:$('dType')?.value||'task',
-  module:($('dModule')?.value||'').trim(),
-  time:$('dTime')?.value||'',
-  priority:$('dPriority')?.value||'mittel',
-  reminder:$('dReminder')?.value||'none'
+  id:Date.now(),
+  title:dTitle.value.trim(),
+  date:dDate.value,
+  type:dType.value,
+  module:dModule.value.trim(),
+  time:dTime.value||'',
+  priority:dPriority.value||'mittel',
+  reminder:'none'
  });
  await saveData();
  closeModal();
  renderAll();
 }
 async function deleteDeadline(id){
- data.deadlines=data.deadlines.filter(x=>String(x.id)!==String(id));
+ data.deadlines=data.deadlines.filter(x=>Number(x.id)!==Number(id));
  renderAll();
  try{await saveData()}catch(err){console.warn('Speichern nach Löschen fehlgeschlagen',err)}
 }
@@ -5243,7 +5239,8 @@ function editDeadline(id){
      <option value="hoch" ${d.priority==='hoch'?'selected':''}>🔴 Hoch</option>
     </select>
    </div>
-   <div class="wide"><label>🔔 Erinnerung</label><select id="dReminder">
+   <div class="wide"><label>🔔 Erinnerung</label>
+
      <option value="none" ${String(d.reminder??"none")==="none"?"selected":""}>Keine Erinnerung</option>
      <option value="7" ${String(d.reminder)==="7"?"selected":""}>7 Tage vorher</option>
      <option value="3" ${String(d.reminder)==="3"?"selected":""}>3 Tage vorher</option>
@@ -5264,7 +5261,6 @@ async function updateDeadline(e,id){
  d.module=dModule.value;
  d.time=dTime.value||'';
  d.priority=dPriority.value||'mittel';
- d.reminder=$('dReminder')?.value||'none';
 
  await saveData();closeModal();renderAll()
 }
@@ -5297,17 +5293,10 @@ async function updateTask(e,id){
 }
 
 function openTask(){openModal('Neue Aufgabe',`<form onsubmit="addTask(event)"><div class="form-grid"><div class="wide"><label>Aufgabe</label><input id="tTitle" placeholder="z. B. Kapitel 4 lesen" required></div><div><label>Rhythmus</label><select id="tPeriod"><option>wöchentlich</option><option>monatlich</option><option>einmalig</option></select></div><div><label>Modul</label><input id="tModule" placeholder="z. B. Entwicklungspsychologie"></div><div><label>Frist</label><input id="tDeadline" type="date"></div></div><br><button class="btn" type="submit">Aufgabe speichern</button></form>`)}
-async function addTask(e){
- e.preventDefault();
- const title=($('tTitle')?.value||'').trim();
- if(!title)return;
- if(!Array.isArray(data.tasks))data.tasks=[];
- data.tasks.push({id:'task-'+Date.now()+'-'+Math.random().toString(16).slice(2),title,period:$('tPeriod')?.value||'einmalig',module:($('tModule')?.value||'').trim(),moduleId:'',deadline:$('tDeadline')?.value||'',done:false});
- await saveData();closeModal();renderAll();
-}
+async function addTask(e){e.preventDefault();data.tasks.push({id:Date.now(),title:tTitle.value,period:tPeriod.value,module:tModule.value.trim(),moduleId:'',deadline:tDeadline.value||'',done:false});await saveData();closeModal();renderAll()}
 async function toggleTask(id){let t=data.tasks.find(x=>x.id===id);if(t)t.done=!t.done;await saveData();renderAll()}
 async function deleteTask(id){
- data.tasks=data.tasks.filter(x=>String(x.id)!==String(id));
+ data.tasks=data.tasks.filter(x=>Number(x.id)!==Number(id));
  renderAll();
  try{await saveData()}catch(err){console.warn('Speichern nach Löschen fehlgeschlagen',err)}
 }
@@ -5674,163 +5663,117 @@ window.MSP_FIREBASE_CONFIG=getFirebaseConfig();
 // Keep actions from racing that initialization; callers can safely wait for fb.
 var cloudReadyResolve;
 var cloudReadyPromise=window.mspCloudReadyPromise=new Promise(function(resolve){cloudReadyResolve=resolve});
+
+function mergeArrayById(cloudArr,localArr){
+ const cloud=Array.isArray(cloudArr)?cloudArr:[];
+ const local=Array.isArray(localArr)?localArr:[];
+ const result=[],seen=new Set();
+ for(const item of [...cloud,...local]){
+  if(item==null)continue;
+  const id=typeof item==='object'&&item.id!=null?String(item.id):'';
+  const key=id||JSON.stringify(item);
+  if(seen.has(key))continue;
+  seen.add(key);result.push(item);
+ }
+ return result;
+}
+function mergeCloudWithLocal(cloudData,localData){
+ const merged=Object.assign(structuredClone(defaultData),structuredClone(cloudData||{}));
+ const keys=['deadlines','tasks','files','fileFolders','modules','notes','podcasts','gradeModules','grades','uniLinks'];
+ for(const k of keys)merged[k]=mergeArrayById(cloudData&&cloudData[k],localData&&localData[k]);
+ merged.plantMinutes=Math.max(
+  Number.isFinite(Number(cloudData&&cloudData.plantMinutes))?Number(cloudData.plantMinutes):0,
+  Number.isFinite(Number(localData&&localData.plantMinutes))?Number(localData.plantMinutes):0,
+  Number(localStorage.getItem('msp_total_learning_minutes')||0)||0
+ );
+ return merged;
+}
 async function initCloud(){
  const cfg=getFirebaseConfig();
  if(!cfg||!cfg.apiKey){updateCloudStatus(false);cloudReadyResolve(null);return}
  try{
   if(!firebase.apps.length)firebase.initializeApp(cfg);
   fb={auth:firebase.auth(),db:firebase.firestore()};
-  // Keep the Firebase login on this device so the next visit restores the
-  // same cloud account automatically (also on mobile/tablet browsers).
   fb.auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(e=>console.warn('Auth-Persistenz:',e));
   cloudReadyResolve(fb);
+
   fb.auth.onAuthStateChanged(async user=>{
+   const generation=++cloudSyncGeneration;
    currentUser=user;
-   // Keep both the module variable and window properties in sync. Other
-   // app components use the window properties to display cloud status.
    window.currentUser=user;
    window.cloudEnabled=!!user;
-
+   cloudListenerReady=false;
    if(cloudUnsubscribe){cloudUnsubscribe();cloudUnsubscribe=null;}
 
-   if(user){
-    cloudEnabled=true;
-    updateCloudStatus(true,user.email||'Angemeldet');
-
-    try{
-     const localBeforeCloud=structuredClone(data||{});
-     const localLinks=(typeof getLocalUniLinks==='function')?getLocalUniLinks():[];
-     const ref=fb.db.collection('users').doc(user.uid);
-     const snap=await ref.get();
-
-     if(snap.exists&&snap.data().data){
-      const cloudData=snap.data().data||{};
-
-      const mergeById=(cloudArr,localArr)=>{
-       const result=[],seen=new Set();
-       [...(Array.isArray(cloudArr)?cloudArr:[]),...(Array.isArray(localArr)?localArr:[])].forEach(item=>{
-        if(!item)return;
-        const id=String(item.id??'');
-        const key=id||JSON.stringify(item);
-        if(seen.has(key))return;
-        seen.add(key);
-        result.push(item);
-       });
-       return result;
-      };
-
-      cloudData.gradeModules=mergeById(cloudData.gradeModules,localBeforeCloud.gradeModules);
-      cloudData.grades=mergeById(cloudData.grades,localBeforeCloud.grades);
-
-      // Plant growth is cumulative, so keep the furthest/most advanced state
-      // from either this device or the cloud.
-      const cloudPlant=Number(cloudData.plantMinutes);
-      const localPlant=Number(localBeforeCloud.plantMinutes);
-      const legacyPlant=Number(localStorage.getItem('msp_total_learning_minutes')||0);
-      cloudData.plantMinutes=Math.max(
-        Number.isFinite(cloudPlant)?cloudPlant:0,
-        Number.isFinite(localPlant)?localPlant:0,
-        Number.isFinite(legacyPlant)?legacyPlant:0
-      );
-
-      const cloudLinks=Array.isArray(cloudData.uniLinks)?cloudData.uniLinks:[];
-      cloudData.uniLinks=mergeById(cloudLinks,localLinks);
-
-      data=cloudData;
-      data.gradeModules=Array.isArray(data.gradeModules)?data.gradeModules:[];
-      data.grades=Array.isArray(data.grades)?data.grades:[];
-
-      saveLocal();
-      await ref.set({data,updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});
-      renderAll();
-     }else{
-      data.gradeModules=Array.isArray(data.gradeModules)?data.gradeModules:[];
-      data.grades=Array.isArray(data.grades)?data.grades:[];
-      const legacyPlant=Number(localStorage.getItem('msp_total_learning_minutes')||0);
-      data.plantMinutes=Math.max(
-        Number.isFinite(Number(data.plantMinutes))?Number(data.plantMinutes):0,
-        Number.isFinite(legacyPlant)?legacyPlant:0
-      );
-      data.uniLinks=Array.isArray(data.uniLinks)?data.uniLinks:[];
-      data.uniLinks=mergeById(data.uniLinks,localLinks);
-      await saveData();
-      renderAll();
-     }
-
-     // Real-time sync: the complete Studyplaner data object is synchronized,
-     // not only grades/links. This is important when another phone/tablet/PC
-     // creates or changes tasks, deadlines, modules, notes, etc.
-     cloudInitialSyncDone=false;
-     cloudUnsubscribe=ref.onSnapshot(async remoteSnap=>{
-      if(!remoteSnap.exists||!remoteSnap.data().data)return;
-      const remoteData=remoteSnap.data().data||{};
-      const remoteUpdatedAt=remoteSnap.data().updatedAt;
-      const remoteMs=remoteUpdatedAt&&typeof remoteUpdatedAt.toMillis==='function'?remoteUpdatedAt.toMillis():0;
-
-      if(!cloudInitialSyncDone){
-       // First snapshot after login: keep local-only records from this device,
-       // then upload the combined dataset so no device loses newly created data.
-       const localBeforeSnapshot=structuredClone(data||{});
-       const base=Object.assign(structuredClone(defaultData),remoteData);
-       const arrayKeys=[
-        'deadlines','tasks','files','fileFolders','modules','notes','podcasts',
-        'gradeModules','grades','uniLinks'
-       ];
-       const mergeById=(cloudArr,localArr)=>{
-        const result=[],seen=new Set();
-        [...(Array.isArray(cloudArr)?cloudArr:[]),...(Array.isArray(localArr)?localArr:[])].forEach(item=>{
-         if(item==null)return;
-         const id=(typeof item==='object')?String(item.id??''):'';
-         const key=id||JSON.stringify(item);
-         if(seen.has(key))return;
-         seen.add(key);result.push(item);
-        });
-        return result;
-       };
-       arrayKeys.forEach(k=>{
-        base[k]=mergeById(remoteData[k],localBeforeSnapshot[k]);
-       });
-       const remotePlant=Number(remoteData.plantMinutes);
-       const localPlant=Number(localBeforeSnapshot.plantMinutes);
-       const legacyPlant=Number(localStorage.getItem('msp_total_learning_minutes')||0);
-       base.plantMinutes=Math.max(
-        Number.isFinite(remotePlant)?remotePlant:0,
-        Number.isFinite(localPlant)?localPlant:0,
-        Number.isFinite(legacyPlant)?legacyPlant:0
-       );
-       data=base;
-       saveLocal();
-       await ref.set({data,updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});
-       cloudInitialSyncDone=true;
-       renderAll();
-       return;
-      }
-
-      // After the initial merge, accept remote changes normally. A snapshot
-      // generated by a local write can arrive immediately; never let a stale
-      // snapshot replace data that was just saved locally.
-      if(cloudLastWriteAt && remoteMs && remoteMs < cloudLastWriteAt-2000)return;
-      const next=Object.assign(structuredClone(defaultData),remoteData);
-      const remotePlant=Number(remoteData.plantMinutes);
-      const localPlant=Number(data.plantMinutes);
-      if(Number.isFinite(localPlant)&&localPlant>Number(next.plantMinutes||0)){
-       next.plantMinutes=localPlant;
-      }
-      const changed=JSON.stringify(data)!==JSON.stringify(next);
-      if(changed){
-       data=next;
-       saveLocal();
-       renderAll();
-      }
-     },err=>console.warn('Cloud-Echtzeit-Sync:',err));
-
-    }catch(e){console.warn('Cloud-Sync:',e)}
-   }else{
-    cloudInitialSyncDone=false;
+   if(!user){
     cloudEnabled=false;
     window.cloudEnabled=false;
-    window.currentUser=null;
     updateCloudStatus(false);
+    return;
+   }
+
+   cloudEnabled=true;
+   updateCloudStatus(true,user.email||'Angemeldet');
+   const ref=fb.db.collection('users').doc(user.uid);
+
+   try{
+    const localData=structuredClone(data||{});
+    const snap=await ref.get();
+    if(generation!==cloudSyncGeneration||!currentUser||currentUser.uid!==user.uid)return;
+
+    if(snap.exists&&snap.data().data){
+     // Existing cloud data wins for existing records; local-only records are kept.
+     data=mergeCloudWithLocal(snap.data().data||{},localData);
+    }else{
+     data=mergeCloudWithLocal({},localData);
+    }
+
+    data.deadlines=Array.isArray(data.deadlines)?data.deadlines:[];
+    data.tasks=Array.isArray(data.tasks)?data.tasks:[];
+    data.files=Array.isArray(data.files)?data.files:[];
+    data.fileFolders=Array.isArray(data.fileFolders)?data.fileFolders:[];
+    data.modules=Array.isArray(data.modules)?data.modules:[];
+    data.notes=Array.isArray(data.notes)?data.notes:[];
+    data.podcasts=Array.isArray(data.podcasts)?data.podcasts:[];
+    data.gradeModules=Array.isArray(data.gradeModules)?data.gradeModules:[];
+    data.grades=Array.isArray(data.grades)?data.grades:[];
+    data.uniLinks=Array.isArray(data.uniLinks)?data.uniLinks:[];
+    saveLocal();
+    renderAll();
+
+    // Ensure the merged data exists in the cloud before listening for changes.
+    await writeCloudData();
+    if(generation!==cloudSyncGeneration||!currentUser||currentUser.uid!==user.uid)return;
+
+    cloudListenerReady=true;
+    cloudUnsubscribe=ref.onSnapshot(remoteSnap=>{
+     if(generation!==cloudSyncGeneration||!cloudListenerReady||!remoteSnap.exists)return;
+     const remote=remoteSnap.data()||{};
+     if(!remote.data)return;
+     const next=Object.assign(structuredClone(defaultData),remote.data);
+     next.deadlines=Array.isArray(next.deadlines)?next.deadlines:[];
+     next.tasks=Array.isArray(next.tasks)?next.tasks:[];
+     next.files=Array.isArray(next.files)?next.files:[];
+     next.fileFolders=Array.isArray(next.fileFolders)?next.fileFolders:[];
+     next.modules=Array.isArray(next.modules)?next.modules:[];
+     next.notes=Array.isArray(next.notes)?next.notes:[];
+     next.podcasts=Array.isArray(next.podcasts)?next.podcasts:[];
+     next.gradeModules=Array.isArray(next.gradeModules)?next.gradeModules:[];
+     next.grades=Array.isArray(next.grades)?next.grades:[];
+     next.uniLinks=Array.isArray(next.uniLinks)?next.uniLinks:[];
+     if(JSON.stringify(next)!==JSON.stringify(data)){
+      data=next;
+      saveLocal();
+      renderAll();
+     }
+     if(window.mspSetSyncStatus)window.mspSetSyncStatus('connected','Cloud: verbunden','Synchronisiert');
+    },err=>{
+     console.warn('Cloud-Echtzeit-Sync:',err);
+     if(window.mspSetSyncStatus)window.mspSetSyncStatus('offline','Cloud: Sync fehlgeschlagen','Wird erneut versucht');
+    });
+   }catch(e){
+    console.warn('Cloud-Initialisierung/Synchronisierung:',e);
+    if(window.mspSetSyncStatus)window.mspSetSyncStatus('offline','Cloud: Sync fehlgeschlagen',e.message||'Bitte Firebase prüfen');
    }
   });
  }catch(e){
@@ -5839,6 +5782,7 @@ async function initCloud(){
   updateCloudStatus(false,'Cloud nicht bereit');
  }
 }
+
 function updateCloudStatus(on,label){$('cloudStatus').innerHTML=`<span class="dot ${on?'on':''}"></span><span>${esc(label||'Nur auf diesem Gerät')}</span>`}
 function refreshAccountCloudState(){
  try{
@@ -8580,23 +8524,6 @@ document.addEventListener('DOMContentLoaded', function(){
   window.addEventListener('load',scheduleHomeRender,{once:true});
   window.addEventListener('pageshow',scheduleHomeRender);
 })();
-
-async function refreshCloudFromServer(){
- if(!(currentUser&&fb&&cloudEnabled))return;
- try{
-  const snap=await fb.db.collection('users').doc(currentUser.uid).get();
-  if(!snap.exists||!snap.data().data)return;
-  const remote=snap.data().data;
-  const remoteJson=JSON.stringify(remote);
-  if(remoteJson!==JSON.stringify(data)){
-   data=Object.assign(structuredClone(defaultData),remote);
-   saveLocal();
-   renderAll();
-  }
- }catch(e){console.warn('Cloud-Aktualisierung:',e)}
-}
-window.addEventListener('online',()=>{ if(currentUser&&fb&&cloudEnabled) refreshCloudFromServer(); });
-document.addEventListener('visibilitychange',()=>{ if(!document.hidden&&currentUser&&fb&&cloudEnabled) refreshCloudFromServer(); });
 </script>
 
 <style id="msp-v285-home-heading-match">
