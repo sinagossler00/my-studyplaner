@@ -6433,15 +6433,54 @@ initCloud();
 // auth state as a real logout while LOCAL persistence is being restored.
 // The main initCloud listener remains the authoritative source.
 // Complete a Firebase redirect login when the browser returns to GitHub Pages.
-(async()=>{
+// If the normal LOCAL persistence was lost (common in some installed-PWA/browser
+// contexts), a previous Google session marker lets us silently re-authenticate
+// with Google's existing session. No password is stored and the user is not
+// asked to select an account again.
+async function mspFinishRedirectAndRestoreAuth(){
  try{
   const ready=await Promise.race([window.mspCloudReadyPromise || cloudReadyPromise,new Promise(resolve=>setTimeout(()=>resolve(null),12000))]);
-  if(ready && ready.auth){
+  if(!ready || !ready.auth)return;
+
+  let redirectError=null;
+  try{
    const result=await ready.auth.getRedirectResult();
-   if(result && result.user) closeModal();
+   if(result && result.user){
+    try{localStorage.removeItem('msp_auto_reauth_attempt_at')}catch(e){}
+    return;
+   }
+  }catch(e){
+   redirectError=e;
+   console.warn('Firebase Google Redirect:',e);
+   try{localStorage.removeItem('msp_auto_reauth_attempt_at')}catch(x){}
   }
- }catch(e){console.warn('Firebase Google Redirect:',e)}
-})();
+
+  // Wait for Firebase's initial auth callback. Only attempt automatic
+  // re-authentication if we previously had a successful Google session.
+  if(window.mspCloudAuthStatePromise){
+   try{await Promise.race([window.mspCloudAuthStatePromise,new Promise(resolve=>setTimeout(resolve,12000))])}catch(e){}
+  }
+  if(ready.auth.currentUser)return;
+
+  let marker=null;
+  try{marker=JSON.parse(localStorage.getItem('msp_auth_session_marker')||'null')}catch(e){}
+  if(!marker || !marker.uid)return;
+
+  // Avoid redirect loops if Google cannot silently authenticate (for example
+  // because its session expired or interaction is required).
+  let lastAttempt=0;
+  try{lastAttempt=Number(localStorage.getItem('msp_auto_reauth_attempt_at')||0)}catch(e){}
+  if(Date.now()-lastAttempt<10*60*1000)return;
+
+  try{localStorage.setItem('msp_auto_reauth_attempt_at',String(Date.now()))}catch(e){}
+  const provider=new firebase.auth.GoogleAuthProvider();
+  provider.setCustomParameters({prompt:'none',login_hint:marker.email||''});
+  await ready.auth.signInWithRedirect(provider);
+ }catch(e){
+  console.warn('Firebase automatische Wiederanmeldung:',e);
+ }
+}
+mspFinishRedirectAndRestoreAuth();
 // Initial UI: wait briefly for Firebase's first auth/cloud read so the
 // first visible render uses the cloud state instead of the stale local state.
 (async function initialCloudAwareRender(){
@@ -7702,7 +7741,7 @@ function renderStudyTimer(){
 (function(){
   if('serviceWorker' in navigator){
     window.addEventListener('load', function(){
-      navigator.serviceWorker.register('./sw.js?v=322').then(function(reg){ try{ reg.update(); }catch(e){} }).catch(function(err){
+      navigator.serviceWorker.register('./sw.js?v=326').then(function(reg){ try{ reg.update(); }catch(e){} }).catch(function(err){
         console.warn('PWA Service Worker konnte nicht registriert werden:', err);
       });
     });
