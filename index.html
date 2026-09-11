@@ -4326,28 +4326,48 @@ function saveLocal(){localStorage.setItem(KEY,JSON.stringify(data))}
 let cloudSavePromise=Promise.resolve();
 let cloudListenerReady=false;
 let cloudSyncGeneration=0;
+let cloudHydrating=false;
+
+function sanitizeForFirestore(value){
+  if(value===undefined)return null;
+  if(value===null)return null;
+  if(value instanceof Date)return value;
+  if(Array.isArray(value))return value.map(sanitizeForFirestore);
+  if(typeof value==='object'){
+    const out={};
+    for(const [k,v] of Object.entries(value)){
+      if(v===undefined||typeof v==='function')continue;
+      out[k]=sanitizeForFirestore(v);
+    }
+    return out;
+  }
+  return value;
+}
 
 async function writeCloudData(){
- if(!cloudEnabled||!currentUser||!fb)return;
- const ref=fb.db.collection('users').doc(currentUser.uid);
- await ref.set({data,updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});
- if(window.mspSetSyncStatus)window.mspSetSyncStatus('connected','Cloud: verbunden','Gerade synchronisiert');
+  if(!cloudEnabled||!currentUser||!fb)return false;
+  const ref=fb.db.collection('users').doc(currentUser.uid);
+  const safeData=sanitizeForFirestore(structuredClone(data));
+  await ref.set({data:safeData,updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true});
+  if(window.mspSetSyncStatus)window.mspSetSyncStatus('connected','Cloud: verbunden','Gerade synchronisiert');
+  return true;
 }
 
 async function saveData(){
- saveLocal();
- if(!cloudEnabled||!currentUser||!fb)return;
- // Serialize writes so quick consecutive edits cannot overwrite each other.
- cloudSavePromise=cloudSavePromise.then(async()=>{
-  if(!cloudEnabled||!currentUser||!fb)return;
-  try{await writeCloudData();}
-  catch(e){
-   console.warn('Cloud-Sync:',e);
-   if(window.mspSetSyncStatus)window.mspSetSyncStatus('offline','Cloud: Sync fehlgeschlagen','Wird erneut versucht');
-  }
- });
- return cloudSavePromise;
+  saveLocal();
+  if(!cloudEnabled||!currentUser||!fb||cloudHydrating)return false;
+  cloudSavePromise=cloudSavePromise.then(async()=>{
+    if(!cloudEnabled||!currentUser||!fb||cloudHydrating)return false;
+    try{return await writeCloudData();}
+    catch(e){
+      console.error('Cloud-Sync fehlgeschlagen:',e);
+      if(window.mspSetSyncStatus)window.mspSetSyncStatus('offline','Cloud: Sync fehlgeschlagen',e&&e.message?e.message:'Firestore-Schreibfehler');
+      return false;
+    }
+  });
+  return cloudSavePromise;
 }
+
 function fmt(d){return new Date(d+'T12:00:00').toLocaleDateString('de-DE',{day:'2-digit',month:'short',year:'numeric'})}
 function dateBox(d){let x=new Date(d+'T12:00:00');return `<strong>${x.getDate()}</strong><span>${x.toLocaleDateString('de-DE',{month:'short'}).replace('.','').toUpperCase()}</span>`}
 function matches(x){let q=$('search').value.toLowerCase();return !q||JSON.stringify(x).toLowerCase().includes(q)}
@@ -5689,98 +5709,96 @@ function mergeCloudWithLocal(cloudData,localData){
  return merged;
 }
 async function initCloud(){
- const cfg=getFirebaseConfig();
- if(!cfg||!cfg.apiKey){updateCloudStatus(false);cloudReadyResolve(null);return}
- try{
-  if(!firebase.apps.length)firebase.initializeApp(cfg);
-  fb={auth:firebase.auth(),db:firebase.firestore()};
-  fb.auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(e=>console.warn('Auth-Persistenz:',e));
-  cloudReadyResolve(fb);
+  const cfg=getFirebaseConfig();
+  if(!cfg||!cfg.apiKey){updateCloudStatus(false);cloudReadyResolve(null);return;}
+  try{
+    if(!firebase.apps.length)firebase.initializeApp(cfg);
+    fb={auth:firebase.auth(),db:firebase.firestore()};
+    try{await fb.auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);}catch(e){console.warn('Auth-Persistenz:',e)}
+    cloudReadyResolve(fb);
 
-  fb.auth.onAuthStateChanged(async user=>{
-   const generation=++cloudSyncGeneration;
-   currentUser=user;
-   window.currentUser=user;
-   window.cloudEnabled=!!user;
-   cloudListenerReady=false;
-   if(cloudUnsubscribe){cloudUnsubscribe();cloudUnsubscribe=null;}
+    fb.auth.onAuthStateChanged(async user=>{
+      const generation=++cloudSyncGeneration;
+      currentUser=user;
+      window.currentUser=user;
+      cloudEnabled=!!user;
+      window.cloudEnabled=!!user;
+      cloudListenerReady=false;
+      if(cloudUnsubscribe){try{cloudUnsubscribe()}catch(e){} cloudUnsubscribe=null;}
 
-   if(!user){
-    cloudEnabled=false;
-    window.cloudEnabled=false;
-    updateCloudStatus(false);
-    return;
-   }
+      if(!user){
+        updateCloudStatus(false);
+        return;
+      }
 
-   cloudEnabled=true;
-   updateCloudStatus(true,user.email||'Angemeldet');
-   const ref=fb.db.collection('users').doc(user.uid);
+      updateCloudStatus(true,user.email||'Angemeldet');
+      const ref=fb.db.collection('users').doc(user.uid);
+      cloudHydrating=true;
+      try{
+        const snap=await ref.get();
+        if(generation!==cloudSyncGeneration||!currentUser||currentUser.uid!==user.uid)return;
 
-   try{
-    const localData=structuredClone(data||{});
-    const snap=await ref.get();
-    if(generation!==cloudSyncGeneration||!currentUser||currentUser.uid!==user.uid)return;
+        if(snap.exists && snap.data() && snap.data().data){
+          // Firestore is the shared source of truth once a cloud document exists.
+          const remote=snap.data().data;
+          data=Object.assign(structuredClone(defaultData),remote);
+        }else{
+          // First login on this account: upload the current local data once.
+          await writeCloudData();
+        }
 
-    if(snap.exists&&snap.data().data){
-     // Existing cloud data wins for existing records; local-only records are kept.
-     data=mergeCloudWithLocal(snap.data().data||{},localData);
-    }else{
-     data=mergeCloudWithLocal({},localData);
-    }
+        data.deadlines=Array.isArray(data.deadlines)?data.deadlines:[];
+        data.tasks=Array.isArray(data.tasks)?data.tasks:[];
+        data.files=Array.isArray(data.files)?data.files:[];
+        data.fileFolders=Array.isArray(data.fileFolders)?data.fileFolders:[];
+        data.modules=Array.isArray(data.modules)?data.modules:[];
+        data.notes=Array.isArray(data.notes)?data.notes:[];
+        data.podcasts=Array.isArray(data.podcasts)?data.podcasts:[];
+        data.gradeModules=Array.isArray(data.gradeModules)?data.gradeModules:[];
+        data.grades=Array.isArray(data.grades)?data.grades:[];
+        data.uniLinks=Array.isArray(data.uniLinks)?data.uniLinks:[];
+        saveLocal();
+        renderAll();
 
-    data.deadlines=Array.isArray(data.deadlines)?data.deadlines:[];
-    data.tasks=Array.isArray(data.tasks)?data.tasks:[];
-    data.files=Array.isArray(data.files)?data.files:[];
-    data.fileFolders=Array.isArray(data.fileFolders)?data.fileFolders:[];
-    data.modules=Array.isArray(data.modules)?data.modules:[];
-    data.notes=Array.isArray(data.notes)?data.notes:[];
-    data.podcasts=Array.isArray(data.podcasts)?data.podcasts:[];
-    data.gradeModules=Array.isArray(data.gradeModules)?data.gradeModules:[];
-    data.grades=Array.isArray(data.grades)?data.grades:[];
-    data.uniLinks=Array.isArray(data.uniLinks)?data.uniLinks:[];
-    saveLocal();
-    renderAll();
-
-    // Ensure the merged data exists in the cloud before listening for changes.
-    await writeCloudData();
-    if(generation!==cloudSyncGeneration||!currentUser||currentUser.uid!==user.uid)return;
-
-    cloudListenerReady=true;
-    cloudUnsubscribe=ref.onSnapshot(remoteSnap=>{
-     if(generation!==cloudSyncGeneration||!cloudListenerReady||!remoteSnap.exists)return;
-     const remote=remoteSnap.data()||{};
-     if(!remote.data)return;
-     const next=Object.assign(structuredClone(defaultData),remote.data);
-     next.deadlines=Array.isArray(next.deadlines)?next.deadlines:[];
-     next.tasks=Array.isArray(next.tasks)?next.tasks:[];
-     next.files=Array.isArray(next.files)?next.files:[];
-     next.fileFolders=Array.isArray(next.fileFolders)?next.fileFolders:[];
-     next.modules=Array.isArray(next.modules)?next.modules:[];
-     next.notes=Array.isArray(next.notes)?next.notes:[];
-     next.podcasts=Array.isArray(next.podcasts)?next.podcasts:[];
-     next.gradeModules=Array.isArray(next.gradeModules)?next.gradeModules:[];
-     next.grades=Array.isArray(next.grades)?next.grades:[];
-     next.uniLinks=Array.isArray(next.uniLinks)?next.uniLinks:[];
-     if(JSON.stringify(next)!==JSON.stringify(data)){
-      data=next;
-      saveLocal();
-      renderAll();
-     }
-     if(window.mspSetSyncStatus)window.mspSetSyncStatus('connected','Cloud: verbunden','Synchronisiert');
-    },err=>{
-     console.warn('Cloud-Echtzeit-Sync:',err);
-     if(window.mspSetSyncStatus)window.mspSetSyncStatus('offline','Cloud: Sync fehlgeschlagen','Wird erneut versucht');
+        if(generation!==cloudSyncGeneration||!currentUser||currentUser.uid!==user.uid)return;
+        cloudListenerReady=true;
+        cloudUnsubscribe=ref.onSnapshot(remoteSnap=>{
+          if(generation!==cloudSyncGeneration||!cloudListenerReady||!remoteSnap.exists)return;
+          const remote=remoteSnap.data()||{};
+          if(!remote.data)return;
+          const next=Object.assign(structuredClone(defaultData),remote.data);
+          next.deadlines=Array.isArray(next.deadlines)?next.deadlines:[];
+          next.tasks=Array.isArray(next.tasks)?next.tasks:[];
+          next.files=Array.isArray(next.files)?next.files:[];
+          next.fileFolders=Array.isArray(next.fileFolders)?next.fileFolders:[];
+          next.modules=Array.isArray(next.modules)?next.modules:[];
+          next.notes=Array.isArray(next.notes)?next.notes:[];
+          next.podcasts=Array.isArray(next.podcasts)?next.podcasts:[];
+          next.gradeModules=Array.isArray(next.gradeModules)?next.gradeModules:[];
+          next.grades=Array.isArray(next.grades)?next.grades:[];
+          next.uniLinks=Array.isArray(next.uniLinks)?next.uniLinks:[];
+          if(JSON.stringify(next)!==JSON.stringify(data)){
+            data=next;
+            saveLocal();
+            renderAll();
+          }
+          if(window.mspSetSyncStatus)window.mspSetSyncStatus('connected','Cloud: verbunden','Synchronisiert');
+        },err=>{
+          console.error('Cloud-Echtzeit-Sync:',err);
+          if(window.mspSetSyncStatus)window.mspSetSyncStatus('offline','Cloud: Sync fehlgeschlagen',err&&err.message?err.message:'Echtzeit-Sync fehlgeschlagen');
+        });
+      }catch(e){
+        console.error('Cloud-Initialisierung/Synchronisierung:',e);
+        if(window.mspSetSyncStatus)window.mspSetSyncStatus('offline','Cloud: Sync fehlgeschlagen',e&&e.message?e.message:'Firestore-Fehler');
+      }finally{
+        if(generation===cloudSyncGeneration)cloudHydrating=false;
+      }
     });
-   }catch(e){
-    console.warn('Cloud-Initialisierung/Synchronisierung:',e);
-    if(window.mspSetSyncStatus)window.mspSetSyncStatus('offline','Cloud: Sync fehlgeschlagen',e.message||'Bitte Firebase prüfen');
-   }
-  });
- }catch(e){
-  console.error('Cloud-Initialisierung:',e);
-  cloudReadyResolve(null);
-  updateCloudStatus(false,'Cloud nicht bereit');
- }
+  }catch(e){
+    console.error('Cloud-Initialisierung:',e);
+    cloudReadyResolve(null);
+    updateCloudStatus(false,'Cloud nicht bereit');
+  }
 }
 
 function updateCloudStatus(on,label){$('cloudStatus').innerHTML=`<span class="dot ${on?'on':''}"></span><span>${esc(label||'Nur auf diesem Gerät')}</span>`}
@@ -5805,7 +5823,7 @@ function openCloud(){
      <button class="btn secondary full" style="margin-top:4px" onclick="connectGoogleCalendar()">🔵 Google Kalender verbinden</button>
    </div>
    <div class="account-note">Google Kalender einmal freigeben. Beim Laden öffnet sich kein Google-Fenster. Wenn der Google-Zugriff abläuft, kannst du ihn bewusst über „Google Kalender verbinden“ neu freigeben.</div>
-   <details class="account-advanced"><summary>⚙️ Erweiterte Firebase-Einstellungen</summary><div class="muted account-small" style="margin:8px 0">Nur nötig, wenn du eine eigene Firebase-Konfiguration ändern möchtest.</div><textarea id="firebaseConfig" placeholder='{"apiKey":"...","authDomain":"...","projectId":"...","storageBucket":"...","messagingSenderId":"...","appId":"..."}'>${esc(JSON.stringify(cfg,null,2))}</textarea><div style="display:flex;gap:7px;margin-top:8px"><button class="btn" onclick="saveFirebaseConfig()">Speichern</button><button class="btn secondary" onclick="clearFirebaseConfig()">Löschen</button></div></details>
+   <details class="account-advanced"><summary>⚙️ Erweiterte Firebase-Einstellungen</summary><div class="muted account-small" style="margin:8px 0">Nur nötig, wenn du eine eigene Firebase-Konfiguration ändern möchtest.</div><textarea id="firebaseConfig" placeholder='{"apiKey":"...","authDomain":"...","projectId":"...","storageBucket":"...","messagingSenderId":"...","appId":"..."}'>${esc(JSON.stringify(cfg,null,2))}</textarea><div style="display:flex;gap:7px;margin-top:8px"><button class="btn" onclick="saveFirebaseConfig()">Speichern</button><button class="btn secondary" onclick="clearFirebaseConfig()">Löschen</button></div><button class="btn secondary full" style="margin-top:8px" onclick="testCloudSync()">☁️ Cloud-Synchronisation testen</button></details>
  </div>`)
 }
 
@@ -5813,6 +5831,20 @@ async function saveFirebaseConfig(){
  try{let cfg=JSON.parse($('firebaseConfig').value);if(!cfg.apiKey||!cfg.projectId)throw Error('apiKey und projectId fehlen.');localStorage.setItem('mystudyplaner_firebase_config',JSON.stringify(cfg));location.reload()}catch(e){alert('Ungültige Konfiguration: '+e.message)}
 }
 function clearFirebaseConfig(){localStorage.removeItem('mystudyplaner_firebase_config');location.reload()}
+async function testCloudSync(){
+ try{
+  if(!fb||!fb.auth||!fb.auth.currentUser)throw new Error('Nicht bei Firebase angemeldet.');
+  currentUser=fb.auth.currentUser; cloudEnabled=true; window.currentUser=currentUser; window.cloudEnabled=true;
+  await writeCloudData();
+  const snap=await fb.db.collection('users').doc(currentUser.uid).get();
+  if(!snap.exists||!snap.data()||!snap.data().data)throw new Error('Firestore-Dokument wurde nicht gefunden.');
+  alert('✅ Cloud-Synchronisation funktioniert.\n\nFirestore kann gelesen und geschrieben werden.');
+ }catch(e){
+  console.error('Cloud-Test:',e);
+  alert('❌ Cloud-Synchronisation fehlgeschlagen.\n\n'+(e&&e.message?e.message:e));
+ }
+}
+
 
 async function cloudGoogleAuth(){
  // Always make sure Firebase Auth is actually ready before the click is handled.
@@ -7484,7 +7516,7 @@ function renderStudyTimer(){
   function getAuthUser(){
     try{
       if(window.currentUser) return window.currentUser;
-      if(window.fb && window.fb.auth && window.fb.auth().currentUser) return window.fb.auth().currentUser;
+      if(window.fb && window.fb.auth && window.fb.auth.currentUser) return window.fb.auth.currentUser;
     }catch(e){}
     return null;
   }
@@ -7530,7 +7562,7 @@ function renderStudyTimer(){
   function bindFirebaseAuth(){
     try{
       if(window.fb && window.fb.auth){
-        window.fb.auth().onAuthStateChanged(function(user){
+        window.fb.auth.onAuthStateChanged(function(user){
           if(user){
             window.currentUser=user;
             window.cloudEnabled=true;
