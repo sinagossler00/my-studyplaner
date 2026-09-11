@@ -3805,6 +3805,54 @@ aside.sidebar{
 }
 </style>
 
+
+<style id="msp-important-responsive-v293">
+/* V293: targeted stability/responsive fixes only. */
+.modal{
+  background:rgba(35,30,27,.34) !important;
+  -webkit-backdrop-filter:blur(1px);
+  backdrop-filter:blur(1px);
+  overscroll-behavior:contain;
+}
+.modal-box{
+  width:min(620px,100%);
+  max-height:min(92vh,760px) !important;
+  overflow-y:auto !important;
+  overflow-x:hidden !important;
+  -webkit-overflow-scrolling:touch;
+}
+@media (max-width:700px){
+  body.modal-open{overflow:hidden !important;}
+  .modal{padding:max(10px,env(safe-area-inset-top)) max(10px,env(safe-area-inset-right)) max(10px,env(safe-area-inset-bottom)) max(10px,env(safe-area-inset-left)) !important;}
+  .modal-box{
+    width:100% !important;
+    max-width:620px !important;
+    max-height:calc(100dvh - 20px) !important;
+    padding:14px !important;
+    border-radius:14px !important;
+  }
+  .modal-head{position:sticky;top:0;z-index:2;background:#fffdf9;padding-bottom:8px;margin-bottom:10px;}
+  .close{min-width:40px;min-height:40px;padding:6px;display:inline-flex;align-items:center;justify-content:center;touch-action:manipulation;}
+  .modal-box button,.modal-box input,.modal-box select,.modal-box textarea{touch-action:manipulation;}
+  .edit-btn,.trash,.psychology-refresh{min-width:40px;min-height:40px;}
+  .check{width:22px;height:22px;}
+  .task-row,.deadline{min-width:0;}
+  .task-text,.deadline-title,.type{overflow-wrap:anywhere;}
+}
+@media (max-width:390px){
+  main{padding-left:8px !important;padding-right:8px !important;}
+  .card{padding:12px !important;}
+  .deadline{grid-template-columns:44px 44px minmax(0,1fr) auto !important;gap:5px !important;}
+  .deadline-title{font-size:11px !important;}
+  .type{font-size:8.5px !important;}
+  .modal-box{padding:12px !important;max-height:calc(100dvh - 14px) !important;}
+  .modal-head h2{font-size:17px !important;}
+}
+@media (min-width:701px) and (max-width:1100px){
+  main{padding:18px !important;}
+}
+</style>
+
 </head>
 <body>
 
@@ -7238,6 +7286,34 @@ document.addEventListener('visibilitychange',()=>{
  }
 });
 </script>
+
+<script id="msp-modal-scroll-lock-v293">
+(function(){
+  function syncModalLock(){
+    document.body.classList.toggle('modal-open', !!document.querySelector('.modal.show'));
+  }
+  const originalOpen=window.openModal;
+  if(typeof originalOpen==='function'){
+    window.openModal=function(){
+      const result=originalOpen.apply(this,arguments);
+      syncModalLock();
+      return result;
+    };
+  }
+  const originalClose=window.closeModal;
+  if(typeof originalClose==='function'){
+    window.closeModal=function(){
+      const result=originalClose.apply(this,arguments);
+      syncModalLock();
+      return result;
+    };
+  }
+  document.addEventListener('click',function(){setTimeout(syncModalLock,0),{passive:true}});
+  new MutationObserver(syncModalLock).observe(document.documentElement,{subtree:true,attributes:true,attributeFilter:['class']});
+  syncModalLock();
+})();
+</script>
+
 </body>
 </html>
 
