@@ -3982,6 +3982,7 @@ aside.sidebar{
   }
 }
 </style>
+<meta name="msp-version" content="v318-cloud-authoritative"><!-- v318: cloud-authoritative refresh -->
 </head>
 <body>
 
@@ -5791,8 +5792,8 @@ async function initCloud(){
           if(window.mspSetSyncStatus)window.mspSetSyncStatus('offline','Cloud: Sync fehlgeschlagen',err&&err.message?err.message:'Echtzeit-Sync fehlgeschlagen');
         });
 
+        // The cloud state is now authoritative. Render only after the download above.
         try{renderAll()}catch(err){
-          // A UI/Calendar problem must never abort Firebase synchronization.
           console.error('Initiales Rendern nach Cloud-Login:',err);
         }
       }catch(e){
@@ -5858,25 +5859,35 @@ async function forceCloudRefresh(){
   if(!u)throw new Error('Nicht bei Firebase angemeldet.');
   currentUser=u; cloudEnabled=true; window.currentUser=u; window.cloudEnabled=true;
   const ref=fb.db.collection('users').doc(u.uid);
-  // Always ask Firestore's server for the current document, not a phone cache.
   const snap=await ref.get({source:'server'});
   if(!snap.exists||!snap.data()||!snap.data().data)throw new Error('Für dieses Firebase-Konto gibt es noch kein gespeichertes Studyplaner-Dokument.');
   const remote=snap.data().data;
-  data=Object.assign(structuredClone(defaultData),remote);
-  data.deadlines=Array.isArray(data.deadlines)?data.deadlines:[];
-  data.tasks=Array.isArray(data.tasks)?data.tasks:[];
-  data.files=Array.isArray(data.files)?data.files:[];
-  data.fileFolders=Array.isArray(data.fileFolders)?data.fileFolders:[];
-  data.modules=Array.isArray(data.modules)?data.modules:[];
-  data.notes=Array.isArray(data.notes)?data.notes:[];
-  data.podcasts=Array.isArray(data.podcasts)?data.podcasts:[];
-  data.gradeModules=Array.isArray(data.gradeModules)?data.gradeModules:[];
-  data.grades=Array.isArray(data.grades)?data.grades:[];
-  data.uniLinks=Array.isArray(data.uniLinks)?data.uniLinks:[];
+  const next=Object.assign(structuredClone(defaultData),remote);
+  // Normalize the cloud object before putting it into the app.
+  next.deadlines=Array.isArray(next.deadlines)?next.deadlines:[];
+  next.tasks=Array.isArray(next.tasks)?next.tasks:[];
+  next.files=Array.isArray(next.files)?next.files:[];
+  next.fileFolders=Array.isArray(next.fileFolders)?next.fileFolders:[];
+  next.modules=Array.isArray(next.modules)?next.modules:[];
+  next.notes=Array.isArray(next.notes)?next.notes:[];
+  next.podcasts=Array.isArray(next.podcasts)?next.podcasts:[];
+  next.gradeModules=Array.isArray(next.gradeModules)?next.gradeModules:[];
+  next.grades=Array.isArray(next.grades)?next.grades:[];
+  next.uniLinks=Array.isArray(next.uniLinks)?next.uniLinks:[];
+  if(!Array.isArray(next.events))next.events=[];
+  data=next;
+  // Make the freshly downloaded cloud state the browser's local state too.
   saveLocal();
-  renderAll();
+  cloudHydrating=true;
+  try{
+    if(cloudUnsubscribe){try{cloudUnsubscribe()}catch(e){} cloudUnsubscribe=null;}
+    renderAll();
+  }finally{
+    cloudHydrating=false;
+  }
+  if(window.mspSetSyncStatus)window.mspSetSyncStatus('connected','Cloud: verbunden','Cloud-Stand geladen');
   const updated=snap.data().updatedAt&&snap.data().updatedAt.toDate?snap.data().updatedAt.toDate().toLocaleString('de-DE'):'unbekannt';
-  alert('✅ Cloud neu geladen.\n\nGerät: '+(u.email||'')+'\nFirebase-UID: '+u.uid.slice(0,12)+'…\n\nAufgaben: '+data.tasks.length+'\nDeadlines: '+data.deadlines.length+'\n\nLetzte Cloud-Aktualisierung: '+updated);
+  alert('✅ Cloud neu geladen.\n\nGerät: '+(u.email||'')+'\nFirebase-UID: '+u.uid.slice(0,12)+'…\n\nAufgaben: '+data.tasks.length+'\nDeadlines: '+data.deadlines.length+'\n\nLetzte Cloud-Aktualisierung: '+updated+'\n\nDie Cloud-Daten wurden jetzt auch als lokaler App-Stand übernommen.');
  }catch(e){
   console.error('Cloud-Refresh:',e);
   alert('❌ Cloud konnte nicht neu geladen werden.\n\n'+(e&&e.message?e.message:e));
@@ -7608,19 +7619,8 @@ function renderStudyTimer(){
   function bindFirebaseAuth(){
     try{
       if(window.fb && window.fb.auth){
-        window.fb.auth.onAuthStateChanged(function(user){
-          if(user){
-            window.currentUser=user;
-            window.cloudEnabled=true;
-            try{ currentUser=user; cloudEnabled=true; }catch(e){}
-            setStatus('connected','Cloud: verbunden','Automatische Synchronisierung aktiv');
-          }else{
-            window.currentUser=null;
-            window.cloudEnabled=false;
-            try{ currentUser=null; cloudEnabled=false; }catch(e){}
-            setStatus('offline','Cloud: nicht verbunden','Bitte anmelden');
-          }
-        });
+        // Firebase auth state is handled by the main initCloud() listener above.
+        // Do not register a second listener here; it used to race the cloud hydration.
         return true;
       }
     }catch(e){}
