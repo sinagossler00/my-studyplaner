@@ -3758,10 +3758,10 @@ aside.sidebar{
       <button data-page="tasks"><span class="icon">☑️</span><span>Aufgaben</span></button>
       <button data-page="grades"><span class="icon">🎓</span><span>Noten</span></button>
       <button data-page="uni-links"><span class="icon">🔗</span><span>Uni-Webseiten</span></button>
+      <button type="button" onclick="window.open('https://drive.google.com/drive/my-drive', '_blank', 'noopener,noreferrer')"><span class="icon">📁</span><span>Google Drive</span></button>
       <button data-page="study-timer"><span class="icon">⏱️</span><span>Lern-Timer</span></button>
       <button data-page="podcast"><span class="icon">🎙️</span><span>KI-Podcast</span></button>
       <button data-page="study-room"><span class="icon">🏠</span><span>Study Room</span></button>
-      <button data-page="files"><span class="icon">📁</span><span>Dateien & Infos</span></button>
     </nav>
 </aside>
 
@@ -3798,7 +3798,6 @@ aside.sidebar{
    </div>
   </div>
   <div class="two-col">
-   <div class="card"><div class="card-head"><h2>📁 Wichtige Dateien & Infos</h2><button class="btn" onclick="triggerUpload()">＋ Upload</button></div><input id="fileInput" type="file" accept=".pdf,image/*,.doc,.docx,.txt" multiple hidden onchange="handleFiles(this.files)"><div id="homeFiles" class="file-grid"></div><button class="btn secondary full" onclick="go('files')">Alle Dateien anzeigen →</button></div>
    <div class="card psychology-day-card"><div class="card-head"><h2>🧠 Psychologie des Tages</h2></div><div id="psychologyDay"></div></div>
   </div>
  </section>
@@ -3869,36 +3868,6 @@ aside.sidebar{
     </div>
   </div>
  </section>
- <section id="files" class="page">
-  <div class="card files-explorer-card">
-    <div class="files-explorer-head">
-      <div>
-        <h2>📁 Dateien</h2>
-        <div class="muted">Deine Lernmaterialien übersichtlich wie auf dem PC.</div>
-      </div>
-      <div class="files-toolbar">
-        <button class="btn secondary" type="button" onclick="createFileFolder()">＋ Neuer Ordner</button>
-        <button class="btn" type="button" onclick="triggerUpload2()">＋ Datei hochladen</button>
-      </div>
-    </div>
-
-    <div class="files-breadcrumb" id="fileBreadcrumb"></div><div id="fileRootDrop" class="file-root-drop" style="display:none" ondragover="fileDragOverRoot(event,this)" ondragleave="fileDragLeaveRoot(this)" ondrop="fileDropOnRoot(event,this)">↩️ Hierher ziehen = aus dem Ordner entfernen</div>
-    <input id="fileInput2" type="file" accept=".pdf,image/*,.doc,.docx,.txt" multiple hidden onchange="handleFiles(this.files)">
-    <div class="file-explorer">
-      <div class="file-explorer-header">
-        <span>Name</span><span>Typ</span><span>Größe</span><span>Aktion</span>
-      </div>
-      <div id="fileList"></div>
-    </div>
-    
-  </div>
-</section>
-
-
-
-
-
-
 <section id="study-room" class="page">
   <div class="card">
     <div class="card-head">
@@ -4494,26 +4463,7 @@ function renderFiles(){
  const fileRows=sortedFiles.map(renderExplorerFile).join('');
  list.innerHTML=(folderRows+fileRows) || `<div class="file-explorer-empty">Dieser Ordner ist leer.<br><span>Erstelle einen Ordner oder lade eine Datei hoch.</span></div>`;
 
- if($('homeFiles')){
-  const homeFolders=folders.slice(0,4);
-  const homeFiles=allFiles.filter(f=>!f.folderId).slice(0,6);
-  const homeRows=[
-   ...homeFolders.map(folder=>`
-    <div class="home-file-row home-folder-row" onclick="currentFileFolder='${esc(folder.id)}';go('files');renderFiles()" title="Ordner öffnen">
-      <div class="home-file-main"><span class="home-file-icon">📁</span><span class="home-file-name">${esc(folder.name)}</span></div>
-      <span class="home-file-type">Ordner</span>
-      <span class="home-file-arrow">›</span>
-    </div>`),
-   ...homeFiles.map(f=>`
-    <div class="home-file-row" onclick="openFile('${f.id}')" title="Datei öffnen">
-      <div class="home-file-main"><span class="home-file-icon">${fileIcon(f)}</span><span class="home-file-name">${esc(f.name)}</span></div>
-      <span class="home-file-type">${esc(f.type||'Datei')}</span>
-      <span class="home-file-arrow">↗</span>
-    </div>`)
-  ];
-  $('homeFiles').innerHTML=homeRows.join('')
-   || '<div class="empty">Noch keine Dateien oder Ordner.</div>';
- }
+
 }
 function moduleFiles(id){return data.files.filter(f=>String(f.moduleId)===String(id))}
 function renderModules(){
