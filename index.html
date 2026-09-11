@@ -1657,6 +1657,20 @@ input:focus,select:focus,textarea:focus{
   border-color:#e8ddd4 !important;
 }
 
+/* Hide edit controls behind every open modal. Keep controls inside the modal visible. */
+body:has(.modal.show) .edit-btn,
+body:has(.modal.show) .actions,
+body:has(.modal.show) [title="Bearbeiten"] {
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+body:has(.modal.show) .modal .edit-btn,
+body:has(.modal.show) .modal .actions,
+body:has(.modal.show) .modal [title="Bearbeiten"] {
+  visibility: visible !important;
+  pointer-events: auto !important;
+}
+
 /* Modal */
 .modal-card,.modal-content{
   background:#fffdf9 !important;
