@@ -3768,6 +3768,17 @@ aside.sidebar{
 .home-progress-meta{font-size:12px;margin-top:8px;}
 @media(max-width:700px){.home-study-row{grid-template-columns:1fr;}.home-study-card,.home-progress-card{min-height:0;}}
 </style>
+
+<style id="msp-uni-shared-modal-style">
+#modal .uni-link-modal-body{display:grid;gap:12px;}
+#modal .uni-link-modal-body label{display:block;font-size:13px;font-weight:700;color:#222;}
+#modal .uni-link-modal-body input,#modal .uni-link-modal-body textarea{display:block;width:100%;box-sizing:border-box;margin-top:6px;background:#fff!important;border:1px solid #777!important;border-radius:7px!important;color:#111!important;font-family:"DM Sans",Arial,sans-serif;padding:10px 12px;}
+#modal .uni-link-modal-body textarea{resize:vertical;min-height:70px;}
+#modal .uni-form-actions{display:flex;gap:8px;margin-top:4px;}
+#modal .uni-form-actions button{cursor:pointer;border-radius:7px;padding:9px 13px;font-weight:700;}
+#modal #saveUniLinkBtn{background:#fff!important;border:1px solid #222!important;color:#111!important;}
+#modal #cancelUniLinkBtn{background:#fff!important;border:1px solid #aaa!important;color:#222!important;}
+</style>
 </head>
 <body>
 
@@ -4055,33 +4066,7 @@ aside.sidebar{
     <button class="btn-primary" id="addUniLinkBtn">➕ Link hinzufügen</button>
   </div>
 
-  <div id="uniLinkForm" class="uni-link-modal" aria-hidden="true">
-    <div class="uni-link-modal-box" role="dialog" aria-modal="true" aria-labelledby="uniLinkFormTitle">
-      <div class="uni-link-modal-head">
-        <h3 id="uniLinkFormTitle">➕ Neue Webseite</h3>
-        <button type="button" class="uni-link-modal-close" id="closeUniLinkBtn" aria-label="Schließen">×</button>
-      </div>
-      <div class="uni-link-modal-body">
-        <label>
-          Überschrift
-          <input id="uniLinkTitle" type="text" placeholder="z. B. FernUni Hagen – Studienportal">
-        </label>
-        <label>
-          Link
-          <input id="uniLinkUrl" type="url" placeholder="https://...">
-        </label>
-        <label>
-          Beschreibung <span style="font-weight:normal;">(optional)</span>
-          <textarea id="uniLinkDescription" rows="2" placeholder="z. B. Hier finde ich meine Studienmaterialien und Termine."></textarea>
-        </label>
-        <div class="uni-form-actions">
-          <button type="button" id="saveUniLinkBtn">💾 Speichern</button>
-          <button type="button" id="cancelUniLinkBtn">Abbrechen</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
+  
   <div id="uniLinksList" style="display:grid; gap:14px;"></div>
   <div id="uniLinksEmpty" class="card" style="text-align:center; padding:30px;">
     <div style="font-size:32px;">🔗</div>
@@ -6089,13 +6074,11 @@ document.addEventListener('DOMContentLoaded', ()=>{
     const empty=document.getElementById('uniLinksEmpty');
     if(!list||!empty)return;
     const links=getLinks();
-
     if(!links.length){
       list.innerHTML='';
       empty.style.display='block';
       return;
     }
-
     empty.style.display='none';
     list.innerHTML=links.map(function(x){
       return '<article class="uni-link-card">'+
@@ -6103,84 +6086,69 @@ document.addEventListener('DOMContentLoaded', ()=>{
         (x.description?'<p class="uni-link-description">'+escHtml(x.description)+'</p>':'')+
         '<span class="uni-link-url">'+escHtml(x.url)+'</span>'+
         '<div class="uni-link-actions">'+
-          '<button type="button" data-open-uni="'+escHtml(x.id)+'">🌐 Öffnen</button>'+
-          '<button type="button" data-edit-uni="'+escHtml(x.id)+'">✏️ Bearbeiten</button>'+
-          '<button type="button" data-delete-uni="'+escHtml(x.id)+'">× Löschen</button>'+
+          '<button type="button" data-open-uni="'+escHtml(x.id)+'">🌐 Öffnen</button>'+ 
+          '<button type="button" data-edit-uni="'+escHtml(x.id)+'">✏️ Bearbeiten</button>'+ 
+          '<button type="button" data-delete-uni="'+escHtml(x.id)+'">× Löschen</button>'+ 
         '</div>'+
       '</article>';
     }).join('');
   }
 
+  function formBody(link){
+    return '<div class="uni-link-modal-body">'+
+      '<label>Überschrift<input id="uniLinkTitle" type="text" placeholder="z. B. FernUni Hagen – Studienportal" value="'+escHtml(link?link.title:'')+'"></label>'+
+      '<label>Link<input id="uniLinkUrl" type="url" placeholder="https://..." value="'+escHtml(link?link.url:'')+'"></label>'+
+      '<label>Beschreibung <span style="font-weight:normal;">(optional)</span><textarea id="uniLinkDescription" rows="2" placeholder="z. B. Hier finde ich meine Studienmaterialien und Termine.">'+escHtml(link?link.description||'':'')+'</textarea></label>'+
+      '<div class="uni-form-actions">'+
+        '<button type="button" id="saveUniLinkBtn">💾 Speichern</button>'+
+        '<button type="button" id="cancelUniLinkBtn">Abbrechen</button>'+ 
+      '</div>'+
+    '</div>';
+  }
+
   function openForm(link){
-    const form=document.getElementById('uniLinkForm');
-    if(!form)return;
-    form.classList.add('open');
-    form.setAttribute('aria-hidden','false');
-    form.dataset.editId=link?String(link.id):'';
-    document.getElementById('uniLinkTitle').value=link?link.title:'';
-    document.getElementById('uniLinkUrl').value=link?link.url:'';
-    document.getElementById('uniLinkDescription').value=link?link.description||'':'';
-    const heading=document.getElementById('uniLinkFormTitle');
-    if(heading)heading.textContent=link?'✏️ Webseite bearbeiten':'➕ Neue Webseite';
-    setTimeout(()=>document.getElementById('uniLinkTitle')?.focus(),0);
+    const title=link?'✏️ Webseite bearbeiten':'➕ Neue Webseite';
+    const body=formBody(link);
+    openModal(title,body);
+    const modal=document.getElementById('modal');
+    if(modal) modal.dataset.uniEditId=link?String(link.id):'';
+    setTimeout(()=>document.getElementById('uniLinkTitle')?.focus(),30);
   }
 
   function closeForm(){
-    const form=document.getElementById('uniLinkForm');
-    if(!form)return;
-    form.classList.remove('open');
-    form.setAttribute('aria-hidden','true');
-    form.dataset.editId='';
-    document.getElementById('uniLinkTitle').value='';
-    document.getElementById('uniLinkUrl').value='';
-    document.getElementById('uniLinkDescription').value='';
+    const modal=document.getElementById('modal');
+    if(modal) delete modal.dataset.uniEditId;
+    closeModal();
+  }
+
+  async function saveForm(){
+    const title=document.getElementById('uniLinkTitle')?.value.trim()||'';
+    const rawUrl=document.getElementById('uniLinkUrl')?.value.trim()||'';
+    const description=document.getElementById('uniLinkDescription')?.value.trim()||'';
+    if(!title){alert('Bitte eine Überschrift eingeben.');return;}
+    if(!rawUrl){alert('Bitte einen Link eingeben.');return;}
+    const url=normalizeUrl(rawUrl);
+    try{new URL(url);}catch(err){alert('Bitte einen gültigen Link eingeben.');return;}
+    const links=getLinks().map(x=>({...x}));
+    const modal=document.getElementById('modal');
+    const editId=modal?.dataset.uniEditId||'';
+    if(editId){
+      const item=links.find(x=>String(x.id)===String(editId));
+      if(item){item.title=title;item.url=url;item.description=description;}
+    }else{
+      links.push({id:Date.now(),title:title,url:url,description:description});
+    }
+    await saveLinks(links);
+    closeForm();
+    renderUniLinks();
   }
 
   function init(){
     const add=document.getElementById('addUniLinkBtn');
-    const save=document.getElementById('saveUniLinkBtn');
-    const cancel=document.getElementById('cancelUniLinkBtn');
     const list=document.getElementById('uniLinksList');
-
     if(add)add.addEventListener('click',function(e){
-      e.preventDefault(); e.stopPropagation(); openForm();
+      e.preventDefault();e.stopPropagation();openForm();
     });
-    if(cancel)cancel.addEventListener('click',function(e){
-      e.preventDefault(); closeForm();
-    });
-    const close=document.getElementById('closeUniLinkBtn');
-    if(close)close.addEventListener('click',function(e){
-      e.preventDefault(); closeForm();
-    });
-    const modal=document.getElementById('uniLinkForm');
-    if(modal)modal.addEventListener('click',function(e){
-      if(e.target===modal)closeForm();
-    });
-
-    if(save)save.addEventListener('click',async function(e){
-      e.preventDefault();
-      const title=document.getElementById('uniLinkTitle').value.trim();
-      const rawUrl=document.getElementById('uniLinkUrl').value.trim();
-      const description=document.getElementById('uniLinkDescription').value.trim();
-      if(!title){alert('Bitte eine Überschrift eingeben.');return;}
-      if(!rawUrl){alert('Bitte einen Link eingeben.');return;}
-      const url=normalizeUrl(rawUrl);
-      try{new URL(url);}catch(err){alert('Bitte einen gültigen Link eingeben.');return;}
-
-      const links=getLinks().map(x=>({...x}));
-      const form=document.getElementById('uniLinkForm');
-      const editId=form.dataset.editId;
-      if(editId){
-        const item=links.find(x=>String(x.id)===String(editId));
-        if(item){item.title=title;item.url=url;item.description=description;}
-      }else{
-        links.push({id:Date.now(),title:title,url:url,description:description});
-      }
-      await saveLinks(links);
-      closeForm();
-      renderUniLinks();
-    });
-
     if(list)list.addEventListener('click',async function(e){
       const openBtn=e.target.closest('[data-open-uni]');
       const editBtn=e.target.closest('[data-edit-uni]');
@@ -6201,7 +6169,10 @@ document.addEventListener('DOMContentLoaded', ()=>{
         renderUniLinks();
       }
     });
-
+    document.addEventListener('click',function(e){
+      if(e.target.closest('#saveUniLinkBtn')){e.preventDefault();saveForm();return;}
+      if(e.target.closest('#cancelUniLinkBtn')){e.preventDefault();closeForm();return;}
+    });
     renderUniLinks();
   }
 
@@ -8120,86 +8091,4 @@ document.addEventListener('DOMContentLoaded', function(){
 }
 
 
-/* v289: Uni-Webseiten nutzt exakt denselben Modal-Aufbau wie die übrigen Dialogfenster */
-#uni-links .uni-link-modal{
-  position:fixed !important;
-  inset:0 !important;
-  display:none !important;
-  align-items:center !important;
-  justify-content:center !important;
-  padding:16px !important;
-  background:rgba(62,47,39,.22) !important;
-  z-index:99998 !important;
-}
-#uni-links .uni-link-modal.open{display:flex !important;}
-#uni-links .uni-link-modal-box{
-  width:min(620px,100%) !important;
-  max-height:90vh !important;
-  overflow:auto !important;
-  background:#fffdf9 !important;
-  border:1px solid #dfd3c9 !important;
-  border-radius:17px !important;
-  padding:19px !important;
-  box-shadow:0 18px 55px rgba(70,50,38,.18) !important;
-}
-
-#uni-links .uni-link-modal-head{
-  display:flex !important;
-  justify-content:space-between !important;
-  align-items:center !important;
-  margin-bottom:15px !important;
-}
-#uni-links .uni-link-modal-head h3{
-  margin:0 !important;
-  font-family:"DM Sans",Arial,sans-serif !important;
-  font-size:20px !important;
-  font-weight:700 !important;
-  color:#111 !important;
-}
-#uni-links .uni-link-modal-close{
-  border:0 !important;
-  background:transparent !important;
-  color:#111 !important;
-  font-size:24px !important;
-  line-height:1 !important;
-  padding:2px 7px !important;
-  cursor:pointer !important;
-}
-#uni-links .uni-link-modal-body{
-  display:grid !important;
-  gap:12px !important;
-}
-#uni-links .uni-link-modal-body label{
-  display:block;
-  font-size:13px;
-  font-weight:700;
-  color:#222;
-}
-#uni-links .uni-link-modal-body input,
-#uni-links .uni-link-modal-body textarea{
-  display:block;
-  width:100%;
-  box-sizing:border-box;
-  margin-top:6px;
-  background:#fff !important;
-  border:1px solid #777 !important;
-  border-radius:7px !important;
-  color:#111 !important;
-  font-family:"DM Sans",Arial,sans-serif;
-  padding:10px 12px;
-}
-#uni-links .uni-link-modal .uni-form-actions{display:flex;gap:8px;margin-top:4px;}
-#uni-links .uni-link-modal .uni-form-actions button{cursor:pointer;border-radius:7px;padding:9px 13px;font-weight:700;}
-#uni-links .uni-link-modal #saveUniLinkBtn{background:#fff !important;border:1px solid #222 !important;color:#111 !important;}
-#uni-links .uni-link-modal #cancelUniLinkBtn{background:#fff !important;border:1px solid #aaa !important;color:#222 !important;}
-body:has(#uniLinkForm.open) .edit-btn,
-body:has(#uniLinkForm.open) .actions,
-body:has(#uniLinkForm.open) [title="Bearbeiten"]{
-  visibility:hidden !important;
-  pointer-events:none !important;
-}
-@media(max-width:600px){
-  #uni-links .uni-link-modal{padding:10px !important;}
-  #uni-links .uni-link-modal-box{max-height:92vh;border-radius:13px;padding:15px;}
-}
 </style>
