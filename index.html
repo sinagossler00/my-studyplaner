@@ -5769,8 +5769,27 @@ async function initCloud(){
     window.fb=fb;
     cloudReadyResolve(fb);
 
-    // Register the auth observer only after persistence has been configured.
-    // Firebase can now restore the saved session before the first callback.
+    // Seed the app state from the already-restored Firebase user.
+    // authStateReady() above guarantees this is the stable initial value.
+    if(fb.auth.currentUser){
+      currentUser=fb.auth.currentUser;
+      window.currentUser=currentUser;
+      cloudEnabled=true;
+      window.cloudEnabled=true;
+    }
+
+    // Wait until Firebase has finished initializing/restoring the persisted
+    // auth session before we register the app listener. This avoids the
+    // mobile/PWA race where currentUser is briefly null during startup.
+    try{
+      if(typeof fb.auth.authStateReady==='function'){
+        await fb.auth.authStateReady();
+      }
+    }catch(e){
+      console.warn('Firebase authStateReady:',e);
+    }
+    // Register the auth observer only after persistence and initial auth state
+    // are ready.
     fb.auth.onAuthStateChanged(async user=>{
       if(!cloudAuthStateResolved){
         cloudAuthStateResolved=true;
@@ -6028,6 +6047,7 @@ async function cloudGoogleAuth(){
   try{
    await fb.auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
    window.mspAuthPersistence='LOCAL';
+   if(typeof fb.auth.authStateReady==='function') await fb.auth.authStateReady();
   }catch(persistErr){
    console.error('Firebase Auth LOCAL persistence:',persistErr);
    alert('Die dauerhafte Cloud-Anmeldung konnte im Browser nicht aktiviert werden.\n\n'+(persistErr.message||persistErr));
@@ -6039,6 +6059,13 @@ async function cloudGoogleAuth(){
 
   try{
    await fb.auth.signInWithPopup(provider);
+   if(typeof fb.auth.authStateReady==='function') await fb.auth.authStateReady();
+   if(fb.auth.currentUser){
+    currentUser=fb.auth.currentUser;
+    window.currentUser=currentUser;
+    cloudEnabled=true;
+    window.cloudEnabled=true;
+   }
    // Migrate the freshly signed-in user to explicit LOCAL persistence.
    try{await fb.auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);window.mspAuthPersistence='LOCAL'}catch(e){console.warn('LOCAL persistence after sign-in:',e)}
   }catch(e){
