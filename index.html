@@ -76,6 +76,26 @@ h1{margin:0;font-size:29px;font-weight:850}h2{margin:0;font-size:19px;font-weigh
 
 @media(max-width:980px){.sidebar{width:205px}main{margin-left:205px;width:calc(100% - 205px)}.dashboard,.two-col{grid-template-columns:1fr}}
 @media(max-width:700px){.app{display:block}.sidebar{position:sticky;top:0;width:100%;height:auto;padding:8px;display:flex;align-items:center;overflow-x:auto}.logo,.tagline,.sidebar-note{display:none}.nav{display:flex;gap:4px}.nav button{white-space:nowrap;margin:0}.nav button span:last-child{display:none}main{margin:0;width:100%;padding:13px}.topbar{align-items:flex-start}.search{width:145px}.cloud-status span{display:none}.quick{grid-template-columns:1fr 1fr}.form-grid{grid-template-columns:1fr}.wide{grid-column:auto}.stats{grid-template-columns:1fr}.deadline{grid-template-columns:52px 54px minmax(0,1fr) auto;gap:7px}.deadline-priority-front{font-size:10px}.google-calendar-actions .btn{font-size:11px}}
+<style id="mystudyplaner-v293-polish">
+/* v293: subtle desktop hover polish */
+@media (hover:hover) and (pointer:fine){
+  .card{transition:transform .18s ease,box-shadow .18s ease}
+  .card:hover{transform:translateY(-2px);box-shadow:0 11px 28px rgba(60,48,10,.16)}
+  .btn,.tab,.edit-btn,.psychology-refresh{transition:transform .16s ease,filter .16s ease,background .16s ease,box-shadow .16s ease}
+  .btn:hover,.tab:hover,.edit-btn:hover,.psychology-refresh:hover{transform:translateY(-1px)}
+  .btn:active,.tab:active,.edit-btn:active,.psychology-refresh:active{transform:translateY(0) scale(.98)}
+}
+/* v293: smooth psychology-of-the-day change */
+@keyframes psychologyDayIn{
+  from{opacity:0;transform:translateY(7px)}
+  to{opacity:1;transform:translateY(0)}
+}
+.psychology-day-content.psychology-day-enter{animation:psychologyDayIn .28s ease both}
+@media (prefers-reduced-motion:reduce){
+  .card,.btn,.tab,.edit-btn,.psychology-refresh{transition:none !important}
+  .psychology-day-content.psychology-day-enter{animation:none !important}
+}
+</style>
 <style id="mystudyplaner-v83-psychology-day">
 .psychology-day-card{min-height:170px}
 .psychology-day-card .card-head{margin-bottom:9px}
@@ -4689,7 +4709,7 @@ function renderPsychologyDay(){
  const dayOfYear=Math.floor((new Date(now.getFullYear(),now.getMonth(),now.getDate())-start)/86400000);
  const index=((dayOfYear-1+psychologyDayOffset)%psychologyPrompts.length+psychologyPrompts.length)%psychologyPrompts.length;
  const item=psychologyPrompts[index];
- el.innerHTML=`<div class="psychology-day-content">
+ el.innerHTML=`<div class="psychology-day-content psychology-day-enter">
   <div class="psychology-day-category">${esc(item.category)}</div>
   <div class="psychology-day-title">${esc(item.title)}</div>
   <div class="psychology-day-text">${esc(item.text)}</div>
