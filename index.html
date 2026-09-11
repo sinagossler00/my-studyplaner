@@ -4701,7 +4701,7 @@ function renderHomeStudyCards(){
  const progress=$('homeStudyProgress');
  if(progress) progress.innerHTML=`<div class="home-progress-head"><span>${label}</span><strong>${pct}%</strong></div><div class="home-progress-bar"><span style="width:${pct}%"></span></div><div class="muted home-progress-meta">${step<=6?`Studium: ${step} von 6 Semestern`:'Bachelorarbeit · Abschlussphase'}</div><button class="btn secondary full" type="button" onclick="openSemesterSettings()" style="margin-top:12px">Semester / Bachelorarbeit auswählen</button>`;
 }
-function setDeadlineCalendarView(view){deadlineCalendarView=view==='week'?'week':'month';localStorage.setItem('msp_deadline_calendar_view_v1',deadlineCalendarView);renderCalendar()}
+function setDeadlineCalendarView(view){deadlineCalendarView=view==='week'?'week':'month';if(deadlineCalendarView==='week'){const now=new Date();calendarMonth=new Date(now.getFullYear(),now.getMonth(),now.getDate())}else{const now=new Date();calendarMonth=new Date(now.getFullYear(),now.getMonth(),1)}localStorage.setItem('msp_deadline_calendar_view_v1',deadlineCalendarView);renderCalendar()}
 function changeDeadlineCalendar(delta){if(deadlineCalendarView==='week'){calendarMonth=new Date(calendarMonth.getFullYear(),calendarMonth.getMonth(),calendarMonth.getDate()+delta*7)}else{calendarMonth=new Date(calendarMonth.getFullYear(),calendarMonth.getMonth()+delta,1)}renderCalendar()}
 function deadlineCalendarItemsForDay(key){return data.deadlines.filter(d=>d.date===key)}
 function renderDeadlineWeekCalendar(box,title,weekdays){
@@ -4721,7 +4721,7 @@ function renderTaskCalendar(){
  }
  const y=calendarMonth.getFullYear(),m=calendarMonth.getMonth();title.textContent=calendarMonth.toLocaleDateString('de-DE',{month:'long',year:'numeric'});if(weekdays)weekdays.innerHTML='<span>Mo</span><span>Di</span><span>Mi</span><span>Do</span><span>Fr</span><span>Sa</span><span>So</span>';box.className='month-calendar';const first=new Date(y,m,1),last=new Date(y,m+1,0),start=(first.getDay()+6)%7,cells=[];for(let i=0;i<start;i++)cells.push('<div class="cal-day empty-day"></div>');for(let day=1;day<=last.getDate();day++){const key=`${y}-${String(m+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`,ts=taskForDay(key),today=key===getTodayKey();cells.push(`<div class="cal-day ${today?'today':''}"><b>${day}</b>${ts.slice(0,4).map(t=>`<div class="cal-item task-calendar-item ${t.done?'done':''}" title="${esc(t.title)}" onclick="event.stopPropagation();editTask(${t.id})">☑️ ${esc(t.title)}</div>`).join('')}${ts.length>4?'<small>+ weitere</small>':''}</div>`)}box.innerHTML=cells.join('');
 }
-function setTaskCalendarView(view){taskCalendarView=view==='week'?'week':'month';localStorage.setItem('msp_task_calendar_view_v1',taskCalendarView);renderTaskCalendar()}
+function setTaskCalendarView(view){taskCalendarView=view==='week'?'week':'month';if(taskCalendarView==='week'){const now=new Date();calendarMonth=new Date(now.getFullYear(),now.getMonth(),now.getDate())}else{const now=new Date();calendarMonth=new Date(now.getFullYear(),now.getMonth(),1)}localStorage.setItem('msp_task_calendar_view_v1',taskCalendarView);renderTaskCalendar()}
 function changeTaskCalendar(delta){if(taskCalendarView==='week'){calendarMonth=new Date(calendarMonth.getFullYear(),calendarMonth.getMonth(),calendarMonth.getDate()+delta*7)}else{calendarMonth=new Date(calendarMonth.getFullYear(),calendarMonth.getMonth()+delta,1)}renderTaskCalendar()}
 
 function renderCalendar(){
@@ -4730,6 +4730,8 @@ function renderCalendar(){
  const mb=$('deadlineMonthViewBtn'),wb=$('deadlineWeekViewBtn'); if(mb)mb.classList.toggle('active',deadlineCalendarView==='month'); if(wb)wb.classList.toggle('active',deadlineCalendarView==='week');
  if(deadlineCalendarView==='week'){renderDeadlineWeekCalendar(box,title,$('calendarWeekdays'));return;}
  if(!box||!title)return;
+ box.className='month-calendar';
+ const weekdays=$('calendarWeekdays'); if(weekdays)weekdays.innerHTML='<span>Mo</span><span>Di</span><span>Mi</span><span>Do</span><span>Fr</span><span>Sa</span><span>So</span>';
  const y=calendarMonth.getFullYear(),m=calendarMonth.getMonth();
  title.textContent=calendarMonth.toLocaleDateString('de-DE',{month:'long',year:'numeric'});
  const first=new Date(y,m,1),last=new Date(y,m+1,0);
@@ -5053,6 +5055,7 @@ async function deleteCalendarEvent(id){
 let plannerCalendarView=localStorage.getItem('msp_planner_calendar_view_v1')||'month';
 function setPlannerCalendarView(view){
  plannerCalendarView=view==='week'?'week':'month';
+ if(plannerCalendarView==='week'){const now=new Date();calendarMonth=new Date(now.getFullYear(),now.getMonth(),now.getDate())}else{const now=new Date();calendarMonth=new Date(now.getFullYear(),now.getMonth(),1);}
  localStorage.setItem('msp_planner_calendar_view_v1',plannerCalendarView);
  renderPlannerCalendar();
 }
