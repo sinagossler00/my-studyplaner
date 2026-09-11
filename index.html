@@ -6433,6 +6433,35 @@ initCloud();
 
 
 
+<script id="msp-cloud-startup-reliable-v324">
+(function(){
+  async function pullCloudNow(){
+    try{
+      if(typeof fb==='undefined'||!fb||!fb.auth||!fb.db)return false;
+      const u=fb.auth.currentUser||currentUser;
+      if(!u)return false;
+      if(typeof cloudHydrating!=='undefined'&&cloudHydrating)return false;
+      const snap=await fb.db.collection('users').doc(u.uid).get({source:'server'});
+      if(!snap.exists)return false;
+      const remote=snap.data()&&snap.data().data;
+      if(!remote)return false;
+      const next=Object.assign(structuredClone(defaultData),remote);
+      ['deadlines','tasks','files','fileFolders','modules','notes','podcasts','gradeModules','grades','uniLinks','events'].forEach(k=>{if(!Array.isArray(next[k]))next[k]=[]});
+      if(JSON.stringify(next)!==JSON.stringify(data)){data=next;saveLocal();try{renderAll()}catch(e){}}
+      if(window.mspSetSyncStatus)window.mspSetSyncStatus('connected','Cloud: verbunden','Synchronisiert');
+      return true;
+    }catch(e){console.warn('v324 Cloud-Startsync:',e);return false;}
+  }
+  async function startupSync(){
+    try{if(window.mspCloudReadyPromise)await Promise.race([window.mspCloudReadyPromise,new Promise(r=>setTimeout(r,15000))]);}catch(e){}
+    try{if(window.mspCloudAuthStatePromise)await Promise.race([window.mspCloudAuthStatePromise,new Promise(r=>setTimeout(r,15000))]);}catch(e){}
+    await pullCloudNow();setTimeout(pullCloudNow,1200);setTimeout(pullCloudNow,3500);
+  }
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',startupSync,{once:true});else startupSync();
+  setInterval(()=>{if(!document.hidden)pullCloudNow()},5000);
+  window.mspReliableCloudPull=pullCloudNow;
+})();
+</script>
 <script id="mystudyplaner-v13-priority">
 (function(){
   const PRIORITIES = {
