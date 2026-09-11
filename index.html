@@ -5689,6 +5689,9 @@ var cloudReadyResolve;
 var cloudReadyPromise=window.mspCloudReadyPromise=new Promise(function(resolve){cloudReadyResolve=resolve});
 var cloudInitialSyncResolve;
 var cloudInitialSyncPromise=window.mspCloudInitialSyncPromise=new Promise(function(resolve){cloudInitialSyncResolve=resolve});
+var cloudAuthStateResolve;
+var cloudAuthStatePromise=window.mspCloudAuthStatePromise=new Promise(function(resolve){cloudAuthStateResolve=resolve});
+var cloudAuthStateResolved=false;
 
 function mergeArrayById(cloudArr,localArr){
  const cloud=Array.isArray(cloudArr)?cloudArr:[];
@@ -5716,27 +5719,24 @@ function mergeCloudWithLocal(cloudData,localData){
 }
 async function initCloud(){
   const cfg=getFirebaseConfig();
-  if(!cfg||!cfg.apiKey){updateCloudStatus(false);cloudReadyResolve(null);cloudInitialSyncResolve(null);return;}
+  if(!cfg||!cfg.apiKey){updateCloudStatus(false);cloudReadyResolve(null);cloudInitialSyncResolve(null);if(!cloudAuthStateResolved){cloudAuthStateResolved=true;cloudAuthStateResolve(null)}return;}
   try{
     if(!firebase.apps.length)firebase.initializeApp(cfg);
     fb={auth:firebase.auth(),db:firebase.firestore()};
-    // Keep Firebase Auth persistent across browser/PWA reloads.
-    // Explicitly set LOCAL before any sign-in and wait for Firebase's
-    // initial auth state restoration before the rest of the app renders.
-    try{
-      await fb.auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
-      window.mspAuthPersistence='LOCAL';
-    }catch(e){
-      window.mspAuthPersistenceError=e;
-      console.warn('Auth-Persistenz:',e);
-    }
+    window.fb=fb;
     cloudReadyResolve(fb);
 
+    // Register the auth observer immediately. Firebase restores a LOCAL
+    // session asynchronously; the app must not mistake the initial state for
+    // a logout or render the local-only state before restoration completes.
     fb.auth.onAuthStateChanged(async user=>{
+      if(!cloudAuthStateResolved){
+        cloudAuthStateResolved=true;
+        cloudAuthStateResolve(user||null);
+      }
       const generation=++cloudSyncGeneration;
       currentUser=user;
       window.currentUser=user;
-      if(user){try{localStorage.setItem('msp_auth_session_marker',JSON.stringify({email:user.email||'',uid:user.uid,at:Date.now()}))}catch(e){}}
       cloudEnabled=!!user;
       window.cloudEnabled=!!user;
       cloudListenerReady=false;
@@ -5748,6 +5748,7 @@ async function initCloud(){
         return;
       }
 
+      try{localStorage.setItem('msp_auth_session_marker',JSON.stringify({email:user.email||'',uid:user.uid,at:Date.now()}))}catch(e){}
       updateCloudStatus(true,user.email||'Angemeldet');
       const ref=fb.db.collection('users').doc(user.uid);
       cloudHydrating=true;
@@ -5772,12 +5773,10 @@ async function initCloud(){
         data.gradeModules=Array.isArray(data.gradeModules)?data.gradeModules:[];
         data.grades=Array.isArray(data.grades)?data.grades:[];
         data.uniLinks=Array.isArray(data.uniLinks)?data.uniLinks:[];
+        if(!Array.isArray(data.events))data.events=[];
         saveLocal();
 
         if(generation!==cloudSyncGeneration||!currentUser||currentUser.uid!==user.uid)return;
-
-        // Attach the real-time listener BEFORE rendering. This way a later
-        // remote change cannot be missed even if some UI renderer throws.
         cloudListenerReady=true;
         cloudUnsubscribe=ref.onSnapshot(remoteSnap=>{
           if(generation!==cloudSyncGeneration||!cloudListenerReady||!remoteSnap.exists)return;
@@ -5794,6 +5793,7 @@ async function initCloud(){
           next.gradeModules=Array.isArray(next.gradeModules)?next.gradeModules:[];
           next.grades=Array.isArray(next.grades)?next.grades:[];
           next.uniLinks=Array.isArray(next.uniLinks)?next.uniLinks:[];
+          if(!Array.isArray(next.events))next.events=[];
           if(JSON.stringify(next)!==JSON.stringify(data)){
             data=next;
             saveLocal();
@@ -5805,18 +5805,10 @@ async function initCloud(){
           if(window.mspSetSyncStatus)window.mspSetSyncStatus('offline','Cloud: Sync fehlgeschlagen',err&&err.message?err.message:'Echtzeit-Sync fehlgeschlagen');
         });
 
-        // The cloud state is now authoritative. Render after the download above.
-        // A few delayed repaint passes are intentional: on mobile browsers several
-        // DOMContentLoaded/load handlers can render the old local state while the
-        // Firebase auth callback is still resolving. The cloud result must win.
-        const renderCloudState=()=>{
-          try{renderAll()}catch(err){console.error('Render nach Cloud-Login:',err)}
-        };
-        renderCloudState();
-        requestAnimationFrame(renderCloudState);
-        setTimeout(renderCloudState,150);
-        setTimeout(renderCloudState,600);
-        setTimeout(renderCloudState,1500);
+        try{renderAll()}catch(err){console.error('Render nach Cloud-Login:',err)}
+        requestAnimationFrame(()=>{try{renderAll()}catch(e){}});
+        setTimeout(()=>{try{renderAll()}catch(e){}},150);
+        setTimeout(()=>{try{renderAll()}catch(e){}},600);
         if(generation===cloudSyncGeneration) cloudInitialSyncResolve(true);
       }catch(e){
         console.error('Cloud-Initialisierung/Synchronisierung:',e);
@@ -5826,13 +5818,25 @@ async function initCloud(){
         if(generation===cloudSyncGeneration)cloudHydrating=false;
       }
     });
+
+    // Keep persistence LOCAL. Do this without delaying registration of the
+    // auth observer. Also repeat it after a successful sign-in in cloudGoogleAuth.
+    try{
+      await fb.auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
+      window.mspAuthPersistence='LOCAL';
+    }catch(e){
+      window.mspAuthPersistenceError=e;
+      console.warn('Auth-Persistenz:',e);
+    }
   }catch(e){
     console.error('Cloud-Initialisierung:',e);
     cloudReadyResolve(null);
     cloudInitialSyncResolve(false);
+    if(!cloudAuthStateResolved){cloudAuthStateResolved=true;cloudAuthStateResolve(null)}
     updateCloudStatus(false,'Cloud nicht bereit');
   }
 }
+
 function updateCloudStatus(on,label){$('cloudStatus').innerHTML=`<span class="dot ${on?'on':''}"></span><span>${esc(label||'Nur auf diesem Gerät')}</span>`}
 function refreshAccountCloudState(){
  try{
@@ -5879,6 +5883,9 @@ async function testCloudSync(){
 
 async function forceCloudRefresh(){
  try{
+  if(!cloudAuthStateResolved && window.mspCloudAuthStatePromise){
+   try{await Promise.race([window.mspCloudAuthStatePromise,new Promise(resolve=>setTimeout(resolve,10000))])}catch(e){}
+  }
   const u=(fb&&fb.auth&&fb.auth.currentUser)||currentUser;
   if(!u)throw new Error('Nicht bei Firebase angemeldet.');
   currentUser=u; cloudEnabled=true; window.currentUser=u; window.cloudEnabled=true;
@@ -5920,6 +5927,9 @@ async function forceCloudRefresh(){
 
 async function showCloudDiagnostics(){
  try{
+  if(!cloudAuthStateResolved && window.mspCloudAuthStatePromise){
+   try{await Promise.race([window.mspCloudAuthStatePromise,new Promise(resolve=>setTimeout(resolve,10000))])}catch(e){}
+  }
   const u=(fb&&fb.auth&&fb.auth.currentUser)||currentUser;
   if(!u)throw new Error('Nicht bei Firebase angemeldet.');
   const snap=await fb.db.collection('users').doc(u.uid).get({source:'server'});
@@ -5962,6 +5972,12 @@ async function cloudGoogleAuth(){
    alert('Die Cloud-Verbindung ist noch nicht bereit. Bitte kurz warten und erneut auf „Mit Google anmelden“ klicken.');
    return;
   }
+  // Wait for Firebase's initial persisted-auth restoration before deciding
+  // whether the user is signed in. This prevents a false "not logged in"
+  // state during the short startup race on mobile browsers.
+  if(!cloudAuthStateResolved && window.mspCloudAuthStatePromise){
+   try{await Promise.race([window.mspCloudAuthStatePromise,new Promise(resolve=>setTimeout(resolve,10000))])}catch(e){}
+  }
   // Firebase Auth can already have a restored session even if the app-level
   // auth-state callback has not fired yet. Keep our state in sync.
   if(fb.auth.currentUser){
@@ -5988,6 +6004,8 @@ async function cloudGoogleAuth(){
 
   try{
    await fb.auth.signInWithPopup(provider);
+   // Migrate the freshly signed-in user to explicit LOCAL persistence.
+   try{await fb.auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);window.mspAuthPersistence='LOCAL'}catch(e){console.warn('LOCAL persistence after sign-in:',e)}
   }catch(e){
    // Popup blockers are common on GitHub Pages/Chromebook browsers.
    // Fall back to the normal Firebase redirect flow instead of making the
