@@ -3814,10 +3814,6 @@ aside.sidebar{
    </div>
   </div>
   <div class="two-col home-study-row">
-   <div class="card home-study-card" id="homeTodayStudyCard">
-    <div class="card-head"><h2>📚 Heute lernen</h2></div>
-    <div id="homeTodayStudy"></div>
-   </div>
    <div class="card home-progress-card" id="homeProgressCard">
     <div class="card-head"><h2>📊 Studienfortschritt</h2></div>
     <div id="homeStudyProgress"></div>
@@ -4529,18 +4525,6 @@ function renderHomeOverview(){
  renderHomeStudyCards();
 }
 function renderHomeStudyCards(){
- const open=(data.tasks||[]).filter(t=>!t.done).slice().sort((a,b)=>String(a.deadline||a.date||'9999-12-31').localeCompare(String(b.deadline||b.date||'9999-12-31')));
- const target=open[0]; const study=$('homeTodayStudy');
- if(study){
-  if(target){
-   const moduleName=target.module||target.moduleName||'Dein Studium';
-   const deadline=target.deadline||target.date||'';
-   const deadlineText=deadline?new Date(deadline+'T12:00:00').toLocaleDateString('de-DE',{day:'numeric',month:'short',year:'numeric'}):'';
-   study.innerHTML=`<div class="home-study-label">${esc(moduleName)}</div><h3 class="home-study-title">${esc(target.title||target.name||'Nächste Aufgabe')}</h3>${deadline?`<div class="muted home-study-meta">⏱️ Frist: ${deadlineText}</div>`:''}<button class="btn home-study-action" onclick="go('tasks')">Weiterlernen →</button>`;
-  }else{
-   study.innerHTML=`<div class="home-study-empty">🎉 Alles erledigt!<br><span class="muted">Aktuell steht keine offene Lernaufgabe an.</span></div>`;
-  }
- }
  const allTasks=data.tasks||[]; const done=allTasks.filter(t=>t.done).length; const total=allTasks.length; const pct=total?Math.round(done/total*100):0;
  const progress=$('homeStudyProgress');
  if(progress) progress.innerHTML=`<div class="home-progress-head"><span>Aufgaben im Studium</span><strong>${pct}%</strong></div><div class="home-progress-bar"><span style="width:${pct}%"></span></div><div class="muted home-progress-meta">${done} von ${total} Aufgaben abgeschlossen</div><button class="btn secondary home-study-action" onclick="go('tasks')">Aufgaben ansehen →</button>`;
@@ -5851,7 +5835,14 @@ function tryInitGoogleFromSavedConfig(){
 }
 window.addEventListener('load',tryInitGoogleFromSavedConfig);
 
-initCloud();renderAll();
+initCloud();
+// Ensure the start page is populated immediately on first load as well as after navigation.
+if(document.readyState==='loading'){
+  document.addEventListener('DOMContentLoaded',()=>{try{renderAll()}catch(e){console.warn('Initial render:',e)}});
+}else{
+  try{renderAll()}catch(e){console.warn('Initial render:',e)}
+}
+window.addEventListener('load',()=>{try{renderAll()}catch(e){console.warn('Final initial render:',e)}});
 </script>
 
 
